@@ -4,6 +4,58 @@
     align-items: center;
 }
 
+.menu-builder-sidebar-footer {
+    padding-block: var(--s, 8px);
+    padding-inline: var(--s, 8px);
+}
+
+#menu-builder-quick-add {
+    box-sizing: border-box;
+    padding: 0 0 var(--l, 24px);
+}
+
+#menu-builder-quick-add * {
+    box-sizing: border-box;
+}
+
+#menu-builder-quick-add h2 {
+    margin: 0 0 14px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--gray-800, #25252a);
+}
+
+#menu-builder-quick-add .menu-builder-quick-add-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#menu-builder-quick-add .menu-builder-quick-add-fields .field {
+    margin: 0;
+}
+
+#menu-builder-quick-add .field,
+#menu-builder-quick-add .input,
+#menu-builder-quick-add .text,
+#menu-builder-quick-add .select {
+    max-width: 100%;
+}
+
+#menu-builder-quick-add .instructions {
+    overflow-wrap: break-word;
+}
+
+#menu-builder-quick-add .btngroup {
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--hairline-color);
+}
+
+#menu-builder-quick-add .btngroup .btn {
+    width: 100%;
+}
+
 ul.menu-builder-tree-list {
     list-style: none;
     margin: 0;

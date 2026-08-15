@@ -122,7 +122,7 @@
         },
 
         remove: function(id, title) {
-            if (!confirm(Craft.t('menu-builder', 'Delete “{title}”? This also deletes any child items.', {title: title}))) {
+            if (!confirm(Craft.t('menu-builder', 'Delete “{title}”? This also deletes any child menus.', {title: title}))) {
                 return;
             }
 

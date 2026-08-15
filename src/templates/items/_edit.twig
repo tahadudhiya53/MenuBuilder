@@ -1,13 +1,15 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = isNew ? "New navigation item"|t('menu-builder') : item.title %}
+{% set title = isNew ? "New navigation menu"|t('menu-builder') : item.title %}
 {% set fullPageForm = true %}
 {% set crumbs = [
     { label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') },
     { label: group.name, url: url('menu-builder/' ~ group.handle) },
 ] %}
-{% set tabs = {
+{% set tabs = isNew ? {
+    basic: { label: "Basic"|t('menu-builder'), url: '#ni-basic' },
+} : {
     basic: { label: "Basic"|t('menu-builder'), url: '#ni-basic' },
     behavior: { label: "Behavior"|t('menu-builder'), url: '#ni-behavior' },
     appearance: { label: "Appearance"|t('menu-builder'), url: '#ni-appearance' },
@@ -146,8 +148,13 @@
 
     {# clickable defaults true for linkable types; the checkbox above drives it for headings/separators #}
     <input type="hidden" name="clickable" id="clickableField" value="{{ (item.type not in ['nonclickable', 'separator']) or item.clickable ? '1' : '' }}">
+
+    {% if isNew %}
+        <p class="light">{{ "Behavior, appearance, accessibility, visibility, and advanced settings become available once this menu is saved."|t('menu-builder') }}</p>
+    {% endif %}
 </div>
 
+{% if not isNew %}
 <div id="ni-behavior" role="tabpanel" aria-labelledby="tab-ni-behavior" class="hidden">
     {{ forms.lightswitchField({
         label: "Enabled"|t('menu-builder'),
@@ -188,7 +195,7 @@
         name: 'fallbackBehavior',
         value: item.fallbackBehavior,
         options: [
-            { label: "Hide the item"|t('menu-builder'), value: 'hide' },
+            { label: "Hide the menu"|t('menu-builder'), value: 'hide' },
             { label: "Keep it, but disable the link"|t('menu-builder'), value: 'disableLink' },
             { label: "Use a fallback URL"|t('menu-builder'), value: 'fallbackUrl' },
         ],
@@ -229,7 +236,7 @@
 </div>
 
 <div id="ni-visibility" role="tabpanel" aria-labelledby="tab-ni-visibility" class="hidden">
-    <p class="light">{{ "This item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it."|t('menu-builder') }}</p>
+    <p class="light">{{ "This menu is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it."|t('menu-builder') }}</p>
 
     {{ forms.checkboxField({ label: "Only show to logged-in users"|t('menu-builder'), id: 'visibilityLoggedIn', name: 'visibility[loggedIn]', checked: loggedInRule is not null }) }}
     {{ forms.checkboxField({ label: "Only show to logged-out (anonymous) visitors"|t('menu-builder'), id: 'visibilityLoggedOut', name: 'visibility[loggedOut]', checked: loggedOutRule is not null }) }}
@@ -270,15 +277,16 @@
         rows: 3,
     }) }}
 </div>
+{% endif %}
 
 {% if not isNew %}
     <hr>
-    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{title}”? This also deletes any child items. This cannot be undone.'|t('menu-builder', { title: item.title })|e('js') }}');">
+    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{title}”? This also deletes any child menus. This cannot be undone.'|t('menu-builder', { title: item.title })|e('js') }}');">
         {{ csrfInput() }}
         <input type="hidden" name="action" value="menu-builder/items/delete">
         <input type="hidden" name="id" value="{{ item.id }}">
         <input type="hidden" name="redirect" value="menu-builder/{{ group.handle }}">
-        <button type="submit" class="btn delete">{{ "Delete item"|t('menu-builder') }}</button>
+        <button type="submit" class="btn delete">{{ "Delete menu"|t('menu-builder') }}</button>
     </form>
 {% endif %}
 {% endblock %}

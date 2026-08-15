@@ -53,7 +53,7 @@
 
 {{ forms.textField({
     label: "Maximum nesting depth"|t('menu-builder'),
-    instructions: "Leave blank for no limit. 1 = a flat list, 2 = one level of children, etc. Enforced both in the CP and when items are rendered."|t('menu-builder'),
+    instructions: "Leave blank for no limit. 1 = a flat list, 2 = one level of children, etc. Enforced both in the CP and when menus are rendered."|t('menu-builder'),
     id: 'maxDepth',
     name: 'maxDepth',
     type: 'number',
@@ -82,7 +82,7 @@
 
 {% if not isNew %}
     <hr>
-    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its items? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');">
+    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its menus? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');">
         {{ csrfInput() }}
         <input type="hidden" name="action" value="menu-builder/groups/delete">
         <input type="hidden" name="id" value="{{ group.id }}">

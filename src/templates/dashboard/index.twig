@@ -7,45 +7,48 @@
 {% set canEdit = currentUser.admin or currentUser.can('menuBuilder:edit') %}
 {% set canCreate = currentUser.admin or currentUser.can('menuBuilder:create') %}
 
-{% block actionButton %}
-    <div class="btngroup">
-        {% if group and canCreate %}
-            <a href="{{ url('menu-builder/' ~ group.handle ~ '/items/new') }}" class="btn submit add icon">{{ "New item"|t('menu-builder') }}</a>
-        {% endif %}
-        {% if canCreate %}
-            <a href="{{ url('menu-builder/groups/new') }}" class="btn icon">{{ "New group"|t('menu-builder') }}</a>
-        {% endif %}
-    </div>
+{% block sidebar %}
+    <nav>
+        <ul>
+            {% for g in groups %}
+                <li>
+                    <a href="{{ url('menu-builder/' ~ g.handle) }}" class="{{ group and g.id == group.id ? 'sel' }}">
+                        <span class="label">{{ g.name }}</span>
+                        {% if not g.enabled %}
+                            <span class="status disabled" title="{{ 'Disabled'|t('menu-builder') }}"></span>
+                        {% endif %}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% if canCreate %}
+        <div class="menu-builder-sidebar-footer">
+            <a href="{{ url('menu-builder/groups/new') }}" class="btn dashed icon add fullwidth">{{ "New group"|t('menu-builder') }}</a>
+        </div>
+    {% endif %}
 {% endblock %}
 
 {% block content %}
-    <div id="menu-builder-toolbar" class="flex flex-nowrap">
-        <div>
-            {{ forms.selectField({
-                id: 'group-switcher',
-                name: 'group-switcher',
-                value: group ? group.handle : '',
-                options: groups|map(g => { label: g.name ~ (g.enabled ? '' : ' (' ~ 'disabled'|t('menu-builder') ~ ')'), value: g.handle }),
-            }) }}
-        </div>
-        <div class="flex-grow">
-            <form method="get">
-                <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search items…'|t('menu-builder') }}" class="text fullwidth">
-            </form>
-        </div>
-        {% if group %}
-            <div>
-                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Group settings"|t('menu-builder') }}</a>
-            </div>
-        {% endif %}
-    </div>
-
     {% if not group %}
         <p class="light">
             {{ "No navigation groups yet. Create one to start building a navigation."|t('menu-builder') }}
         </p>
-    {% elseif group.description %}
-        <p class="light">{{ group.description }}</p>
+    {% else %}
+        <div id="menu-builder-toolbar" class="flex flex-nowrap">
+            <div class="flex-grow">
+                <form method="get">
+                    <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search menus…'|t('menu-builder') }}" class="text fullwidth">
+                </form>
+            </div>
+            <div>
+                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Group settings"|t('menu-builder') }}</a>
+            </div>
+        </div>
+
+        {% if group.description %}
+            <p class="light">{{ group.description }}</p>
+        {% endif %}
     {% endif %}
 
     {% if group %}
@@ -60,19 +63,123 @@
         {% if items is empty %}
             <p class="light">
                 {% if search %}
-                    {{ "No items match your search."|t('menu-builder') }}
+                    {{ "No menus match your search."|t('menu-builder') }}
                 {% else %}
-                    {{ "This navigation has no items yet."|t('menu-builder') }}
+                    {{ "This navigation has no menus yet."|t('menu-builder') }}
                 {% endif %}
             </p>
         {% endif %}
     {% endif %}
 {% endblock %}
 
-{% js %}
-document.getElementById('group-switcher')?.addEventListener('change', function(event) {
-    window.location = Craft.getCpUrl('menu-builder/' + event.target.value);
-});
-{% endjs %}
+{% block details %}
+    {% if group and canCreate %}
+        <div id="menu-builder-quick-add">
+            <h2>{{ "New menu"|t('menu-builder') }}</h2>
+            <form method="post" action="">
+                {{ csrfInput() }}
+                <input type="hidden" name="action" value="menu-builder/items/save">
+                <input type="hidden" name="groupId" value="{{ group.id }}">
+                <input type="hidden" name="parentId" value="">
+                <input type="hidden" name="clickable" id="quick-add-clickable" value="1">
+                {{ redirectInput('menu-builder/' ~ group.handle) }}
+
+                <div class="menu-builder-quick-add-fields">
+                    {{ forms.selectField({
+                        label: "Link type"|t('menu-builder'),
+                        id: 'quick-add-type',
+                        name: 'type',
+                        value: 'url',
+                        options: [
+                            { label: "Entry"|t('menu-builder'), value: 'entry' },
+                            { label: "Category"|t('menu-builder'), value: 'category' },
+                            { label: "Asset"|t('menu-builder'), value: 'asset' },
+                            { label: "Custom URL"|t('menu-builder'), value: 'url' },
+                            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
+                        ],
+                    }) }}
+
+                    {{ forms.textField({
+                        label: "Title"|t('menu-builder'),
+                        id: 'quick-add-title',
+                        name: 'title',
+                        required: true,
+                    }) }}
+
+                    <div data-quick-add-section="entry" class="menu-builder-link-section hidden">
+                        {{ forms.elementSelectField({
+                            label: "Entry"|t('menu-builder'),
+                            id: 'quick-add-entry',
+                            name: 'elementId',
+                            elementType: 'craft\\elements\\Entry',
+                            sources: '*',
+                            single: true,
+                            limit: 1,
+                        }) }}
+                    </div>
+
+                    <div data-quick-add-section="category" class="menu-builder-link-section hidden">
+                        {{ forms.elementSelectField({
+                            label: "Category"|t('menu-builder'),
+                            id: 'quick-add-category',
+                            name: 'elementId',
+                            elementType: 'craft\\elements\\Category',
+                            sources: '*',
+                            single: true,
+                            limit: 1,
+                        }) }}
+                    </div>
+
+                    <div data-quick-add-section="asset" class="menu-builder-link-section hidden">
+                        {{ forms.elementSelectField({
+                            label: "Asset"|t('menu-builder'),
+                            id: 'quick-add-asset',
+                            name: 'elementId',
+                            elementType: 'craft\\elements\\Asset',
+                            sources: '*',
+                            single: true,
+                            limit: 1,
+                        }) }}
+                    </div>
+
+                    <div data-quick-add-section="url" class="menu-builder-link-section">
+                        {{ forms.textField({
+                            label: "URL"|t('menu-builder'),
+                            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menu-builder'),
+                            id: 'quick-add-url',
+                            name: 'customUrl',
+                        }) }}
+                    </div>
+                </div>
+
+                <div class="btngroup">
+                    <button type="submit" class="btn submit fullwidth">{{ "Create"|t('menu-builder') }}</button>
+                </div>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% if group and canCreate %}
+    {% js %}
+    (function() {
+        var panel = document.getElementById('menu-builder-quick-add');
+        var typeField = document.getElementById('quick-add-type');
+        var clickableField = document.getElementById('quick-add-clickable');
+        var sections = panel.querySelectorAll('[data-quick-add-section]');
+
+        function updateSections() {
+            var type = typeField.value;
+            sections.forEach(function(section) {
+                section.classList.toggle('hidden', section.getAttribute('data-quick-add-section') !== type);
+            });
+            clickableField.value = type === 'nonclickable' ? '' : '1';
+        }
+
+        typeField.addEventListener('change', updateSections);
+        updateSections();
+    })();
+    {% endjs %}
+{% endif %}
 
 {% do view.registerAssetBundle("Tahadudhiya\\MenuBuilder\\web\\assets\\cp\\CpAsset") %}

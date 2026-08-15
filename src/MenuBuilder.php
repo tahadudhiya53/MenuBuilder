@@ -100,13 +100,13 @@ class MenuBuilder extends Plugin
                             'label' => Craft::t('menu-builder', 'View navigation'),
                         ],
                         'menuBuilder:create' => [
-                            'label' => Craft::t('menu-builder', 'Create navigation groups and items'),
+                            'label' => Craft::t('menu-builder', 'Create navigation groups and menus'),
                         ],
                         'menuBuilder:edit' => [
-                            'label' => Craft::t('menu-builder', 'Edit navigation groups and items'),
+                            'label' => Craft::t('menu-builder', 'Edit navigation groups and menus'),
                         ],
                         'menuBuilder:delete' => [
-                            'label' => Craft::t('menu-builder', 'Delete navigation groups and items'),
+                            'label' => Craft::t('menu-builder', 'Delete navigation groups and menus'),
                         ],
                         'menuBuilder:manageSettings' => [
                             'label' => Craft::t('menu-builder', 'Manage navigation settings'),

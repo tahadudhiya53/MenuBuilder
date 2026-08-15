@@ -30,7 +30,7 @@ class ItemsController extends Controller
         };
 
         if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
-            throw new ForbiddenHttpException('You are not permitted to manage navigation items.');
+            throw new ForbiddenHttpException('You are not permitted to manage navigation menus.');
         }
 
         return true;
@@ -49,7 +49,7 @@ class ItemsController extends Controller
                 $item = MenuBuilder::getInstance()->items->getById($itemId);
 
                 if (!$item || $item->groupId !== $group->id) {
-                    throw new NotFoundHttpException('Navigation item not found.');
+                    throw new NotFoundHttpException('Navigation menu not found.');
                 }
             } else {
                 $item = new MenuBuilderItem();
@@ -76,7 +76,7 @@ class ItemsController extends Controller
         $item = $itemId ? MenuBuilder::getInstance()->items->getById($itemId) : new MenuBuilderItem();
 
         if (!$item) {
-            throw new NotFoundHttpException('Navigation item not found.');
+            throw new NotFoundHttpException('Navigation menu not found.');
         }
 
         $item->groupId = (int)$request->getRequiredBodyParam('groupId');
@@ -115,12 +115,12 @@ class ItemsController extends Controller
         $item->metadata = $this->bodyArray('metadata');
 
         if (!MenuBuilder::getInstance()->items->save($item)) {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation item.'));
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation menu.'));
 
-            return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save navigation item.'), 'item');
+            return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save navigation menu.'), 'item');
         }
 
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation item saved.'));
+        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation menu saved.'));
 
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
 
@@ -134,7 +134,7 @@ class ItemsController extends Controller
         $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
         $success = MenuBuilder::getInstance()->items->deleteById($id);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that item.'));
+        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that menu.'));
     }
 
     public function actionDuplicate(): Response
@@ -145,7 +145,7 @@ class ItemsController extends Controller
         $clone = MenuBuilder::getInstance()->items->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that item.'));
+            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu.'));
         }
 
         return $this->asSuccess(data: ['id' => $clone->id]);
@@ -159,13 +159,13 @@ class ItemsController extends Controller
         $item = MenuBuilder::getInstance()->items->getById($id);
 
         if (!$item) {
-            return $this->asFailure(Craft::t('menu-builder', 'Navigation item not found.'));
+            return $this->asFailure(Craft::t('menu-builder', 'Navigation menu not found.'));
         }
 
         $item->enabled = !$item->enabled;
         $success = MenuBuilder::getInstance()->items->save($item, runValidation: false);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t update that item.'), ['enabled' => $item->enabled]);
+        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t update that menu.'), ['enabled' => $item->enabled]);
     }
 
     /**

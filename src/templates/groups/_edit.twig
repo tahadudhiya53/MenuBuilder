@@ -1,0 +1,92 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = isNew ? "New navigation group"|t('menu-builder') : group.name %}
+{% set fullPageForm = true %}
+{% set crumbs = [{ label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') }] %}
+
+{% block actionButton %}
+    <div class="btngroup">
+        <input type="submit" class="btn submit" value="{{ 'Save'|t('app') }}">
+    </div>
+{% endblock %}
+
+{% block content %}
+<input type="hidden" name="action" value="menu-builder/groups/save">
+<input type="hidden" name="groupId" value="{{ group.id }}">
+{{ redirectInput('menu-builder') }}
+{{ csrfInput() }}
+
+{{ forms.textField({
+    label: "Name"|t('menu-builder'),
+    id: 'name',
+    name: 'name',
+    value: group.name,
+    required: true,
+    errors: group.getErrors('name'),
+}) }}
+
+{{ forms.textField({
+    label: "Handle"|t('menu-builder'),
+    instructions: "Referenced from Twig as `craft.menuBuilder.get('{handle}')`."|t('menu-builder'),
+    id: 'handle',
+    name: 'handle',
+    value: group.handle,
+    placeholder: 'e.g. main',
+    errors: group.getErrors('handle'),
+}) }}
+
+{{ forms.textareaField({
+    label: "Description"|t('menu-builder'),
+    id: 'description',
+    name: 'description',
+    value: group.description,
+    rows: 2,
+}) }}
+
+{{ forms.lightswitchField({
+    label: "Enabled"|t('menu-builder'),
+    id: 'enabled',
+    name: 'enabled',
+    on: group.enabled,
+}) }}
+
+{{ forms.textField({
+    label: "Maximum nesting depth"|t('menu-builder'),
+    instructions: "Leave blank for no limit. 1 = a flat list, 2 = one level of children, etc. Enforced both in the CP and when items are rendered."|t('menu-builder'),
+    id: 'maxDepth',
+    name: 'maxDepth',
+    type: 'number',
+    min: 1,
+    max: 10,
+    value: group.maxDepth,
+    errors: group.getErrors('maxDepth'),
+}) }}
+
+{{ forms.textField({
+    label: "CSS class"|t('menu-builder'),
+    instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menu-builder'),
+    id: 'cssClass',
+    name: 'cssClass',
+    value: group.cssClass,
+}) }}
+
+{{ forms.textareaField({
+    label: "HTML attributes"|t('menu-builder'),
+    instructions: "One `key: value` pair per line."|t('menu-builder'),
+    id: 'htmlAttributes',
+    name: 'htmlAttributes',
+    value: group.htmlAttributes|map((v, k) => k ~ ': ' ~ v)|join("\n"),
+    rows: 3,
+}) }}
+
+{% if not isNew %}
+    <hr>
+    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its items? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="menu-builder/groups/delete">
+        <input type="hidden" name="id" value="{{ group.id }}">
+        <button type="submit" class="btn delete">{{ "Delete group"|t('menu-builder') }}</button>
+    </form>
+{% endif %}
+{% endblock %}

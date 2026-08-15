@@ -1,0 +1,335 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = isNew ? "New navigation item"|t('menu-builder') : item.title %}
+{% set fullPageForm = true %}
+{% set crumbs = [
+    { label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') },
+    { label: group.name, url: url('menu-builder/' ~ group.handle) },
+] %}
+{% set tabs = {
+    basic: { label: "Basic"|t('menu-builder'), url: '#ni-basic' },
+    behavior: { label: "Behavior"|t('menu-builder'), url: '#ni-behavior' },
+    appearance: { label: "Appearance"|t('menu-builder'), url: '#ni-appearance' },
+    accessibility: { label: "Accessibility"|t('menu-builder'), url: '#ni-accessibility' },
+    visibility: { label: "Visibility"|t('menu-builder'), url: '#ni-visibility' },
+    advanced: { label: "Advanced"|t('menu-builder'), url: '#ni-advanced' },
+} %}
+
+{% set loggedInRule = item.visibility|filter(r => r.type == 'loggedIn')|first %}
+{% set loggedOutRule = item.visibility|filter(r => r.type == 'loggedOut')|first %}
+{% set userGroupRule = item.visibility|filter(r => r.type == 'userGroup')|first %}
+{% set siteRule = item.visibility|filter(r => r.type == 'site')|first %}
+{% set dateRule = item.visibility|filter(r => r.type == 'dateRange')|first %}
+{% set envRule = item.visibility|filter(r => r.type == 'environment')|first %}
+
+{% set entryElement = item.type == 'entry' and item.elementId ? craft.entries.id(item.elementId).status(null).one() : null %}
+{% set categoryElement = item.type == 'category' and item.elementId ? craft.categories.id(item.elementId).status(null).one() : null %}
+{% set assetElement = item.type == 'asset' and item.elementId ? craft.assets.id(item.elementId).one() : null %}
+{% set imageElement = item.image ? craft.assets.id(item.image).one() : null %}
+
+{% block actionButton %}
+    <div class="btngroup">
+        <input type="submit" class="btn submit" value="{{ 'Save'|t('app') }}">
+    </div>
+{% endblock %}
+
+{% block content %}
+<input type="hidden" name="action" value="menu-builder/items/save">
+<input type="hidden" name="itemId" value="{{ item.id }}">
+<input type="hidden" name="groupId" value="{{ group.id }}">
+<input type="hidden" name="parentId" value="{{ item.parentId }}">
+{{ redirectInput('menu-builder/' ~ group.handle) }}
+{{ csrfInput() }}
+
+<div id="ni-basic" role="tabpanel" aria-labelledby="tab-ni-basic">
+    {{ forms.selectField({
+        label: "Link type"|t('menu-builder'),
+        id: 'type',
+        name: 'type',
+        value: item.type,
+        options: [
+            { label: "Entry"|t('menu-builder'), value: 'entry' },
+            { label: "Category"|t('menu-builder'), value: 'category' },
+            { label: "Asset"|t('menu-builder'), value: 'asset' },
+            { label: "Custom URL"|t('menu-builder'), value: 'url' },
+            { label: "Anchor"|t('menu-builder'), value: 'anchor' },
+            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
+            { label: "Separator"|t('menu-builder'), value: 'separator' },
+        ],
+    }) }}
+
+    {{ forms.textField({
+        label: "Title"|t('menu-builder'),
+        id: 'title',
+        name: 'title',
+        value: item.title,
+        errors: item.getErrors('title'),
+    }) }}
+
+    <div data-link-section="entry" class="menu-builder-link-section">
+        {{ forms.elementSelectField({
+            label: "Entry"|t('menu-builder'),
+            id: 'entryElementId',
+            name: 'elementId',
+            elementType: 'craft\\elements\\Entry',
+            sources: '*',
+            single: true,
+            limit: 1,
+            elements: entryElement ? [entryElement] : [],
+            errors: item.getErrors('elementId'),
+        }) }}
+    </div>
+
+    <div data-link-section="category" class="menu-builder-link-section">
+        {{ forms.elementSelectField({
+            label: "Category"|t('menu-builder'),
+            id: 'categoryElementId',
+            name: 'elementId',
+            elementType: 'craft\\elements\\Category',
+            sources: '*',
+            single: true,
+            limit: 1,
+            elements: categoryElement ? [categoryElement] : [],
+        }) }}
+    </div>
+
+    <div data-link-section="asset" class="menu-builder-link-section">
+        {{ forms.elementSelectField({
+            label: "Asset"|t('menu-builder'),
+            id: 'assetElementId',
+            name: 'elementId',
+            elementType: 'craft\\elements\\Asset',
+            sources: '*',
+            single: true,
+            limit: 1,
+            elements: assetElement ? [assetElement] : [],
+        }) }}
+    </div>
+
+    <div data-link-section="url" class="menu-builder-link-section">
+        {{ forms.textField({
+            label: "URL"|t('menu-builder'),
+            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menu-builder'),
+            id: 'customUrl',
+            name: 'customUrl',
+            value: item.customUrl,
+            errors: item.getErrors('customUrl'),
+        }) }}
+    </div>
+
+    <div data-link-section="anchor" class="menu-builder-link-section">
+        {{ forms.textField({
+            label: "Anchor handle"|t('menu-builder'),
+            instructions: "Rendered as a link to #handle. Leave blank to reuse the Handle field in Advanced."|t('menu-builder'),
+            id: 'anchorUrl',
+            name: 'customUrl',
+            value: item.customUrl,
+        }) }}
+    </div>
+
+    <div data-link-section="nonclickable,separator" class="menu-builder-link-section">
+        {{ forms.checkboxField({
+            label: "Give this heading its own link anyway"|t('menu-builder'),
+            instructions: "Explicit editor choice — a heading is never made clickable just because a URL happens to be set (spec §5)."|t('menu-builder'),
+            id: 'nonClickableHasUrl',
+        }) }}
+        <div data-nonclickable-url>
+            {{ forms.textField({
+                label: "URL"|t('menu-builder'),
+                id: 'nonClickableUrl',
+                name: 'customUrl',
+                value: item.customUrl,
+            }) }}
+        </div>
+    </div>
+
+    {# clickable defaults true for linkable types; the checkbox above drives it for headings/separators #}
+    <input type="hidden" name="clickable" id="clickableField" value="{{ (item.type not in ['nonclickable', 'separator']) or item.clickable ? '1' : '' }}">
+</div>
+
+<div id="ni-behavior" role="tabpanel" aria-labelledby="tab-ni-behavior" class="hidden">
+    {{ forms.lightswitchField({
+        label: "Enabled"|t('menu-builder'),
+        id: 'enabled',
+        name: 'enabled',
+        on: item.enabled,
+    }) }}
+
+    {{ forms.selectField({
+        label: "Open in"|t('menu-builder'),
+        id: 'target',
+        name: 'target',
+        value: item.target,
+        options: [
+            { label: "Same window"|t('menu-builder'), value: '_self' },
+            { label: "New tab"|t('menu-builder'), value: '_blank' },
+        ],
+    }) }}
+
+    {{ forms.checkboxField({
+        label: "Add rel=\"nofollow\""|t('menu-builder'),
+        id: 'nofollow',
+        name: 'nofollow',
+        checked: item.rel and 'nofollow' in item.rel|split(' '),
+    }) }}
+
+    {{ forms.checkboxField({
+        label: "Add rel=\"sponsored\""|t('menu-builder'),
+        id: 'sponsored',
+        name: 'sponsored',
+        checked: item.rel and 'sponsored' in item.rel|split(' '),
+    }) }}
+
+    <h2>{{ "If the linked element becomes unavailable"|t('menu-builder') }}</h2>
+    {{ forms.selectField({
+        label: "Fallback behavior"|t('menu-builder'),
+        id: 'fallbackBehavior',
+        name: 'fallbackBehavior',
+        value: item.fallbackBehavior,
+        options: [
+            { label: "Hide the item"|t('menu-builder'), value: 'hide' },
+            { label: "Keep it, but disable the link"|t('menu-builder'), value: 'disableLink' },
+            { label: "Use a fallback URL"|t('menu-builder'), value: 'fallbackUrl' },
+        ],
+    }) }}
+    <div data-fallback-url>
+        {{ forms.textField({
+            label: "Fallback URL"|t('menu-builder'),
+            id: 'fallbackUrl',
+            name: 'fallbackUrl',
+            value: item.fallbackUrl,
+            errors: item.getErrors('fallbackUrl'),
+        }) }}
+    </div>
+</div>
+
+<div id="ni-appearance" role="tabpanel" aria-labelledby="tab-ni-appearance" class="hidden">
+    {{ forms.textField({ label: "Icon"|t('menu-builder'), instructions: "Any identifier your templates know how to render (icon font class, SVG handle, etc.).", id: 'icon', name: 'icon', value: item.icon }) }}
+    {{ forms.textField({ label: "Badge"|t('menu-builder'), id: 'badge', name: 'badge', value: item.badge }) }}
+    {{ forms.textareaField({ label: "Description"|t('menu-builder'), id: 'description', name: 'description', value: item.description, rows: 2 }) }}
+    {{ forms.elementSelectField({
+        label: "Image"|t('menu-builder'),
+        id: 'image',
+        name: 'image',
+        elementType: 'craft\\elements\\Asset',
+        sources: '*',
+        criteria: { kind: 'image' },
+        single: true,
+        limit: 1,
+        elements: imageElement ? [imageElement] : [],
+    }) }}
+    {{ forms.lightswitchField({ label: "Featured"|t('menu-builder'), id: 'featured', name: 'featured', on: item.featured }) }}
+    {{ forms.textField({ label: "CSS class"|t('menu-builder'), id: 'cssClass', name: 'cssClass', value: item.cssClass }) }}
+</div>
+
+<div id="ni-accessibility" role="tabpanel" aria-labelledby="tab-ni-accessibility" class="hidden">
+    {{ forms.textField({ label: "ARIA label"|t('menu-builder'), id: 'ariaLabel', name: 'ariaLabel', value: item.ariaLabel }) }}
+    {{ forms.textField({ label: "Title attribute"|t('menu-builder'), id: 'titleAttribute', name: 'titleAttribute', value: item.titleAttribute }) }}
+</div>
+
+<div id="ni-visibility" role="tabpanel" aria-labelledby="tab-ni-visibility" class="hidden">
+    <p class="light">{{ "This item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it."|t('menu-builder') }}</p>
+
+    {{ forms.checkboxField({ label: "Only show to logged-in users"|t('menu-builder'), id: 'visibilityLoggedIn', name: 'visibility[loggedIn]', checked: loggedInRule is not null }) }}
+    {{ forms.checkboxField({ label: "Only show to logged-out (anonymous) visitors"|t('menu-builder'), id: 'visibilityLoggedOut', name: 'visibility[loggedOut]', checked: loggedOutRule is not null }) }}
+
+    {{ forms.checkboxSelectField({
+        label: "Restrict to user groups"|t('menu-builder'),
+        id: 'visibilityUserGroups',
+        name: 'visibility[userGroups]',
+        values: userGroupRule.groupIds ?? [],
+        options: craft.app.userGroups.getAllGroups()|map(g => { label: g.name, value: g.id }),
+    }) }}
+
+    {% if craft.app.getIsMultiSite() %}
+        {{ forms.checkboxSelectField({
+            label: "Restrict to sites"|t('menu-builder'),
+            id: 'visibilitySites',
+            name: 'visibility[sites]',
+            values: siteRule.siteIds ?? [],
+            options: craft.app.sites.getAllSites()|map(s => { label: s.name, value: s.id }),
+        }) }}
+    {% endif %}
+
+    {{ forms.textField({ label: "Visible from"|t('menu-builder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
+    {{ forms.textField({ label: "Visible until"|t('menu-builder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
+    {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT).", id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule.environments ?? [] | join(', ') }) }}
+</div>
+
+<div id="ni-advanced" role="tabpanel" aria-labelledby="tab-ni-advanced" class="hidden">
+    {{ forms.textField({ label: "Handle"|t('menu-builder'), instructions: "Used for anchor links and CSS targeting.", id: 'handle', name: 'handle', value: item.handle, errors: item.getErrors('handle') }) }}
+    {{ forms.textField({ label: "HTML id"|t('menu-builder'), id: 'htmlId', name: 'htmlId', value: item.htmlId }) }}
+    {{ forms.textField({ label: "rel"|t('menu-builder'), instructions: "Additional rel values beyond nofollow/sponsored above.", id: 'rel', name: 'rel', value: item.rel }) }}
+    {{ forms.textareaField({
+        label: "HTML attributes"|t('menu-builder'),
+        instructions: "One `key: value` pair per line, e.g. `data-tracking: nav-main`."|t('menu-builder'),
+        id: 'htmlAttributes',
+        name: 'htmlAttributes',
+        value: item.htmlAttributes|map((v, k) => k ~ ': ' ~ v)|join("\n"),
+        rows: 3,
+    }) }}
+</div>
+
+{% if not isNew %}
+    <hr>
+    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{title}”? This also deletes any child items. This cannot be undone.'|t('menu-builder', { title: item.title })|e('js') }}');">
+        {{ csrfInput() }}
+        <input type="hidden" name="action" value="menu-builder/items/delete">
+        <input type="hidden" name="id" value="{{ item.id }}">
+        <input type="hidden" name="redirect" value="menu-builder/{{ group.handle }}">
+        <button type="submit" class="btn delete">{{ "Delete item"|t('menu-builder') }}</button>
+    </form>
+{% endif %}
+{% endblock %}
+
+{% js %}
+(function() {
+    var typeField = document.getElementById('type');
+    var sections = document.querySelectorAll('[data-link-section]');
+
+    function updateSections() {
+        var type = typeField.value;
+        sections.forEach(function(section) {
+            var types = section.getAttribute('data-link-section').split(',');
+            section.style.display = types.indexOf(type) !== -1 ? '' : 'none';
+        });
+    }
+
+    typeField.addEventListener('change', updateSections);
+    updateSections();
+
+    var fallbackField = document.getElementById('fallbackBehavior');
+    var fallbackUrlWrap = document.querySelector('[data-fallback-url]');
+    function updateFallback() {
+        fallbackUrlWrap.style.display = fallbackField.value === 'fallbackUrl' ? '' : 'none';
+    }
+    fallbackField.addEventListener('change', updateFallback);
+    updateFallback();
+
+    var nonClickableCheckbox = document.getElementById('nonClickableHasUrl');
+    var nonClickableUrlWrap = document.querySelector('[data-nonclickable-url]');
+    var clickableField = document.getElementById('clickableField');
+
+    function isHeadingType() {
+        return typeField.value === 'nonclickable' || typeField.value === 'separator';
+    }
+
+    function updateClickableField() {
+        clickableField.value = (!isHeadingType() || (nonClickableCheckbox && nonClickableCheckbox.checked)) ? '1' : '';
+    }
+
+    if (nonClickableCheckbox && nonClickableUrlWrap) {
+        nonClickableCheckbox.checked = {{ item.customUrl and (item.type == 'nonclickable' or item.type == 'separator') ? 'true' : 'false' }};
+        function updateNonClickable() {
+            nonClickableUrlWrap.style.display = nonClickableCheckbox.checked ? '' : 'none';
+            updateClickableField();
+        }
+        nonClickableCheckbox.addEventListener('change', updateNonClickable);
+        updateNonClickable();
+    }
+
+    typeField.addEventListener('change', updateClickableField);
+    updateClickableField();
+})();
+{% endjs %}

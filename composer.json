@@ -1,0 +1,68 @@
+{
+    "name": "tahadudhiya/craft-menu-builder",
+    "description": "Advanced, flexible menu management for Craft CMS — multiple menu groups, drag-and-drop hierarchy, mixed link types, non-clickable parents, visibility rules, and a clean Twig API.",
+    "type": "craft-plugin",
+    "version": "1.0.0",
+    "license": "MIT",
+    "keywords": [
+        "craft",
+        "craftcms",
+        "navigation",
+        "menu",
+        "menu-builder"
+    ],
+    "authors": [
+        {
+            "name": "Tahadudhiya"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/tahadudhiya/craft-menu-builder/issues?state=open",
+        "source": "https://github.com/tahadudhiya/craft-menu-builder",
+        "docs": "https://github.com/tahadudhiya/craft-menu-builder",
+        "rss": "https://github.com/tahadudhiya/craft-menu-builder/releases.atom"
+    },
+    "require": {
+        "php": ">=8.2.0",
+        "craftcms/cms": "^5.0"
+    },
+    "require-dev": {
+        "craftcms/ecs": "dev-main",
+        "craftcms/phpstan": "dev-main",
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Tahadudhiya\\MenuBuilder\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tahadudhiya\\MenuBuilder\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "class": "Tahadudhiya\\MenuBuilder\\MenuBuilder",
+        "handle": "menu-builder",
+        "name": "MenuBuilder",
+        "developer": "Tahadudhiya",
+        "documentationUrl": "https://github.com/tahadudhiya/craft-menu-builder",
+        "changelogUrl": "https://raw.githubusercontent.com/tahadudhiya/craft-menu-builder/main/CHANGELOG.md"
+    },
+    "scripts": {
+        "check-cs": "@php -d error_reporting=6143 vendor/bin/ecs check --ansi",
+        "fix-cs": "@php -d error_reporting=6143 vendor/bin/ecs check --ansi --fix",
+        "phpstan": "phpstan analyse --debug --no-progress --memory-limit=1G",
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.2.0"
+        },
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true,
+            "craftcms/plugin-installer": true
+        }
+    }
+}

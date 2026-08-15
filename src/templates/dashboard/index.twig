@@ -1,0 +1,78 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = "MenuBuilder"|t('menu-builder') %}
+{% set selectedSubnavItem = 'dashboard' %}
+
+{% set canEdit = currentUser.admin or currentUser.can('menuBuilder:edit') %}
+{% set canCreate = currentUser.admin or currentUser.can('menuBuilder:create') %}
+
+{% block actionButton %}
+    <div class="btngroup">
+        {% if group and canCreate %}
+            <a href="{{ url('menu-builder/' ~ group.handle ~ '/items/new') }}" class="btn submit add icon">{{ "New item"|t('menu-builder') }}</a>
+        {% endif %}
+        {% if canCreate %}
+            <a href="{{ url('menu-builder/groups/new') }}" class="btn icon">{{ "New group"|t('menu-builder') }}</a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div id="menu-builder-toolbar" class="flex flex-nowrap">
+        <div>
+            {{ forms.selectField({
+                id: 'group-switcher',
+                name: 'group-switcher',
+                value: group ? group.handle : '',
+                options: groups|map(g => { label: g.name ~ (g.enabled ? '' : ' (' ~ 'disabled'|t('menu-builder') ~ ')'), value: g.handle }),
+            }) }}
+        </div>
+        <div class="flex-grow">
+            <form method="get">
+                <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search items…'|t('menu-builder') }}" class="text fullwidth">
+            </form>
+        </div>
+        {% if group %}
+            <div>
+                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Group settings"|t('menu-builder') }}</a>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if not group %}
+        <p class="light">
+            {{ "No navigation groups yet. Create one to start building a navigation."|t('menu-builder') }}
+        </p>
+    {% elseif group.description %}
+        <p class="light">{{ group.description }}</p>
+    {% endif %}
+
+    {% if group %}
+        <div id="menu-builder-tree"
+             data-group-id="{{ group.id }}"
+             data-group-handle="{{ group.handle }}"
+             data-max-depth="{{ group.maxDepth ?? '' }}"
+             data-can-edit="{{ canEdit ? '1' : '0' }}">
+            {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit } %}
+        </div>
+
+        {% if items is empty %}
+            <p class="light">
+                {% if search %}
+                    {{ "No items match your search."|t('menu-builder') }}
+                {% else %}
+                    {{ "This navigation has no items yet."|t('menu-builder') }}
+                {% endif %}
+            </p>
+        {% endif %}
+    {% endif %}
+{% endblock %}
+
+{% js %}
+document.getElementById('group-switcher')?.addEventListener('change', function(event) {
+    window.location = Craft.getCpUrl('menu-builder/' + event.target.value);
+});
+{% endjs %}
+
+{% do view.registerAssetBundle("Tahadudhiya\\MenuBuilder\\web\\assets\\cp\\CpAsset") %}

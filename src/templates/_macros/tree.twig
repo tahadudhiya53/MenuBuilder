@@ -1,0 +1,31 @@
+{#
+ # Optional recursive renderer. Entirely optional — walk `menu`/`node.children`
+ # yourself for full control over markup/CSS. Usage:
+ #
+ #   {% import "menu-builder/_macros/tree" as menuMacros %}
+ #   {{ menuMacros.render(craft.menuBuilder.get('main')) }}
+ #}
+{% macro render(nodes) %}
+    {% import _self as self %}
+    <ul>
+        {% for node in nodes %}
+            <li class="{{ node.cssClass }}{{ node.isActiveOrAncestor() ? ' is-active' : '' }}">
+                {% if node.isClickable %}
+                    <a href="{{ node.url }}"
+                       target="{{ node.target }}"
+                       {% if node.rel %}rel="{{ node.rel }}"{% endif %}
+                       {% if node.ariaLabel %}aria-label="{{ node.ariaLabel }}"{% endif %}
+                       {% if node.titleAttribute %}title="{{ node.titleAttribute }}"{% endif %}
+                       {% if node.isActive %}aria-current="page"{% endif %}
+                    >{{ node.title }}</a>
+                {% else %}
+                    <span>{{ node.title }}</span>
+                {% endif %}
+
+                {% if node.hasChildren() %}
+                    {{ self.render(node.children) }}
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}

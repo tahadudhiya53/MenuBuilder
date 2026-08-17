@@ -82,11 +82,26 @@
 
 {% if not isNew %}
     <hr>
-    <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its menus? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');">
-        {{ csrfInput() }}
-        <input type="hidden" name="action" value="menu-builder/groups/delete">
-        <input type="hidden" name="id" value="{{ group.id }}">
-        <button type="submit" class="btn delete">{{ "Delete group"|t('menu-builder') }}</button>
-    </form>
+    <div class="btngroup">
+        <button type="button" class="btn" id="menu-builder-duplicate-group">{{ "Duplicate"|t('app') }}</button>
+        <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its menu items? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');" style="display:inline">
+            {{ csrfInput() }}
+            <input type="hidden" name="action" value="menu-builder/groups/delete">
+            <input type="hidden" name="id" value="{{ group.id }}">
+            <button type="submit" class="btn delete">{{ "Delete menu"|t('menu-builder') }}</button>
+        </form>
+    </div>
+
+    {% js %}
+    document.getElementById('menu-builder-duplicate-group').addEventListener('click', function() {
+        Craft.sendActionRequest('POST', 'menu-builder/groups/duplicate', { data: { id: {{ group.id }} } })
+            .then(function(response) {
+                window.location.href = response.data.url;
+            })
+            .catch(function() {
+                Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t duplicate that navigation menu.'));
+            });
+    });
+    {% endjs %}
 {% endif %}
 {% endblock %}

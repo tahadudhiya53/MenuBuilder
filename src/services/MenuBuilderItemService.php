@@ -242,7 +242,47 @@ class MenuBuilderItemService extends Component
         return $this->recordToModel($clone);
     }
 
-    public function deleteById(int $id): bool
+    /**
+     * Clones every top-level item (and its descendants) from one group into
+     * another, preserving hierarchy and titles. Used by
+     * MenuBuilderGroupService::duplicate() — must run inside that method's
+     * own transaction.
+     */
+    public function duplicateAllForGroup(int $sourceGroupId, int $targetGroupId): void
+    {
+        $roots = MenuBuilderItemRecord::find()
+            ->where(['groupId' => $sourceGroupId, 'parentId' => null])
+            ->orderBy(['sortOrder' => SORT_ASC])
+            ->all();
+
+        foreach ($roots as $root) {
+            $this->duplicateRecord($root, null, $targetGroupId, renameTitle: false);
+        }
+    }
+
+    public function hasChildren(int $id): bool
+    {
+        return MenuBuilderItemRecord::find()->where(['parentId' => $id])->exists();
+    }
+
+    public function countDirectChildren(int $id): int
+    {
+        return (int)MenuBuilderItemRecord::find()->where(['parentId' => $id])->count();
+    }
+
+    public function countForGroup(int $groupId): int
+    {
+        return (int)MenuBuilderItemRecord::find()->where(['groupId' => $groupId])->count();
+    }
+
+    /**
+     * Deletes an item. If it has children, `$keepChildren` decides their fate:
+     * false (default) relies on the cascading FK on parentId to remove the
+     * whole subtree; true reparents direct children up to the deleted item's
+     * own parent (appended after its existing siblings there) before the
+     * delete runs, so they survive.
+     */
+    public function deleteById(int $id, bool $keepChildren = false): bool
     {
         $record = MenuBuilderItemRecord::findOne($id);
 
@@ -251,8 +291,40 @@ class MenuBuilderItemService extends Component
         }
 
         $groupId = (int)$record->groupId;
-        // Cascading FK on parentId removes the whole subtree.
-        $result = (bool)$record->delete();
+
+        if (!$keepChildren) {
+            $result = (bool)$record->delete();
+            $this->invalidateGroup($groupId);
+
+            return $result;
+        }
+
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            $newParentId = $record->parentId;
+            $children = MenuBuilderItemRecord::find()->where(['parentId' => $id])->orderBy(['sortOrder' => SORT_ASC])->all();
+
+            foreach ($children as $child) {
+                $child->parentId = $newParentId;
+                $child->sortOrder = $this->nextSortOrder($groupId, $newParentId);
+
+                if (!$child->save(false, ['parentId', 'sortOrder'])) {
+                    $transaction->rollBack();
+
+                    return false;
+                }
+            }
+
+            $result = (bool)$record->delete();
+            $transaction->commit();
+        } catch (Throwable $exception) {
+            $transaction->rollBack();
+            Craft::warning('Failed to delete navigation item: ' . $exception->getMessage(), __METHOD__);
+
+            return false;
+        }
+
         $this->invalidateGroup($groupId);
 
         return $result;
@@ -334,16 +406,18 @@ class MenuBuilderItemService extends Component
         return $max;
     }
 
-    private function duplicateRecord(MenuBuilderItemRecord $original, ?int $newParentId): MenuBuilderItemRecord
+    private function duplicateRecord(MenuBuilderItemRecord $original, ?int $newParentId, ?int $newGroupId = null, bool $renameTitle = true): MenuBuilderItemRecord
     {
+        $groupId = $newGroupId ?? (int)$original->groupId;
+
         $clone = new MenuBuilderItemRecord();
-        $clone->groupId = $original->groupId;
+        $clone->groupId = $groupId;
         $clone->parentId = $newParentId;
         $clone->type = $original->type;
-        $clone->title = $original->title . ' 2';
+        $clone->title = $renameTitle ? $original->title . ' 2' : $original->title;
         $clone->handle = null;
         $clone->enabled = $original->enabled;
-        $clone->sortOrder = $this->nextSortOrder((int)$original->groupId, $newParentId);
+        $clone->sortOrder = $this->nextSortOrder($groupId, $newParentId);
         $clone->clickable = $original->clickable;
         $clone->elementId = $original->elementId;
         $clone->customUrl = $original->customUrl;
@@ -366,7 +440,7 @@ class MenuBuilderItemService extends Component
         $clone->save(false);
 
         foreach (MenuBuilderItemRecord::find()->where(['parentId' => $original->id])->all() as $child) {
-            $this->duplicateRecord($child, $clone->id);
+            $this->duplicateRecord($child, $clone->id, $groupId, $renameTitle);
         }
 
         return $clone;

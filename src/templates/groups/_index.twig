@@ -1,0 +1,114 @@
+{% extends "_layouts/cp" %}
+
+{% set title = "MenuBuilder"|t('menu-builder') %}
+{% set selectedSubnavItem = 'dashboard' %}
+
+{% block actionButton %}
+    {% if canCreate %}
+        <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if rows|length %}
+        <div class="tablepane">
+            <table class="data fullwidth" id="menu-builder-groups">
+                <thead>
+                    <tr>
+                        <th scope="col">{{ "Name"|t('menu-builder') }}</th>
+                        <th scope="col">{{ "Handle"|t('menu-builder') }}</th>
+                        <th scope="col">{{ "Status"|t('menu-builder') }}</th>
+                        <th scope="col">{{ "Items"|t('menu-builder') }}</th>
+                        <th scope="col">{{ "Last updated"|t('menu-builder') }}</th>
+                        <td class="thin"></td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set group = row.group %}
+                        <tr data-id="{{ group.id }}" data-handle="{{ group.handle }}">
+                            <th scope="row">
+                                <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ group.name }}</a>
+                            </th>
+                            <td><code>{{ group.handle }}</code></td>
+                            <td>
+                                <span class="status {{ group.enabled ? 'green' : '' }}"></span>{{ group.enabled ? "Enabled"|t('menu-builder') : "Disabled"|t('menu-builder') }}
+                            </td>
+                            <td>{{ row.itemCount }}</td>
+                            <td>{{ group.dateUpdated ? group.dateUpdated|datetime('short') : '' }}</td>
+                            <td class="thin">
+                                <div class="menu-builder-row-actions">
+                                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {name}'|t('menu-builder', { name: group.name }) }}"></button>
+                                    <div class="menu">
+                                        <ul>
+                                            <li><a href="{{ url('menu-builder/' ~ group.handle) }}" role="button">{{ "Edit"|t('app') }}</a></li>
+                                            {% if canEdit %}
+                                                <li><a href="{{ url('menu-builder/groups/' ~ group.id) }}" role="button">{{ "Menu settings"|t('menu-builder') }}</a></li>
+                                            {% endif %}
+                                            {% if canCreate %}
+                                                <li><a data-mb-action="duplicate-group" data-id="{{ group.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a></li>
+                                            {% endif %}
+                                            {% if canDelete %}
+                                                <li><a data-mb-action="delete-group" data-id="{{ group.id }}" data-name="{{ group.name }}" class="error" role="button">{{ "Delete"|t('app') }}</a></li>
+                                            {% endif %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="zilch">
+            <p>{{ "No menus yet"|t('menu-builder') }}</p>
+            <p class="light">{{ "Create your first navigation menu to get started."|t('menu-builder') }}</p>
+            {% if canCreate %}
+                <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "Create Menu"|t('menu-builder') }}</a></p>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% js %}
+(function() {
+    document.querySelectorAll('[data-mb-action="duplicate-group"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            event.preventDefault();
+            var id = link.getAttribute('data-id');
+            Craft.sendActionRequest('POST', 'menu-builder/groups/duplicate', { data: { id: id } })
+                .then(function(response) {
+                    Craft.cp.displaySuccess(Craft.t('menu-builder', 'Navigation menu duplicated.'));
+                    window.location.reload();
+                })
+                .catch(function() {
+                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t duplicate that navigation menu.'));
+                });
+        });
+    });
+
+    document.querySelectorAll('[data-mb-action="delete-group"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            event.preventDefault();
+            var id = link.getAttribute('data-id');
+            var name = link.getAttribute('data-name');
+
+            if (!confirm(Craft.t('menu-builder', 'Delete “{name}” and all of its menu items? This cannot be undone.', { name: name }))) {
+                return;
+            }
+
+            Craft.sendActionRequest('POST', 'menu-builder/groups/delete', { data: { id: id } })
+                .then(function() {
+                    Craft.cp.displaySuccess(Craft.t('menu-builder', 'Navigation menu deleted.'));
+                    window.location.reload();
+                })
+                .catch(function() {
+                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t delete that navigation menu.'));
+                });
+        });
+    });
+})();
+{% endjs %}
+
+{% do view.registerAssetBundle("Tahadudhiya\\MenuBuilder\\web\\assets\\cp\\CpAsset") %}

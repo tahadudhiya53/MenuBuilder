@@ -102,8 +102,9 @@ class MenuBuilderItem extends Model
             [['target'], 'in', 'range' => ['_self', '_blank']],
             [['fallbackBehavior'], 'in', 'range' => self::FALLBACK_BEHAVIORS],
             [['elementId'], 'required', 'when' => fn() => in_array($this->type, self::ELEMENT_TYPES, true)],
-            [['customUrl'], 'validateCustomUrl'],
-            [['fallbackUrl'], 'validateFallbackUrl'],
+            [['customUrl'], 'validateCustomUrl', 'skipOnEmpty' => false],
+            [['fallbackUrl'], 'validateFallbackUrl', 'skipOnEmpty' => false],
+            [['handle'], 'validateAnchorTarget', 'skipOnEmpty' => false],
             [['rel', 'cssClass', 'htmlId', 'ariaLabel', 'titleAttribute', 'icon', 'badge', 'description'], 'string'],
             [['htmlAttributes', 'visibility', 'metadata'], 'safe'],
         ];
@@ -123,6 +124,18 @@ class MenuBuilderItem extends Model
 
         if (!self::isPermissiveUrl($this->customUrl)) {
             $this->addError('customUrl', 'Enter a valid URL, path, fragment, mailto:, or tel: link.');
+        }
+    }
+
+    /** An anchor link resolves from handle, falling back to customUrl (see AnchorLinkResolver) — at least one must be set. */
+    public function validateAnchorTarget(): void
+    {
+        if ($this->type !== self::TYPE_ANCHOR) {
+            return;
+        }
+
+        if (trim((string)$this->handle) === '' && trim((string)$this->customUrl) === '') {
+            $this->addError('handle', 'An anchor target (handle) is required for this link type.');
         }
     }
 

@@ -66,6 +66,34 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertArrayHasKey('fallbackUrl', $item->getErrors());
     }
 
+    public function testCustomUrlRequiredForUrlType(): void
+    {
+        $item = new MenuBuilderItem();
+        $item->groupId = 1;
+        $item->type = MenuBuilderItem::TYPE_URL;
+        $item->title = 'Link';
+        $item->customUrl = null;
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('customUrl', $item->getErrors());
+    }
+
+    public function testAnchorTargetRequired(): void
+    {
+        $item = new MenuBuilderItem();
+        $item->groupId = 1;
+        $item->type = MenuBuilderItem::TYPE_ANCHOR;
+        $item->title = 'Jump link';
+        $item->handle = null;
+        $item->customUrl = null;
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('handle', $item->getErrors());
+
+        $item->handle = 'section-2';
+        $this->assertTrue($item->validate());
+    }
+
     public function testIsLinkable(): void
     {
         $entry = new MenuBuilderItem();

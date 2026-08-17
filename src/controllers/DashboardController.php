@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
+use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use yii\web\ForbiddenHttpException;
@@ -26,15 +27,19 @@ class DashboardController extends Controller
         return true;
     }
 
-    public function actionIndex(?string $groupHandle = null): Response
+    public function actionIndex(string $groupHandle): Response
     {
         $groups = MenuBuilder::getInstance()->groups->getAll();
-        $group = $groupHandle !== null
-            ? MenuBuilder::getInstance()->groups->getByHandle($groupHandle)
-            : ($groups[0] ?? null);
+        $group = MenuBuilder::getInstance()->groups->getByHandle($groupHandle);
+
+        if (!$group) {
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'That navigation menu doesn’t exist.'));
+
+            return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+        }
 
         $search = Craft::$app->getRequest()->getQueryParam('search', '');
-        $items = $group ? MenuBuilder::getInstance()->items->getTree($group->id) : [];
+        $items = MenuBuilder::getInstance()->items->getTree($group->id);
 
         if ($search) {
             $items = $this->filterTree($items, mb_strtolower($search));
@@ -45,6 +50,7 @@ class DashboardController extends Controller
             'group' => $group,
             'items' => $items,
             'search' => $search,
+            'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
         ]);
     }
 

@@ -80,7 +80,7 @@ class MenuBuilder extends Plugin
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
             function(RegisterUrlRulesEvent $event) {
-                $event->rules['menu-builder'] = 'menu-builder/dashboard/index';
+                $event->rules['menu-builder'] = 'menu-builder/groups/index';
                 $event->rules['menu-builder/groups/new'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/groups/<groupId:\d+>'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>'] = 'menu-builder/dashboard/index';
@@ -139,7 +139,7 @@ class MenuBuilder extends Plugin
         $subnav = [];
 
         if ($currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:view'))) {
-            $subnav['dashboard'] = ['label' => Craft::t('menu-builder', 'Dashboard'), 'url' => 'menu-builder'];
+            $subnav['dashboard'] = ['label' => Craft::t('menu-builder', 'Menus'), 'url' => 'menu-builder'];
         }
 
         $item['subnav'] = $subnav;

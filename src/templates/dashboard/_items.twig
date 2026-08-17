@@ -1,0 +1,80 @@
+{% set typeLabels = {
+    entry: 'Entry'|t('menu-builder'),
+    category: 'Category'|t('menu-builder'),
+    asset: 'Asset'|t('menu-builder'),
+    url: 'Custom Link'|t('menu-builder'),
+    anchor: 'Anchor'|t('menu-builder'),
+    nonclickable: 'Heading'|t('menu-builder'),
+    separator: 'Separator'|t('menu-builder'),
+} %}
+
+{% for item in items %}
+    {% set atMaxDepth = (group.maxDepth is not null and level >= group.maxDepth) or item.type == 'separator' %}
+    <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" style="--mb-level: {{ level }}">
+        <div class="menu-builder-item-row">
+            {% if canEdit %}
+                <a class="menu-builder-drag-handle move icon" title="{{ 'Reorder'|t('app') }}" role="button" tabindex="0" aria-label="{{ 'Reorder {title}'|t('menu-builder', { title: item.title }) }}"></a>
+            {% endif %}
+
+            <span class="menu-builder-item-title">
+                {{ item.title|default('(' ~ 'untitled'|t('menu-builder') ~ ')') }}
+            </span>
+
+            <span class="menu-builder-item-type badge">{{ typeLabels[item.type] ?? item.type }}</span>
+
+            {% if not item.enabled %}
+                <span class="menu-builder-item-status badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
+            {% endif %}
+
+            {% if item.hasChildren() %}
+                <span class="menu-builder-item-childcount light" title="{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}">
+                    {{ item.children|length }}
+                </span>
+            {% endif %}
+
+            {% if canEdit %}
+                <div class="menu-builder-item-actions">
+                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {title}'|t('menu-builder', { title: item.title|default('untitled'|t('menu-builder')) }) }}"></button>
+                    <div class="menu">
+                        <ul>
+                            <li>
+                                <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Edit"|t('app') }}</a>
+                            </li>
+                            <li>
+                                <a class="{{ not atMaxDepth ? '' : 'menu-builder-action-hidden' }}" data-mb-action="add-child" data-parent-id="{{ item.id }}" role="button">{{ "Add child"|t('menu-builder') }}</a>
+                            </li>
+                            <li>
+                                <a data-mb-action="add-sibling" data-parent-id="{{ parentId ?? '' }}" role="button">{{ "Add sibling"|t('menu-builder') }}</a>
+                            </li>
+                            <li>
+                                <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a>
+                            </li>
+                        </ul>
+                        <hr>
+                        <ul>
+                            <li><a data-mb-action="move-up" data-id="{{ item.id }}" role="button">{{ "Move up"|t('menu-builder') }}</a></li>
+                            <li><a data-mb-action="move-down" data-id="{{ item.id }}" role="button">{{ "Move down"|t('menu-builder') }}</a></li>
+                            <li><a class="{{ level > 1 ? '' : 'menu-builder-action-hidden' }}" data-mb-action="outdent" data-id="{{ item.id }}" role="button">{{ "Outdent (move up one level)"|t('menu-builder') }}</a></li>
+                            <li><a class="{{ not atMaxDepth ? '' : 'menu-builder-action-hidden' }}" data-mb-action="indent" data-id="{{ item.id }}" role="button">{{ "Indent (make child of item above)"|t('menu-builder') }}</a></li>
+                        </ul>
+                        <hr>
+                        <ul>
+                            <li>
+                                <a data-mb-action="toggle" data-id="{{ item.id }}" role="button">
+                                    {{ item.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}
+                                </a>
+                            </li>
+                            <li>
+                                <a data-mb-action="delete" data-id="{{ item.id }}" data-title="{{ item.title }}" data-has-children="{{ item.hasChildren() ? '1' : '0' }}" class="error" role="button">{{ "Delete"|t('app') }}</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </li>
+
+    {% if item.hasChildren() %}
+        {% include "menu-builder/dashboard/_items" with { items: item.children, level: level + 1, parentId: item.id, group: group, canEdit: canEdit } %}
+    {% endif %}
+{% endfor %}

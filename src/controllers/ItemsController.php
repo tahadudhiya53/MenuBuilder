@@ -59,12 +59,26 @@ class ItemsController extends Controller
             }
         }
 
-        return $this->renderTemplate('menu-builder/items/_edit', [
+        $variables = [
             'group' => $group,
             'item' => $item,
             'isNew' => $item->id === null,
             'siblingCandidates' => MenuBuilder::getInstance()->items->getFlatForGroup($group->id),
-        ]);
+        ];
+
+        if (Craft::$app->getRequest()->getIsAjax() && Craft::$app->getRequest()->getAcceptsJson()) {
+            $view = $this->getView();
+            $html = $view->renderTemplate('menu-builder/items/_fields', $variables);
+
+            return $this->asJson([
+                'title' => $variables['isNew'] ? Craft::t('menu-builder', 'New menu item') : $item->title,
+                'html' => $html,
+                'headHtml' => $view->getHeadHtml(),
+                'footHtml' => $view->getBodyHtml(),
+            ]);
+        }
+
+        return $this->renderTemplate('menu-builder/items/_edit', $variables);
     }
 
     public function actionSave(): ?Response
@@ -85,7 +99,11 @@ class ItemsController extends Controller
         $item->type = $this->bodyString('type', MenuBuilderItem::TYPE_URL);
         $item->title = $this->bodyString('title');
         $item->handle = $this->bodyString('handle') ?: null;
-        $item->enabled = (bool)$request->getBodyParam('enabled', false);
+        // The "Enabled" toggle only exists once an item can be saved a second
+        // time (basic-only new-item forms don't show it — see spec §12/isNew
+        // handling in items/_fields.twig), so a missing param means "leave
+        // the default" rather than "explicitly disabled".
+        $item->enabled = (bool)$request->getBodyParam('enabled', $item->id === null);
         $item->clickable = (bool)$request->getBodyParam('clickable', false);
 
         $elementId = $this->bodyArray('elementId');
@@ -124,6 +142,10 @@ class ItemsController extends Controller
 
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
 
+        if ($request->getIsAjax() && $request->getAcceptsJson()) {
+            return $this->asSuccess(data: ['id' => $item->id, 'title' => $item->title]);
+        }
+
         return $this->redirectToPostedUrl($item, UrlHelper::cpUrl('menu-builder/' . $group?->handle));
     }
 
@@ -131,8 +153,20 @@ class ItemsController extends Controller
     {
         $this->requirePostRequest();
 
-        $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
-        $success = MenuBuilder::getInstance()->items->deleteById($id);
+        $request = Craft::$app->getRequest();
+        $id = (int)$request->getRequiredBodyParam('id');
+        $itemsService = MenuBuilder::getInstance()->items;
+        $keepChildrenParam = $request->getBodyParam('keepChildren');
+        $wantsChoice = $request->getIsAjax() && $request->getAcceptsJson();
+
+        if ($keepChildrenParam === null && $wantsChoice && $itemsService->hasChildren($id)) {
+            return $this->asJson([
+                'requiresChoice' => true,
+                'childCount' => $itemsService->countDirectChildren($id),
+            ]);
+        }
+
+        $success = $itemsService->deleteById($id, (bool)$keepChildrenParam);
 
         return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that menu.'));
     }
@@ -256,12 +290,16 @@ class ItemsController extends Controller
             $rules[] = ['type' => 'loggedOut'];
         }
 
-        $userGroups = array_filter(array_map('intval', $posted['userGroups'] ?? []));
+        // Checkbox-select groups post a zero-value padding field alongside
+        // the checked `[]` entries so the key always exists — when nothing
+        // is checked, that padding value arrives as a bare string instead
+        // of an array (seen from the AJAX slide-out's own request builder).
+        $userGroups = array_filter(array_map('intval', is_array($posted['userGroups'] ?? null) ? $posted['userGroups'] : []));
         if (!empty($userGroups)) {
             $rules[] = ['type' => 'userGroup', 'groupIds' => array_values($userGroups)];
         }
 
-        $sites = array_filter(array_map('intval', $posted['sites'] ?? []));
+        $sites = array_filter(array_map('intval', is_array($posted['sites'] ?? null) ? $posted['sites'] : []));
         if (!empty($sites)) {
             $rules[] = ['type' => 'site', 'siteIds' => array_values($sites)];
         }

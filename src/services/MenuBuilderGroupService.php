@@ -102,6 +102,71 @@ class MenuBuilderGroupService extends Component
         return true;
     }
 
+    public function countItems(int $groupId): int
+    {
+        return MenuBuilder::getInstance()->items->countForGroup($groupId);
+    }
+
+    /**
+     * Clones a group (name + " Copy", handle uniquified with a numeric
+     * suffix) and every item in it, preserving hierarchy.
+     */
+    public function duplicate(int $id): ?MenuBuilderGroup
+    {
+        $original = MenuBuilderGroupRecord::findOne($id);
+
+        if (!$original) {
+            return null;
+        }
+
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            $clone = new MenuBuilderGroupRecord();
+            $clone->name = $original->name . ' Copy';
+            $clone->handle = $this->uniqueHandle($original->handle);
+            $clone->description = $original->description;
+            $clone->enabled = $original->enabled;
+            $clone->sortOrder = $this->nextSortOrder();
+            $clone->maxDepth = $original->maxDepth;
+            $clone->cssClass = $original->cssClass;
+            $clone->htmlAttributes = $original->htmlAttributes;
+            $clone->settings = $original->settings;
+
+            if (!$clone->save()) {
+                $transaction->rollBack();
+
+                return null;
+            }
+
+            MenuBuilder::getInstance()->items->duplicateAllForGroup((int)$original->id, (int)$clone->id);
+            $transaction->commit();
+        } catch (\Throwable $exception) {
+            $transaction->rollBack();
+            Craft::warning('Failed to duplicate navigation group: ' . $exception->getMessage(), __METHOD__);
+
+            return null;
+        }
+
+        $this->allCache = null;
+        MenuBuilder::getInstance()->cache->invalidateAll();
+
+        return $this->recordToModel($clone);
+    }
+
+    private function uniqueHandle(string $baseHandle): string
+    {
+        $handle = $baseHandle;
+        $suffix = 2;
+
+        while (MenuBuilderGroupRecord::find()->where(['handle' => $handle])->exists()) {
+            $handle = $baseHandle . $suffix;
+            $suffix++;
+        }
+
+        return $handle;
+    }
+
     public function deleteById(int $id): bool
     {
         $record = MenuBuilderGroupRecord::findOne($id);

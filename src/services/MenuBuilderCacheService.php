@@ -5,7 +5,7 @@ namespace Tahadudhiya\MenuBuilder\services;
 use Craft;
 use craft\base\Component;
 use yii\caching\TagDependency;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 
 /**
  * Caches the link-resolved (but not yet visibility-filtered or active-state
@@ -22,8 +22,8 @@ class MenuBuilderCacheService extends Component
     private const DURATION = null; // cache until explicitly invalidated
 
     /**
-     * @param callable():array<int,MenuBuilderItem> $generator
-     * @return MenuBuilderItem[]
+     * @param callable():array<int,MenuBuilderNode> $generator
+     * @return MenuBuilderNode[]
      */
     public function getOrSet(string $groupHandle, callable $generator): array
     {

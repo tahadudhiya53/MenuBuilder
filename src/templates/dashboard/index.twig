@@ -1,8 +1,9 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = "MenuBuilder"|t('menu-builder') %}
+{% set title = group.name %}
 {% set selectedSubnavItem = 'dashboard' %}
+{% set crumbs = [{ label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') }] %}
 
 {% set canEdit = currentUser.admin or currentUser.can('menuBuilder:edit') %}
 {% set canCreate = currentUser.admin or currentUser.can('menuBuilder:create') %}
@@ -30,52 +31,60 @@
 {% endblock %}
 
 {% block content %}
-    {% if not group %}
+    <header class="menu-builder-header">
+        <h1 class="menu-builder-header-title">
+            {{ group.name }}
+            {% if not group.enabled %}<span class="badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>{% endif %}
+        </h1>
         <p class="light">
-            {{ "No navigation groups yet. Create one to start building a navigation."|t('menu-builder') }}
+            {{ "Handle: {handle}"|t('menu-builder', { handle: group.handle }) }}
+            &middot;
+            {{ "{count} items"|t('menu-builder', { count: itemCount }) }}
         </p>
-    {% else %}
-        <div id="menu-builder-toolbar" class="flex flex-nowrap">
-            <div class="flex-grow">
-                <form method="get">
-                    <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search menus…'|t('menu-builder') }}" class="text fullwidth">
-                </form>
-            </div>
-            <div>
-                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Group settings"|t('menu-builder') }}</a>
-            </div>
-        </div>
-
         {% if group.description %}
             <p class="light">{{ group.description }}</p>
         {% endif %}
-    {% endif %}
+    </header>
 
-    {% if group %}
-        <div id="menu-builder-tree"
-             data-group-id="{{ group.id }}"
-             data-group-handle="{{ group.handle }}"
-             data-max-depth="{{ group.maxDepth ?? '' }}"
-             data-can-edit="{{ canEdit ? '1' : '0' }}">
-            {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit } %}
+    <div id="menu-builder-toolbar" class="flex flex-nowrap">
+        <div class="flex-grow">
+            <form method="get">
+                <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search menu items…'|t('menu-builder') }}" class="text fullwidth">
+            </form>
         </div>
+        <div>
+            <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Menu settings"|t('menu-builder') }}</a>
+        </div>
+    </div>
 
-        {% if items is empty %}
-            <p class="light">
+    <div id="menu-builder-tree"
+         data-group-id="{{ group.id }}"
+         data-group-handle="{{ group.handle }}"
+         data-max-depth="{{ group.maxDepth ?? '' }}"
+         data-can-edit="{{ canEdit ? '1' : '0' }}">
+        {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit } %}
+    </div>
+
+    {% if items is empty %}
+        <div class="zilch">
+            <p>
                 {% if search %}
-                    {{ "No menus match your search."|t('menu-builder') }}
+                    {{ "No menu items match your search."|t('menu-builder') }}
                 {% else %}
-                    {{ "This navigation has no menus yet."|t('menu-builder') }}
+                    {{ "This menu has no items yet."|t('menu-builder') }}
                 {% endif %}
             </p>
-        {% endif %}
+            {% if canCreate and not search %}
+                <p><a href="#" class="btn submit" data-mb-action="focus-quick-add">{{ "+ Add Menu Item"|t('menu-builder') }}</a></p>
+            {% endif %}
+        </div>
     {% endif %}
 {% endblock %}
 
 {% block details %}
     {% if group and canCreate %}
         <div id="menu-builder-quick-add">
-            <h2>{{ "New menu"|t('menu-builder') }}</h2>
+            <h2>{{ "+ Add Menu Item"|t('menu-builder') }}</h2>
             <form method="post" action="">
                 {{ csrfInput() }}
                 <input type="hidden" name="action" value="menu-builder/items/save">
@@ -86,7 +95,7 @@
 
                 <div class="menu-builder-quick-add-fields">
                     {{ forms.selectField({
-                        label: "Link type"|t('menu-builder'),
+                        label: "Type"|t('menu-builder'),
                         id: 'quick-add-type',
                         name: 'type',
                         value: 'url',
@@ -95,7 +104,9 @@
                             { label: "Category"|t('menu-builder'), value: 'category' },
                             { label: "Asset"|t('menu-builder'), value: 'asset' },
                             { label: "Custom URL"|t('menu-builder'), value: 'url' },
-                            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
+                            { label: "Anchor"|t('menu-builder'), value: 'anchor' },
+                            { label: "Heading (non-clickable)"|t('menu-builder'), value: 'nonclickable' },
+                            { label: "Separator"|t('menu-builder'), value: 'separator' },
                         ],
                     }) }}
 
@@ -150,6 +161,14 @@
                             name: 'customUrl',
                         }) }}
                     </div>
+
+                    <div data-quick-add-section="anchor" class="menu-builder-link-section hidden">
+                        {{ forms.textField({
+                            label: "Anchor handle"|t('menu-builder'),
+                            id: 'quick-add-anchor',
+                            name: 'customUrl',
+                        }) }}
+                    </div>
                 </div>
 
                 <div class="btngroup">
@@ -171,13 +190,29 @@
         function updateSections() {
             var type = typeField.value;
             sections.forEach(function(section) {
-                section.classList.toggle('hidden', section.getAttribute('data-quick-add-section') !== type);
+                var visible = section.getAttribute('data-quick-add-section') === type;
+                section.classList.toggle('hidden', !visible);
+                // The url/anchor sections share the `customUrl` field name
+                // (only one applies per type) — disabling the inactive one
+                // keeps its blank value out of the submitted form entirely,
+                // rather than letting it silently overwrite the real value.
+                section.querySelectorAll('input, select, textarea').forEach(function(field) {
+                    field.disabled = !visible;
+                });
             });
-            clickableField.value = type === 'nonclickable' ? '' : '1';
+            clickableField.value = (type === 'nonclickable' || type === 'separator') ? '' : '1';
         }
 
         typeField.addEventListener('change', updateSections);
         updateSections();
+
+        document.querySelectorAll('[data-mb-action="focus-quick-add"]').forEach(function(link) {
+            link.addEventListener('click', function(event) {
+                event.preventDefault();
+                panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                document.getElementById('quick-add-title').focus();
+            });
+        });
     })();
     {% endjs %}
 {% endif %}

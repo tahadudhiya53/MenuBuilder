@@ -21,15 +21,35 @@ class GroupsController extends Controller
 
         $this->requireCpRequest();
         $currentUser = Craft::$app->getUser()->getIdentity();
-        $requiredPermission = in_array($action->id, ['delete'], true)
-            ? 'menuBuilder:delete'
-            : 'menuBuilder:create';
+        $requiredPermission = match ($action->id) {
+            'index' => 'menuBuilder:view',
+            'delete' => 'menuBuilder:delete',
+            default => 'menuBuilder:create',
+        };
 
         if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
             throw new ForbiddenHttpException('You are not permitted to manage navigation groups.');
         }
 
         return true;
+    }
+
+    public function actionIndex(): Response
+    {
+        $groups = MenuBuilder::getInstance()->groups->getAll();
+        $currentUser = Craft::$app->getUser()->getIdentity();
+
+        $rows = array_map(fn(MenuBuilderGroup $group) => [
+            'group' => $group,
+            'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
+        ], $groups);
+
+        return $this->renderTemplate('menu-builder/groups/_index', [
+            'rows' => $rows,
+            'canCreate' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:create')),
+            'canEdit' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:edit')),
+            'canDelete' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:delete')),
+        ]);
     }
 
     public function actionEdit(?int $groupId = null, ?MenuBuilderGroup $group = null): Response
@@ -83,6 +103,23 @@ class GroupsController extends Controller
         Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group saved.'));
 
         return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menu-builder/' . $group->handle));
+    }
+
+    public function actionDuplicate(): Response
+    {
+        $this->requirePostRequest();
+
+        $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
+        $clone = MenuBuilder::getInstance()->groups->duplicate($id);
+
+        if ($clone === null) {
+            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that navigation group.'));
+        }
+
+        return $this->asSuccess(data: [
+            'id' => $clone->id,
+            'url' => UrlHelper::cpUrl('menu-builder/' . $clone->handle),
+        ]);
     }
 
     public function actionDelete(): Response

@@ -13,7 +13,12 @@ class CpAsset extends AssetBundle
         $this->sourcePath = __DIR__;
         $this->depends = [CraftCpAsset::class, GarnishAsset::class];
         $this->css = ['menu-builder-cp.css'];
-        $this->js = ['menu-builder-cp.js'];
+        $this->js = [
+            'js/menu-builder.js',
+            'js/item-fields.js',
+            'js/slideout.js',
+            'js/tree.js',
+        ];
 
         parent::init();
     }

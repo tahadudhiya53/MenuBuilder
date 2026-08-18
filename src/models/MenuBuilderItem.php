@@ -94,7 +94,10 @@ class MenuBuilderItem extends Model
         return [
             [['groupId'], 'required'],
             [['type'], 'in', 'range' => self::TYPES],
-            [['title'], 'required', 'when' => fn($model) => $model->type !== self::TYPE_SEPARATOR],
+            // Element-backed types may leave title blank to inherit the linked
+            // element's own title at render time (spec §14) — an explicit
+            // title, once given, is never overwritten by that fallback.
+            [['title'], 'required', 'when' => fn($model) => $model->type !== self::TYPE_SEPARATOR && !in_array($model->type, self::ELEMENT_TYPES, true)],
             [['title'], 'string', 'max' => 255],
             [['handle'], 'match', 'pattern' => '/^[a-zA-Z][a-zA-Z0-9_-]*$/', 'message' => 'Handle must start with a letter and contain only letters, numbers, underscores, and hyphens.', 'skipOnEmpty' => true],
             [['enabled', 'clickable', 'featured'], 'boolean'],
@@ -105,6 +108,7 @@ class MenuBuilderItem extends Model
             [['customUrl'], 'validateCustomUrl', 'skipOnEmpty' => false],
             [['fallbackUrl'], 'validateFallbackUrl', 'skipOnEmpty' => false],
             [['handle'], 'validateAnchorTarget', 'skipOnEmpty' => false],
+            [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
             [['rel', 'cssClass', 'htmlId', 'ariaLabel', 'titleAttribute', 'icon', 'badge', 'description'], 'string'],
             [['htmlAttributes', 'visibility', 'metadata'], 'safe'],
         ];
@@ -134,9 +138,34 @@ class MenuBuilderItem extends Model
             return;
         }
 
-        if (trim((string)$this->handle) === '' && trim((string)$this->customUrl) === '') {
+        $target = trim((string)$this->handle) !== '' ? trim((string)$this->handle) : trim((string)$this->customUrl);
+
+        if ($target === '') {
             $this->addError('handle', 'An anchor target (handle) is required for this link type.');
+
+            return;
         }
+
+        if (!self::isValidAnchorTarget($target)) {
+            $this->addError('handle', 'Enter a valid anchor target — no spaces or quote characters.');
+        }
+    }
+
+    /**
+     * Rejects the malformed fragments spec §7 calls out (quotes, whitespace,
+     * angle brackets) while staying permissive about what's otherwise a
+     * valid HTML id/fragment. A leading '#' is tolerated since the resolver
+     * strips it before use.
+     */
+    public static function isValidAnchorTarget(string $value): bool
+    {
+        $value = trim($value);
+
+        if ($value === '' || $value === '#') {
+            return false;
+        }
+
+        return preg_match('/^#?[^\s"\'<>]+$/', $value) === 1;
     }
 
     public function validateFallbackUrl(): void
@@ -179,6 +208,41 @@ class MenuBuilderItem extends Model
         }
 
         return filter_var($value, FILTER_VALIDATE_URL) !== false;
+    }
+
+    /**
+     * Defense-in-depth beyond Twig's own output escaping (spec §16): rejects
+     * event-handler-shaped attribute keys and `javascript:`-scheme values so
+     * a custom Twig loop that renders `htmlAttributes` unescaped-as-markup
+     * can't be turned into script execution by editor input.
+     */
+    public function validateHtmlAttributes(): void
+    {
+        if (!is_array($this->htmlAttributes)) {
+            $this->addError('htmlAttributes', 'Invalid attributes.');
+
+            return;
+        }
+
+        foreach ($this->htmlAttributes as $key => $value) {
+            if (!is_string($key) || !preg_match('/^[a-zA-Z][a-zA-Z0-9_:-]*$/', $key)) {
+                $this->addError('htmlAttributes', "\"$key\" is not a valid attribute name.");
+
+                continue;
+            }
+
+            if (stripos($key, 'on') === 0) {
+                $this->addError('htmlAttributes', "Event handler attributes like \"$key\" are not allowed.");
+
+                continue;
+            }
+
+            $normalizedValue = preg_replace('/\s+/', '', (string)$value);
+
+            if (stripos($normalizedValue, 'javascript:') !== false) {
+                $this->addError('htmlAttributes', "The value for \"$key\" may not use a javascript: URL.");
+            }
+        }
     }
 
     public function isLinkable(): bool

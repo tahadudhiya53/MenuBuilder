@@ -12,7 +12,8 @@ class ResolvedLink
     public function __construct(
         public readonly ?string $url = null,
         public readonly bool $isAvailable = true,
-        public readonly ?string $fallbackLabel = null,
+        /** The linked element's own title, used when the item has no explicit title override (spec §14). */
+        public readonly ?string $label = null,
     ) {
     }
 
@@ -21,9 +22,9 @@ class ResolvedLink
         return new self(url: null, isAvailable: false);
     }
 
-    public static function to(string $url): self
+    public static function to(string $url, ?string $label = null): self
     {
-        return new self(url: $url, isAvailable: true);
+        return new self(url: $url, isAvailable: true, label: $label);
     }
 
     public static function none(): self

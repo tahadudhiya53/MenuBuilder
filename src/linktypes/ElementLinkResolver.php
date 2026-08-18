@@ -46,7 +46,9 @@ class ElementLinkResolver implements LinkTypeResolverInterface
             return $this->fallback($item);
         }
 
-        return ResolvedLink::to($url);
+        $label = (string)($element->title ?? '');
+
+        return ResolvedLink::to($url, $label !== '' ? $label : null);
     }
 
     private function isPubliclyAvailable(ElementInterface $element): bool

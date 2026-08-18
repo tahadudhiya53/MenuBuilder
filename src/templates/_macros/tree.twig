@@ -9,23 +9,29 @@
     {% import _self as self %}
     <ul>
         {% for node in nodes %}
-            <li class="{{ node.cssClass }}{{ node.isActiveOrAncestor() ? ' is-active' : '' }}">
-                {% if node.isClickable %}
-                    <a href="{{ node.url }}"
-                       target="{{ node.target }}"
-                       {% if node.rel %}rel="{{ node.rel }}"{% endif %}
-                       {% if node.ariaLabel %}aria-label="{{ node.ariaLabel }}"{% endif %}
-                       {% if node.titleAttribute %}title="{{ node.titleAttribute }}"{% endif %}
-                       {% if node.isActive %}aria-current="page"{% endif %}
-                    >{{ node.title }}</a>
-                {% else %}
-                    <span>{{ node.title }}</span>
-                {% endif %}
+            {% if node.type == 'separator' %}
+                <li role="separator" class="{{ node.cssClass }}"{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
+            {% else %}
+                <li class="{{ node.cssClass }}{{ node.isActiveOrAncestor() ? ' is-active' : '' }}"{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}>
+                    {% if node.isClickable %}
+                        <a href="{{ node.url }}"
+                           target="{{ node.target }}"
+                           {% if node.rel %}rel="{{ node.rel }}"{% endif %}
+                           {% if node.ariaLabel %}aria-label="{{ node.ariaLabel }}"{% endif %}
+                           {% if node.titleAttribute %}title="{{ node.titleAttribute }}"{% endif %}
+                           {% if node.isActive %}aria-current="page"{% endif %}
+                           {% for key, value in node.htmlAttributes %}{{ key }}="{{ value }}" {% endfor %}
+                        >{{ node.title }}</a>
+                    {% else %}
+                        {# A non-clickable heading is a label, never a fake link — no href, ever. #}
+                        <span{% if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}>{{ node.title }}</span>
+                    {% endif %}
 
-                {% if node.hasChildren() %}
-                    {{ self.render(node.children) }}
-                {% endif %}
-            </li>
+                    {% if node.hasChildren() %}
+                        {{ self.render(node.children) }}
+                    {% endif %}
+                </li>
+            {% endif %}
         {% endfor %}
     </ul>
 {% endmacro %}

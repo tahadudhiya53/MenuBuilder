@@ -17,7 +17,13 @@
             {% endif %}
 
             <span class="menu-builder-item-title">
-                {{ item.title|default('(' ~ 'untitled'|t('menu-builder') ~ ')') }}
+                {% if item.title %}
+                    {{ item.title }}
+                {% elseif item.type in ['entry', 'category', 'asset'] %}
+                    <em class="light">{{ "(uses linked element's title)"|t('menu-builder') }}</em>
+                {% else %}
+                    <em class="light">{{ "(untitled)"|t('menu-builder') }}</em>
+                {% endif %}
             </span>
 
             <span class="menu-builder-item-type badge">{{ typeLabels[item.type] ?? item.type }}</span>

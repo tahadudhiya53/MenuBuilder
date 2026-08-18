@@ -61,12 +61,37 @@ class LinkTypeResolverTest extends TestCase
         $link = $resolver->resolve($heading);
         $this->assertTrue($link->isAvailable);
         $this->assertNull($link->url);
+    }
+
+    /**
+     * There is no "give it a link anyway" path — a customUrl or a stale
+     * clickable=true on a heading/separator item must never produce a link.
+     */
+    public function testNonClickableLinkResolverIgnoresCustomUrlAndClickableFlag(): void
+    {
+        $resolver = new NonClickableLinkResolver();
 
         $headingWithUrl = new MenuBuilderItem();
         $headingWithUrl->type = MenuBuilderItem::TYPE_NONCLICKABLE;
         $headingWithUrl->clickable = true;
         $headingWithUrl->customUrl = '/products';
 
-        $this->assertSame('/products', $resolver->resolve($headingWithUrl)->url);
+        $link = $resolver->resolve($headingWithUrl);
+        $this->assertNull($link->url);
+        $this->assertTrue($link->isAvailable);
+    }
+
+    public function testSeparatorRemainsStructuralEvenWithCustomUrl(): void
+    {
+        $resolver = new NonClickableLinkResolver();
+
+        $separator = new MenuBuilderItem();
+        $separator->type = MenuBuilderItem::TYPE_SEPARATOR;
+        $separator->clickable = true;
+        $separator->customUrl = '/products';
+
+        $link = $resolver->resolve($separator);
+        $this->assertNull($link->url);
+        $this->assertTrue($link->isAvailable);
     }
 }

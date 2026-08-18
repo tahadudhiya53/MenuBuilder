@@ -6,22 +6,16 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\ResolvedLink;
 
 /**
- * Shared by nonclickable and separator types — a heading/group label with no
- * href at all, unless the editor explicitly gave it a custom URL (spec §5:
- * a non-clickable parent can optionally still have its own URL).
+ * Shared by nonclickable and separator types — a structural heading/group
+ * label that never resolves to a link. There is no alternate "give it a link
+ * anyway" path: isLinkable() on the item is authoritative, and this resolver
+ * matches that by always returning no link, regardless of any leftover
+ * customUrl/clickable value on the item.
  */
 class NonClickableLinkResolver implements LinkTypeResolverInterface
 {
     public function resolve(MenuBuilderItem $item): ResolvedLink
     {
-        if (!$item->clickable) {
-            return ResolvedLink::none();
-        }
-
-        if ($item->customUrl) {
-            return ResolvedLink::to($item->customUrl);
-        }
-
         return ResolvedLink::none();
     }
 }

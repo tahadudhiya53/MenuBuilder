@@ -4,6 +4,7 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
@@ -84,12 +85,12 @@ class MenuBuilderResolver extends Component
                 id: $item->id,
                 handle: $item->handle,
                 type: $item->type,
-                title: $item->title,
+                title: LinkAttributeHelper::resolveTitle($item->title, $resolvedLink->label),
                 url: $resolvedLink->url,
                 isClickable: $isClickable,
                 isLinkAvailable: $resolvedLink->isAvailable,
                 target: $item->target,
-                rel: $item->rel,
+                rel: LinkAttributeHelper::mergeRelForTarget($item->target, $item->rel),
                 cssClass: $item->cssClass,
                 htmlId: $item->htmlId,
                 htmlAttributes: $item->htmlAttributes,

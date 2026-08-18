@@ -20,8 +20,6 @@
         var typeField = root.querySelector('#type');
         var sections = root.querySelectorAll('[data-link-section]');
         var clickableField = root.querySelector('#clickableField');
-        var nonClickableCheckbox = root.querySelector('#nonClickableHasUrl');
-        var nonClickableUrlWrap = root.querySelector('[data-nonclickable-url]');
         var fallbackField = root.querySelector('#fallbackBehavior');
         var fallbackUrlWrap = root.querySelector('[data-fallback-url]');
 
@@ -35,8 +33,8 @@
 
         /**
          * Several sibling sections share the same field name (`customUrl` for
-         * url/anchor/nonclickable, `elementId` for entry/category/asset) since
-         * only one is ever meant to apply at a time. Hiding a section isn't
+         * url/anchor, `elementId` for entry/category/asset) since only one is
+         * ever meant to apply at a time. Hiding a section isn't
          * enough on its own — an unrelated section's stale/blank value would
          * still serialize and silently clobber the visible one's value on
          * submit. Disabling excludes a field from both serializeArray() and a
@@ -62,17 +60,7 @@
             if (!clickableField) {
                 return;
             }
-            clickableField.value = (!isHeadingType() || (nonClickableCheckbox && nonClickableCheckbox.checked)) ? '1' : '';
-        }
-
-        function updateNonClickable() {
-            if (!nonClickableCheckbox || !nonClickableUrlWrap) {
-                return;
-            }
-            var visible = nonClickableCheckbox.checked;
-            nonClickableUrlWrap.style.display = visible ? '' : 'none';
-            setSectionDisabled(nonClickableUrlWrap, !visible);
-            updateClickableField();
+            clickableField.value = !isHeadingType() ? '1' : '';
         }
 
         function updateFallback() {
@@ -86,16 +74,10 @@
 
         typeField.addEventListener('change', function() {
             updateSections();
-            updateNonClickable();
             updateClickableField();
         });
         updateSections();
-        updateNonClickable();
         updateClickableField();
-
-        if (nonClickableCheckbox) {
-            nonClickableCheckbox.addEventListener('change', updateNonClickable);
-        }
 
         if (fallbackField) {
             fallbackField.addEventListener('change', updateFallback);

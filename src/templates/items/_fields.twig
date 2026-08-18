@@ -41,6 +41,7 @@
 
     {{ forms.textField({
         label: "Title"|t('menu-builder'),
+        instructions: item.type in ['entry', 'category', 'asset'] ? "Leave blank to use the linked element's own title."|t('menu-builder') : null,
         id: 'title',
         name: 'title',
         value: item.title,
@@ -105,27 +106,12 @@
             id: 'anchorUrl',
             name: 'customUrl',
             value: item.customUrl,
+            errors: item.getErrors('handle'),
         }) }}
     </div>
 
-    <div data-link-section="nonclickable,separator" class="menu-builder-link-section">
-        {{ forms.checkboxField({
-            label: "Give this heading its own link anyway"|t('menu-builder'),
-            instructions: "Explicit editor choice — a heading is never made clickable just because a URL happens to be set (spec §5)."|t('menu-builder'),
-            id: 'nonClickableHasUrl',
-        }) }}
-        <div data-nonclickable-url>
-            {{ forms.textField({
-                label: "URL"|t('menu-builder'),
-                id: 'nonClickableUrl',
-                name: 'customUrl',
-                value: item.customUrl,
-            }) }}
-        </div>
-    </div>
-
-    {# clickable defaults true for linkable types; the checkbox above drives it for headings/separators #}
-    <input type="hidden" name="clickable" id="clickableField" value="{{ (item.type not in ['nonclickable', 'separator']) or item.clickable ? '1' : '' }}">
+    {# Non-clickable headings and separators can never carry a link — no UI exposes one, and isLinkable() is authoritative regardless. #}
+    <input type="hidden" name="clickable" id="clickableField" value="{{ item.type not in ['nonclickable', 'separator'] ? '1' : '' }}">
 
     {% if isNew %}
         <p class="light">{{ "Behavior, appearance, accessibility, visibility, and advanced settings become available once this menu item is saved."|t('menu-builder') }}</p>
@@ -143,51 +129,54 @@
         on: item.enabled,
     }) }}
 
-    {{ forms.selectField({
-        label: "Open in"|t('menu-builder'),
-        id: 'target',
-        name: 'target',
-        value: item.target,
-        options: [
-            { label: "Same window"|t('menu-builder'), value: '_self' },
-            { label: "New tab"|t('menu-builder'), value: '_blank' },
-        ],
-    }) }}
-
-    {{ forms.checkboxField({
-        label: "Add rel=\"nofollow\""|t('menu-builder'),
-        id: 'nofollow',
-        name: 'nofollow',
-        checked: item.rel and 'nofollow' in item.rel|split(' '),
-    }) }}
-
-    {{ forms.checkboxField({
-        label: "Add rel=\"sponsored\""|t('menu-builder'),
-        id: 'sponsored',
-        name: 'sponsored',
-        checked: item.rel and 'sponsored' in item.rel|split(' '),
-    }) }}
-
-    <h3>{{ "If the linked element becomes unavailable"|t('menu-builder') }}</h3>
-    {{ forms.selectField({
-        label: "Fallback behavior"|t('menu-builder'),
-        id: 'fallbackBehavior',
-        name: 'fallbackBehavior',
-        value: item.fallbackBehavior,
-        options: [
-            { label: "Hide the menu item"|t('menu-builder'), value: 'hide' },
-            { label: "Keep it, but disable the link"|t('menu-builder'), value: 'disableLink' },
-            { label: "Use a fallback URL"|t('menu-builder'), value: 'fallbackUrl' },
-        ],
-    }) }}
-    <div data-fallback-url>
-        {{ forms.textField({
-            label: "Fallback URL"|t('menu-builder'),
-            id: 'fallbackUrl',
-            name: 'fallbackUrl',
-            value: item.fallbackUrl,
-            errors: item.getErrors('fallbackUrl'),
+    {# Target/rel/fallback only make sense for types that can actually produce a link — never for a non-clickable heading or a structural separator. #}
+    <div data-link-section="entry,category,asset,url,anchor" class="menu-builder-link-section">
+        {{ forms.selectField({
+            label: "Open in"|t('menu-builder'),
+            id: 'target',
+            name: 'target',
+            value: item.target,
+            options: [
+                { label: "Same window"|t('menu-builder'), value: '_self' },
+                { label: "New tab"|t('menu-builder'), value: '_blank' },
+            ],
         }) }}
+
+        {{ forms.checkboxField({
+            label: "Add rel=\"nofollow\""|t('menu-builder'),
+            id: 'nofollow',
+            name: 'nofollow',
+            checked: item.rel and 'nofollow' in item.rel|split(' '),
+        }) }}
+
+        {{ forms.checkboxField({
+            label: "Add rel=\"sponsored\""|t('menu-builder'),
+            id: 'sponsored',
+            name: 'sponsored',
+            checked: item.rel and 'sponsored' in item.rel|split(' '),
+        }) }}
+
+        <h3>{{ "If the linked element becomes unavailable"|t('menu-builder') }}</h3>
+        {{ forms.selectField({
+            label: "Fallback behavior"|t('menu-builder'),
+            id: 'fallbackBehavior',
+            name: 'fallbackBehavior',
+            value: item.fallbackBehavior,
+            options: [
+                { label: "Hide the menu item"|t('menu-builder'), value: 'hide' },
+                { label: "Keep it, but disable the link"|t('menu-builder'), value: 'disableLink' },
+                { label: "Use a fallback URL"|t('menu-builder'), value: 'fallbackUrl' },
+            ],
+        }) }}
+        <div data-fallback-url>
+            {{ forms.textField({
+                label: "Fallback URL"|t('menu-builder'),
+                id: 'fallbackUrl',
+                name: 'fallbackUrl',
+                value: item.fallbackUrl,
+                errors: item.getErrors('fallbackUrl'),
+            }) }}
+        </div>
     </div>
 </div>
 
@@ -258,6 +247,7 @@
         id: 'htmlAttributes',
         name: 'htmlAttributes',
         value: item.htmlAttributes|map((v, k) => k ~ ': ' ~ v)|join("\n"),
+        errors: item.getErrors('htmlAttributes'),
         rows: 3,
     }) }}
 </div>

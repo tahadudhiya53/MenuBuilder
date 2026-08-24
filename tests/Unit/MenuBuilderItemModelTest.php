@@ -212,6 +212,173 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertFalse($separator->isLinkable());
     }
 
+    private function validUrlItem(array $visibility): MenuBuilderItem
+    {
+        $item = new MenuBuilderItem();
+        $item->groupId = 1;
+        $item->type = MenuBuilderItem::TYPE_URL;
+        $item->title = 'Link';
+        $item->customUrl = '/foo';
+        $item->visibility = $visibility;
+
+        return $item;
+    }
+
+    public function testVisibilityEmptyIsValid(): void
+    {
+        $this->assertTrue($this->validUrlItem([])->validate());
+    }
+
+    public function testVisibilityRejectsRuleWithoutType(): void
+    {
+        $item = $this->validUrlItem([['groupIds' => [1]]]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+    }
+
+    public function testVisibilityAllowsUnrecognizedTypeForThirdPartyRules(): void
+    {
+        // Types this model doesn't know the shape of (e.g. registered via
+        // MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES)
+        // aren't rejected here — they're validated by their own rule class
+        // at evaluation time instead.
+        $item = $this->validUrlItem([['type' => 'thirdPartyRule', 'anything' => 'goes']]);
+
+        $this->assertTrue($item->validate());
+    }
+
+    public function testVisibilityUserGroupRuleRequiresNumericIds(): void
+    {
+        $valid = $this->validUrlItem([['type' => 'userGroup', 'groupIds' => [1, 2]]]);
+        $this->assertTrue($valid->validate(), json_encode($valid->getErrors()));
+
+        $invalid = $this->validUrlItem([['type' => 'userGroup', 'groupIds' => ['not-an-id']]]);
+        $this->assertFalse($invalid->validate());
+        $this->assertArrayHasKey('visibility', $invalid->getErrors());
+    }
+
+    public function testVisibilitySiteRuleRequiresNumericIds(): void
+    {
+        $invalid = $this->validUrlItem([['type' => 'site', 'siteIds' => 'not-an-array']]);
+
+        $this->assertFalse($invalid->validate());
+        $this->assertArrayHasKey('visibility', $invalid->getErrors());
+    }
+
+    /** Bool/float must not slip through via a permissive `(string)` cast — `true` casts to `"1"`, which looks like a valid ID. */
+    public function testVisibilityIdListRejectsInvalidPhpTypes(): void
+    {
+        foreach ([true, false, 1.5, null, ['nested']] as $badValue) {
+            $item = $this->validUrlItem([['type' => 'userGroup', 'groupIds' => [$badValue]]]);
+
+            $this->assertFalse($item->validate(), 'Expected invalid groupIds entry: ' . json_encode($badValue));
+            $this->assertArrayHasKey('visibility', $item->getErrors());
+        }
+    }
+
+    public function testVisibilityIdListRejectsZeroAndNegativeIds(): void
+    {
+        foreach ([[0], [-1], ['-1'], ['0']] as $badIds) {
+            $item = $this->validUrlItem([['type' => 'site', 'siteIds' => $badIds]]);
+
+            $this->assertFalse($item->validate(), 'Expected invalid siteIds: ' . json_encode($badIds));
+        }
+    }
+
+    public function testVisibilityIdListAcceptsNumericStringIds(): void
+    {
+        $item = $this->validUrlItem([['type' => 'userGroup', 'groupIds' => ['1', '2']]]);
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+    }
+
+    /** Empty/absent groupIds is a deliberate no-op (UserGroupRule passes unconditionally), not malformed config. */
+    public function testVisibilityEmptyGroupIdsIsValidNoOp(): void
+    {
+        $this->assertTrue($this->validUrlItem([['type' => 'userGroup', 'groupIds' => []]])->validate());
+        $this->assertTrue($this->validUrlItem([['type' => 'userGroup']])->validate());
+    }
+
+    /** Empty/absent siteIds is a deliberate no-op (SiteRule passes unconditionally), not malformed config. */
+    public function testVisibilityEmptySiteIdsIsValidNoOp(): void
+    {
+        $this->assertTrue($this->validUrlItem([['type' => 'site', 'siteIds' => []]])->validate());
+        $this->assertTrue($this->validUrlItem([['type' => 'site']])->validate());
+    }
+
+    /** Empty/absent environments is a deliberate no-op (EnvironmentRule passes unconditionally), not malformed config. */
+    public function testVisibilityEmptyEnvironmentsIsValidNoOp(): void
+    {
+        $this->assertTrue($this->validUrlItem([['type' => 'environment', 'environments' => []]])->validate());
+        $this->assertTrue($this->validUrlItem([['type' => 'environment']])->validate());
+    }
+
+    public function testVisibilityDateRangeRequiresAtLeastOneBound(): void
+    {
+        $item = $this->validUrlItem([['type' => 'dateRange']]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+    }
+
+    public function testVisibilityDateRangeRejectsInvalidDates(): void
+    {
+        $item = $this->validUrlItem([['type' => 'dateRange', 'start' => 'not-a-date']]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+    }
+
+    /** Malformed, non-string persisted values must fail closed rather than throw. */
+    public function testVisibilityDateRangeRejectsNonStringDateValues(): void
+    {
+        foreach ([true, ['nested' => 'array'], 12345] as $badValue) {
+            $item = $this->validUrlItem([['type' => 'dateRange', 'start' => $badValue]]);
+
+            $this->assertFalse($item->validate(), 'Expected invalid start value: ' . json_encode($badValue));
+            $this->assertArrayHasKey('visibility', $item->getErrors());
+        }
+    }
+
+    /** DateTime would otherwise silently normalize this to March 2 instead of rejecting it. */
+    public function testVisibilityDateRangeRejectsInvalidCalendarDates(): void
+    {
+        $item = $this->validUrlItem([['type' => 'dateRange', 'start' => '2026-02-30']]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+
+        $item = $this->validUrlItem([['type' => 'dateRange', 'end' => '2026-04-31 10:00:00']]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+    }
+
+    public function testVisibilityDateRangeRejectsStartAfterEnd(): void
+    {
+        $item = $this->validUrlItem([['type' => 'dateRange', 'start' => '2026-09-30', 'end' => '2026-09-01']]);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('visibility', $item->getErrors());
+    }
+
+    public function testVisibilityDateRangeAcceptsValidRange(): void
+    {
+        $item = $this->validUrlItem([['type' => 'dateRange', 'start' => '2026-09-01 09:00', 'end' => '2026-09-30 23:59']]);
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+    }
+
+    public function testVisibilityEnvironmentRuleRequiresNonEmptyStrings(): void
+    {
+        $valid = $this->validUrlItem([['type' => 'environment', 'environments' => ['production', 'staging']]]);
+        $this->assertTrue($valid->validate(), json_encode($valid->getErrors()));
+
+        $invalid = $this->validUrlItem([['type' => 'environment', 'environments' => ['']]]);
+        $this->assertFalse($invalid->validate());
+    }
+
     public function testHasChildren(): void
     {
         $item = new MenuBuilderItem();

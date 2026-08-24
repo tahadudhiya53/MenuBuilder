@@ -21,17 +21,64 @@ class GroupsController extends Controller
 
         $this->requireCpRequest();
         $currentUser = Craft::$app->getUser()->getIdentity();
-        $requiredPermission = match ($action->id) {
-            'index' => 'menuBuilder:view',
-            'delete' => 'menuBuilder:delete',
-            default => 'menuBuilder:create',
-        };
+        $requiredPermission = self::requiredPermissionForAction($action->id);
 
         if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
             throw new ForbiddenHttpException('You are not permitted to manage navigation groups.');
         }
 
         return true;
+    }
+
+    /**
+     * Pure mapping from action to the permission it requires, factored out
+     * so it's unit-testable without a booted Craft app. Groups are
+     * structural/settings-level entities (name, handle, maxDepth, cssClass,
+     * htmlAttributes — see MenuBuilderGroup) rather than content, so
+     * creating/editing/duplicating one is gated by `manageSettings` — the
+     * `create`/`edit` permissions govern items within a group instead (see
+     * ItemsController::requiredPermissionForAction()).
+     */
+    public static function requiredPermissionForAction(string $actionId): string
+    {
+        return match ($actionId) {
+            'index', 'edit' => 'menuBuilder:view',
+            'delete' => 'menuBuilder:delete',
+            default => 'menuBuilder:manageSettings',
+        };
+    }
+
+    /**
+     * Quick enable/disable, parity with ItemsController::actionToggle() —
+     * previously a group could only be toggled by opening the full edit form.
+     */
+    public function actionToggle(): Response
+    {
+        $this->requirePostRequest();
+
+        $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
+        $group = MenuBuilder::getInstance()->groups->getById($id);
+
+        if (!$group) {
+            return $this->asFailure(Craft::t('menu-builder', 'Navigation group not found.'));
+        }
+
+        $group->enabled = !$group->enabled;
+        $success = MenuBuilder::getInstance()->groups->save($group, runValidation: false);
+
+        if (Craft::$app->getRequest()->getAcceptsJson()) {
+            return $success
+                ? $this->asSuccess(data: ['enabled' => $group->enabled])
+                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+        }
+
+        if ($success) {
+            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group updated.'));
+        } else {
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+        }
+
+        return $this->redirectToPostedUrl();
     }
 
     public function actionIndex(): Response
@@ -46,8 +93,7 @@ class GroupsController extends Controller
 
         return $this->renderTemplate('menu-builder/groups/_index', [
             'rows' => $rows,
-            'canCreate' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:create')),
-            'canEdit' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:edit')),
+            'canManageSettings' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:manageSettings')),
             'canDelete' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:delete')),
         ]);
     }
@@ -93,6 +139,7 @@ class GroupsController extends Controller
         $maxDepth = $request->getBodyParam('maxDepth');
         $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
         $group->htmlAttributes = $this->parseAttributeLines($this->bodyString('htmlAttributes'));
+        $group->siteIds = $this->postedSiteIds($request->getBodyParam('siteIds'));
 
         if (!MenuBuilder::getInstance()->groups->save($group)) {
             Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation group.'));
@@ -142,6 +189,27 @@ class GroupsController extends Controller
         }
 
         return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+    }
+
+    /**
+     * Normalizes the posted site restriction into `int[]`. Craft's
+     * checkbox-select posts a zero-value padding field alongside the checked
+     * `[]` entries, and posts a bare string instead of an array when nothing
+     * is checked (same shape ItemsController::buildVisibilityRules() guards
+     * against for the per-item `site` rule) — both collapse to "no
+     * restriction" here.
+     *
+     * @return int[]
+     */
+    private function postedSiteIds(mixed $posted): array
+    {
+        if (!is_array($posted)) {
+            return [];
+        }
+
+        $siteIds = array_filter(array_map('intval', array_filter($posted, 'is_scalar')), fn(int $id) => $id > 0);
+
+        return array_values(array_unique($siteIds));
     }
 
     /** Parses `key: value` per-line input into an attributes array. */

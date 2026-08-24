@@ -22,6 +22,16 @@ foreach ($autoloadCandidates as $autoload) {
             require $yiiClass;
         }
 
+        // Craft::t() falls back to plain strtr() placeholder substitution
+        // when Craft::$app is null (see yii\BaseYii::t()), so loading just
+        // the class — no booted app — is enough for model/rule validation
+        // messages to work in these no-booted-app unit tests.
+        $craftClass = dirname($autoload) . '/craftcms/cms/src/Craft.php';
+
+        if (file_exists($craftClass)) {
+            require $craftClass;
+        }
+
         return;
     }
 }

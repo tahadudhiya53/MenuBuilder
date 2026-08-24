@@ -57,12 +57,21 @@
         </div>
     </div>
 
+    {% if canEdit %}
+        <div id="menu-builder-bulk-toolbar" hidden>
+            <span class="light" id="menu-builder-bulk-count"></span>
+            <button type="button" class="btn small" data-mb-bulk-op="enable">{{ "Enable"|t('menu-builder') }}</button>
+            <button type="button" class="btn small" data-mb-bulk-op="disable">{{ "Disable"|t('menu-builder') }}</button>
+            <button type="button" class="btn small error" data-mb-bulk-op="delete">{{ "Delete"|t('app') }}</button>
+        </div>
+    {% endif %}
+
     <div id="menu-builder-tree"
          data-group-id="{{ group.id }}"
          data-group-handle="{{ group.handle }}"
          data-max-depth="{{ group.maxDepth ?? '' }}"
          data-can-edit="{{ canEdit ? '1' : '0' }}">
-        {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit } %}
+        {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit, orphanedItemIds: orphanedItemIds } %}
     </div>
 
     {% if items is empty %}
@@ -84,16 +93,24 @@
 {% block details %}
     {% if group and canCreate %}
         <div id="menu-builder-quick-add">
-            <h2>{{ "+ Add Menu Item"|t('menu-builder') }}</h2>
+            <h2>{{ "Add Menu Item"|t('menu-builder') }}</h2>
             <form method="post" action="">
                 {{ csrfInput() }}
                 <input type="hidden" name="action" value="menu-builder/items/save">
                 <input type="hidden" name="groupId" value="{{ group.id }}">
-                <input type="hidden" name="parentId" value="">
                 <input type="hidden" name="clickable" id="quick-add-clickable" value="1">
                 {{ redirectInput('menu-builder/' ~ group.handle) }}
 
                 <div class="menu-builder-quick-add-fields">
+                    {{ forms.selectField({
+                        label: "Nest under"|t('menu-builder'),
+                        instructions: "Where this item lands in the tree. Drag it elsewhere later if you change your mind."|t('menu-builder'),
+                        id: 'quick-add-parent',
+                        name: 'parentId',
+                        value: '',
+                        options: parentOptions,
+                    }) }}
+
                     {{ forms.selectField({
                         label: "Type"|t('menu-builder'),
                         id: 'quick-add-type',
@@ -114,8 +131,8 @@
                         label: "Title"|t('menu-builder'),
                         id: 'quick-add-title',
                         name: 'title',
-                        required: true,
                     }) }}
+                    <p class="light" data-quick-add-title-hint hidden>{{ "Leave blank to use the linked element's own title."|t('menu-builder') }}</p>
 
                     <div data-quick-add-section="entry" class="menu-builder-link-section hidden">
                         {{ forms.elementSelectField({
@@ -179,6 +196,95 @@
     {% endif %}
 {% endblock %}
 
+{% if canEdit %}
+    {% js %}
+    (function() {
+        var toolbar = document.getElementById('menu-builder-bulk-toolbar');
+        var countLabel = document.getElementById('menu-builder-bulk-count');
+        var tree = document.getElementById('menu-builder-tree');
+
+        function selectedIds() {
+            return Array.prototype.map.call(
+                tree.querySelectorAll('[data-mb-bulk-select]:checked'),
+                function(el) { return el.getAttribute('data-id'); }
+            );
+        }
+
+        function setBusy(busy) {
+            toolbar.querySelectorAll('[data-mb-bulk-op]').forEach(function(el) {
+                el.disabled = busy;
+            });
+        }
+
+        function updateToolbar() {
+            var ids = selectedIds();
+            toolbar.hidden = ids.length === 0;
+            countLabel.textContent = Craft.t('menu-builder', '{count} selected', { count: ids.length });
+        }
+
+        tree.addEventListener('change', function(event) {
+            if (event.target.matches('[data-mb-bulk-select]')) {
+                updateToolbar();
+            }
+        });
+
+        // Browsers restore checkbox state on reload and on back/forward, which
+        // would otherwise leave checked rows with no toolbar. Sync once now,
+        // and again when the page is restored from the back/forward cache.
+        updateToolbar();
+        window.addEventListener('pageshow', updateToolbar);
+
+        toolbar.querySelectorAll('[data-mb-bulk-op]').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var op = button.getAttribute('data-mb-bulk-op');
+                var ids = selectedIds();
+
+                if (ids.length === 0) {
+                    return;
+                }
+
+                if (op === 'delete' && !confirm(Craft.t('menu-builder', 'Delete {count} menu item(s)? Their children are deleted too. This cannot be undone.', { count: ids.length }))) {
+                    return;
+                }
+
+                setBusy(true);
+
+                Craft.sendActionRequest('POST', 'menu-builder/items/bulk', { data: { op: op, ids: ids } })
+                    .then(function() {
+                        // Enable/disable is a per-row visual change, so apply it
+                        // in place through the tree controller's own
+                        // setRowEnabled() — the single implementation the row
+                        // menu's Disable/Enable uses too. Delete changes the
+                        // tree's shape (child counts, connector lines, sort
+                        // order), so that one still reloads.
+                        if (op !== 'delete' && window.MenuBuilder && window.MenuBuilder.tree) {
+                            ids.forEach(function(id) {
+                                window.MenuBuilder.tree.setRowEnabled(id, op === 'enable');
+                            });
+
+                            tree.querySelectorAll('[data-mb-bulk-select]:checked').forEach(function(box) {
+                                box.checked = false;
+                            });
+
+                            setBusy(false);
+                            updateToolbar();
+                            Craft.cp.displayNotice(Craft.t('menu-builder', '{count} menu item(s) updated.', { count: ids.length }));
+
+                            return;
+                        }
+
+                        window.location.reload();
+                    })
+                    .catch(function() {
+                        setBusy(false);
+                        Craft.cp.displayError(Craft.t('menu-builder', 'That bulk action couldn’t be completed.'));
+                    });
+            });
+        });
+    })();
+    {% endjs %}
+{% endif %}
+
 {% if group and canCreate %}
     {% js %}
     (function() {
@@ -186,6 +292,8 @@
         var typeField = document.getElementById('quick-add-type');
         var clickableField = document.getElementById('quick-add-clickable');
         var sections = panel.querySelectorAll('[data-quick-add-section]');
+        var titleHint = panel.querySelector('[data-quick-add-title-hint]');
+        var elementTypes = ['entry', 'category', 'asset'];
 
         function updateSections() {
             var type = typeField.value;
@@ -201,6 +309,12 @@
                 });
             });
             clickableField.value = (type === 'nonclickable' || type === 'separator') ? '' : '1';
+            // Entry/category/asset titles fall back to the linked element's
+            // own title when left blank (see MenuBuilderResolver) — this hint
+            // is UX-only, the PHP model remains the authoritative validator.
+            if (titleHint) {
+                titleHint.hidden = elementTypes.indexOf(type) === -1;
+            }
         }
 
         typeField.addEventListener('change', updateSections);

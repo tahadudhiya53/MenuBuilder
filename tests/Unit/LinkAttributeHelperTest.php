@@ -62,4 +62,27 @@ class LinkAttributeHelperTest extends TestCase
     {
         $this->assertSame('nofollow', LinkAttributeHelper::mergeRelForTarget('_self', 'nofollow nofollow'));
     }
+
+    public function testValidateHtmlAttributesAcceptsWellFormedBag(): void
+    {
+        $this->assertSame([], LinkAttributeHelper::validateHtmlAttributes(['data-foo' => 'bar', 'aria-hidden' => 'true']));
+    }
+
+    public function testValidateHtmlAttributesRejectsInvalidKey(): void
+    {
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['1invalid' => 'x']));
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['has space' => 'x']));
+    }
+
+    public function testValidateHtmlAttributesRejectsEventHandlerKeys(): void
+    {
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['onclick' => 'alert(1)']));
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['onmouseover' => 'x']));
+    }
+
+    public function testValidateHtmlAttributesRejectsJavascriptUrls(): void
+    {
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['data-href' => 'javascript:alert(1)']));
+        $this->assertNotEmpty(LinkAttributeHelper::validateHtmlAttributes(['data-href' => 'java script:alert(1)']));
+    }
 }

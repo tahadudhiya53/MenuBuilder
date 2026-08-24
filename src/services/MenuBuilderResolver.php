@@ -4,8 +4,10 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
+use craft\base\ElementInterface;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
@@ -26,13 +28,20 @@ class MenuBuilderResolver extends Component
             return null;
         }
 
+        $visibilityService = MenuBuilder::getInstance()->visibility;
+        $context = $visibilityService->buildContext();
+
+        // Group-level site restriction (MenuBuilderGroup::$siteIds) gates the
+        // whole menu before any items are loaded — the coarse counterpart to
+        // the per-item `site` visibility rule.
+        if (!$group->isAvailableForSite($context->currentSiteId)) {
+            return null;
+        }
+
         $resolvedNodes = MenuBuilder::getInstance()->cache->getOrSet(
             $groupHandle,
             fn() => $this->buildResolvedNodes($group->id)
         );
-
-        $visibilityService = MenuBuilder::getInstance()->visibility;
-        $context = $visibilityService->buildContext();
 
         $itemsById = [];
         foreach (MenuBuilder::getInstance()->items->getFlatForGroup($group->id, includeDisabled: false) as $item) {
@@ -80,6 +89,7 @@ class MenuBuilderResolver extends Component
             }
 
             $isClickable = $item->isLinkable() && $item->clickable && $resolvedLink->url !== null;
+            $megaMenuConfig = $this->buildMegaMenuConfig($item);
 
             $node = new MenuBuilderNode(
                 id: $item->id,
@@ -102,14 +112,94 @@ class MenuBuilderResolver extends Component
                 image: $item->image,
                 featured: $item->featured,
                 level: $level,
+                megaMenu: $megaMenuConfig,
+                megaMenuColumn: $this->intOrNull($item->metadata['megaMenuColumn'] ?? null),
             );
 
             $node->parent = $parent;
             $node->children = $this->convert($item->children, $level + 1, $node);
+
+            if ($item->type === MenuBuilderItem::TYPE_DYNAMIC && $item->enabled) {
+                $node->children = array_merge($node->children, $this->buildDynamicChildren($item, $level + 1, $node));
+            }
+
             $nodes[] = $node;
         }
 
         return $nodes;
+    }
+
+    private function buildMegaMenuConfig(MenuBuilderItem $item): ?MenuBuilderMegaMenuConfig
+    {
+        $config = $item->metadata['megaMenu'] ?? null;
+
+        if (!is_array($config) || empty($config['enabled'])) {
+            return null;
+        }
+
+        $columns = $config['columns'] ?? 1;
+
+        return new MenuBuilderMegaMenuConfig(columns: is_int($columns) && $columns >= 1 && $columns <= 6 ? $columns : 1);
+    }
+
+    private function intOrNull(mixed $value): ?int
+    {
+        return is_int($value) ? $value : null;
+    }
+
+    /**
+     * Synthesizes MenuBuilderNode[] from a `dynamic` item's configured
+     * source (MenuBuilderDynamicNavigationService) — never persisted as
+     * MenuBuilderItem rows. These carry no visibility config of their own
+     * (there's nothing to configure per-element); they're already
+     * site/status-scoped by the query itself, same boundary a real
+     * entry/category/asset link would respect.
+     *
+     * @return MenuBuilderNode[]
+     */
+    private function buildDynamicChildren(MenuBuilderItem $item, int $level, MenuBuilderNode $parent): array
+    {
+        $config = is_array($item->metadata['dynamicSource'] ?? null) ? $item->metadata['dynamicSource'] : [];
+        $elements = MenuBuilder::getInstance()->dynamicNavigation->resolveElements($config);
+        $nodes = [];
+
+        foreach ($elements as $element) {
+            $node = $this->buildDynamicNode($element, $level);
+            $node->parent = $parent;
+            $nodes[] = $node;
+        }
+
+        return $nodes;
+    }
+
+    private function buildDynamicNode(ElementInterface $element, int $level): MenuBuilderNode
+    {
+        $url = method_exists($element, 'getUrl') ? $element->getUrl() : null;
+        $title = (string)($element->title ?? '');
+
+        return new MenuBuilderNode(
+            id: (int)$element->id,
+            handle: null,
+            type: MenuBuilderItem::TYPE_DYNAMIC,
+            title: $title,
+            url: $url,
+            isClickable: $url !== null,
+            isLinkAvailable: true,
+            target: '_self',
+            rel: null,
+            cssClass: null,
+            htmlId: null,
+            htmlAttributes: [],
+            ariaLabel: null,
+            titleAttribute: null,
+            icon: null,
+            badge: null,
+            description: null,
+            image: null,
+            featured: false,
+            level: $level,
+            isDynamic: true,
+        );
     }
 
     /**
@@ -126,7 +216,15 @@ class MenuBuilderResolver extends Component
         $filtered = [];
 
         foreach ($nodes as $node) {
-            $item = $itemsById[$node->id] ?? null;
+            // A dynamic-navigation child's `id` is a Craft element ID, not a
+            // MenuBuilderItem ID — looking it up in $itemsById could
+            // collide with an unrelated real item that happens to share the
+            // same numeric ID, and apply that item's visibility rules to
+            // the wrong node. Synthetic nodes carry no visibility config of
+            // their own (see MenuBuilderResolver::buildDynamicChildren()),
+            // so they're always visible here — they're already
+            // site/status-scoped by the query that produced them.
+            $item = $node->isDynamic ? null : ($itemsById[$node->id] ?? null);
 
             if ($item !== null && !$visibilityService->isVisible($item, $context)) {
                 continue;

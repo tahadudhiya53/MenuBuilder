@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\models;
 
 use craft\base\Model;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 
 /**
  * A named navigation (e.g. "Main Navigation", "Footer Navigation"). Items
@@ -21,6 +22,17 @@ class MenuBuilderGroup extends Model
     public ?int $maxDepth = null;
     public ?string $cssClass = null;
 
+    /**
+     * @var int[] Sites this whole menu is restricted to (empty = every site).
+     *            Mirrors the per-item `site` visibility rule (see
+     *            visibility/SiteRule) one level up: an unavailable group is
+     *            skipped wholesale by MenuBuilderResolver::getTree() rather
+     *            than filtered item by item. Persisted inside the `settings`
+     *            bag (see MenuBuilderGroupService) so no schema change is
+     *            needed.
+     */
+    public array $siteIds = [];
+
     /** @var array<string,string> Arbitrary HTML attributes for the rendered <nav>/wrapper. */
     public array $htmlAttributes = [];
 
@@ -31,7 +43,7 @@ class MenuBuilderGroup extends Model
     public ?string $dateCreated = null;
     public ?string $dateUpdated = null;
 
-    public function rules(): array
+    protected function defineRules(): array
     {
         return [
             [['name', 'handle'], 'required'],
@@ -41,8 +53,70 @@ class MenuBuilderGroup extends Model
             [['enabled'], 'boolean'],
             [['sortOrder'], 'integer'],
             [['maxDepth'], 'integer', 'min' => 1, 'max' => 10],
+            [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
+            [['siteIds'], 'validateSiteIds', 'skipOnEmpty' => false],
+            [['siteIds'], 'safe'],
             [['htmlAttributes', 'settings'], 'safe'],
         ];
+    }
+
+    /**
+     * Same defense-in-depth as MenuBuilderItem::validateHtmlAttributes() —
+     * a group's htmlAttributes bag is rendered onto a <nav>/wrapper element
+     * by downstream templates too, so it needs the same protection against
+     * event-handler-shaped keys and javascript: values.
+     */
+    public function validateHtmlAttributes(): void
+    {
+        if (!is_array($this->htmlAttributes)) {
+            $this->addError('htmlAttributes', 'Invalid attributes.');
+
+            return;
+        }
+
+        foreach (LinkAttributeHelper::validateHtmlAttributes($this->htmlAttributes) as $error) {
+            $this->addError('htmlAttributes', $error);
+        }
+    }
+
+    /**
+     * Site IDs are posted from a checkbox list, so reject anything that
+     * isn't a list of positive integers rather than silently casting — the
+     * same shape check MenuBuilderItem applies to its `site` rule config.
+     */
+    public function validateSiteIds(): void
+    {
+        if (!is_array($this->siteIds)) {
+            $this->addError('siteIds', 'Invalid sites.');
+
+            return;
+        }
+
+        foreach ($this->siteIds as $siteId) {
+            if (!is_int($siteId) || $siteId < 1) {
+                $this->addError('siteIds', 'Invalid sites.');
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Whether this menu is available on the given site. An empty
+     * restriction list means "every site"; a null current site (console
+     * requests, uninstalled Craft) can't be matched against a restriction,
+     * so a restricted menu is unavailable there — same conservative
+     * behaviour the item-level SiteRule inverts by design (it passes when
+     * there's no site to compare), except here the restriction is an
+     * explicit availability boundary for the whole menu.
+     */
+    public function isAvailableForSite(?int $siteId): bool
+    {
+        if (empty($this->siteIds)) {
+            return true;
+        }
+
+        return $siteId !== null && in_array($siteId, $this->siteIds, true);
     }
 
     /**

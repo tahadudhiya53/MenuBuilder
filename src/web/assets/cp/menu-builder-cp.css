@@ -4,6 +4,28 @@
     align-items: center;
 }
 
+/* The bulk toolbar only exists while rows are selected. Its own `display` is
+ * declared here rather than borrowing Craft's `.flex` helper class: a class's
+ * `display: flex` outranks the `hidden` attribute's UA `display: none`, so an
+ * element that is both `.flex` and `[hidden]` stays visible. The `[hidden]`
+ * rule below carries one id + one attribute, so it beats the base rule
+ * regardless of source order. */
+#menu-builder-bulk-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+#menu-builder-bulk-toolbar[hidden] {
+    display: none;
+}
+
+#menu-builder-bulk-count {
+    margin-right: 4px;
+}
+
 .menu-builder-header {
     margin-bottom: 14px;
 }
@@ -17,6 +39,17 @@
 .menu-builder-sidebar-footer {
     padding-block: var(--s, 8px);
     padding-inline: var(--s, 8px);
+}
+
+/* Craft's details pane is 350px, which crams the quick-add form's labels,
+   instructions, and element selects. Widened only on pages that actually render
+   the panel — both the outer container (sized from --details-width) and #details
+   itself (a hardcoded 350px) have to move together. The narrow-viewport
+   `width: auto !important` further down Craft's sheet still wins over these. */
+#details-container:has(#menu-builder-quick-add),
+#details:has(#menu-builder-quick-add) {
+    --details-width: 350px;
+    width: var(--details-width);
 }
 
 #menu-builder-quick-add {
@@ -45,10 +78,17 @@
     margin: 0;
 }
 
+/* Craft sizes selects to their content and text inputs to a default column
+   width, which leaves ragged right edges in a narrow pane — every control here
+   fills the panel instead. */
 #menu-builder-quick-add .field,
 #menu-builder-quick-add .input,
 #menu-builder-quick-add .text,
-#menu-builder-quick-add .select {
+#menu-builder-quick-add .select,
+#menu-builder-quick-add .select select,
+#menu-builder-quick-add .elementselect,
+#menu-builder-quick-add .elementselect .elements {
+    width: 100%;
     max-width: 100%;
 }
 
@@ -84,16 +124,36 @@ li.menu-builder-item {
     transition: margin-inline-start 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
+/* Vertical trunk: runs the full row height (plus margins) so it connects
+ * seamlessly into the next sibling's own rail. Only the last child's trunk
+ * stops at the row's midpoint, since there's no further sibling to reach. */
 li.menu-builder-item[data-level]:not([data-level="1"])::before {
     content: "";
     position: absolute;
     inset-inline-start: -14px;
     top: -5px;
     width: 11px;
-    height: calc(50% + 5px);
+    height: calc(100% + 10px);
     border-inline-start: 1px solid var(--gray-300, #c8d0d8);
+    pointer-events: none;
+}
+
+li.menu-builder-item[data-level]:not([data-level="1"]).menu-builder-item-last::before {
+    height: calc(50% + 5px);
     border-bottom: 1px solid var(--gray-300, #c8d0d8);
     border-end-start-radius: 4px;
+}
+
+/* Every non-last child also gets its own horizontal branch off the trunk,
+ * so middle children look connected to the parent, not just the last one. */
+li.menu-builder-item[data-level]:not([data-level="1"]):not(.menu-builder-item-last)::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: -14px;
+    top: 50%;
+    width: 11px;
+    height: 0;
+    border-bottom: 1px solid var(--gray-300, #c8d0d8);
     pointer-events: none;
 }
 
@@ -103,16 +163,6 @@ li.menu-builder-item.menu-builder-item-has-children {
 
 li.menu-builder-item.menu-builder-item-disabled {
     opacity: 0.7;
-}
-
-li.menu-builder-item.menu-builder-drop-parent-pending {
-    border-color: var(--gray-400, #9aa5b1);
-}
-
-li.menu-builder-item.menu-builder-drop-parent {
-    border-color: var(--focus-color, #0d78f2);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-color, #0d78f2) 25%, transparent);
-    background: color-mix(in srgb, var(--focus-color, #0d78f2) 7%, var(--white));
 }
 
 li.menu-builder-drop-position {
@@ -161,10 +211,6 @@ li.menu-builder-drop-position[data-level]:not([data-level="1"])::before {
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
-}
-
-.menu-builder-action-hidden {
-    display: none !important;
 }
 
 .menu-builder-drag-handle {
@@ -339,6 +385,33 @@ ul.menu-builder-draghelper > li.menu-builder-item {
 
 .menu-builder-slideout-body h2:first-child {
     margin-top: 0;
+}
+
+/* Item editor sections (Basic / Behavior / Appearance / …) — give each
+   section its own breathing room and a visible divider from the next, in
+   both the full-page editor and the slide-out (spec: sections were
+   touching, with no way to tell where one ended and the next began). */
+.menu-builder-item-fields > [data-mb-section] {
+    padding-top: 20px;
+    padding-bottom: 20px;
+    padding-left: 4px;
+}
+
+.menu-builder-item-fields > [data-mb-section]:first-of-type {
+    padding-top: 0;
+}
+
+.menu-builder-item-fields > [data-mb-section]:last-of-type {
+    padding-bottom: 0;
+}
+
+.menu-builder-item-fields > [data-mb-section] + [data-mb-section] {
+    border-top: 1px solid var(--hairline-color);
+}
+
+.menu-builder-item-fields > [data-mb-section] > h2 {
+    margin-top: 0;
+    margin-bottom: 12px;
 }
 
 .menu-builder-slideout-footer {

@@ -26,13 +26,15 @@ class MenuBuilderVisibilityService extends Component
     public function buildContext(): VisibilityContext
     {
         $user = Craft::$app->getUser()->getIdentity();
+        $timezone = new \DateTimeZone(Craft::$app->getTimeZone());
 
         return new VisibilityContext(
             isLoggedIn: $user !== null,
             userGroupIds: $user !== null ? array_map(fn($group) => (int)$group->id, $user->getGroups()) : [],
             currentSiteId: Craft::$app->getIsInstalled() ? Craft::$app->getSites()->getCurrentSite()->id : null,
-            now: new \DateTime(),
+            now: new \DateTime('now', $timezone),
             environment: Craft::$app->env,
+            timezone: $timezone,
         );
     }
 

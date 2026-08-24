@@ -6,13 +6,16 @@
     anchor: 'Anchor'|t('menu-builder'),
     nonclickable: 'Heading'|t('menu-builder'),
     separator: 'Separator'|t('menu-builder'),
+    dynamic: 'Dynamic'|t('menu-builder'),
 } %}
 
 {% for item in items %}
-    {% set atMaxDepth = (group.maxDepth is not null and level >= group.maxDepth) or item.type == 'separator' %}
-    <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" style="--mb-level: {{ level }}">
+    <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}{{ loop.last ? ' menu-builder-item-last' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" style="--mb-level: {{ level }}">
         <div class="menu-builder-item-row">
             {% if canEdit %}
+                <label class="menu-builder-bulk-checkbox">
+                    <input type="checkbox" data-mb-bulk-select data-id="{{ item.id }}" aria-label="{{ 'Select {title}'|t('menu-builder', { title: item.title|default('untitled'|t('menu-builder')) }) }}">
+                </label>
                 <a class="menu-builder-drag-handle move icon" title="{{ 'Reorder'|t('app') }}" role="button" tabindex="0" aria-label="{{ 'Reorder {title}'|t('menu-builder', { title: item.title }) }}"></a>
             {% endif %}
 
@@ -28,8 +31,22 @@
 
             <span class="menu-builder-item-type badge">{{ typeLabels[item.type] ?? item.type }}</span>
 
+            {% if item.metadata.megaMenu.enabled ?? false %}
+                <span class="menu-builder-item-status badge" title="{{ 'This item presents its children as a mega menu.'|t('menu-builder') }}">{{ "Mega menu"|t('menu-builder') }}</span>
+            {% endif %}
+
             {% if not item.enabled %}
-                <span class="menu-builder-item-status badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
+                {# The `-disabled-flag` class is this badge's own hook: `-item-status`
+                   is shared with the mega-menu and orphaned-element badges, so the
+                   JS that adds/removes this one on toggle needs a selector that
+                   can't collide with them (see tree.js `toggle()`). #}
+                <span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
+            {% endif %}
+
+            {% if orphanedItemIds is defined and orphanedItemIds[item.id] is defined %}
+                <span class="menu-builder-item-status badge disabled-badge" title="{{ 'The linked entry/category/asset no longer exists.'|t('menu-builder') }}">
+                    ⚠ {{ "Linked element unavailable"|t('menu-builder') }}
+                </span>
             {% endif %}
 
             {% if item.hasChildren() %}
@@ -47,21 +64,8 @@
                                 <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Edit"|t('app') }}</a>
                             </li>
                             <li>
-                                <a class="{{ not atMaxDepth ? '' : 'menu-builder-action-hidden' }}" data-mb-action="add-child" data-parent-id="{{ item.id }}" role="button">{{ "Add child"|t('menu-builder') }}</a>
-                            </li>
-                            <li>
-                                <a data-mb-action="add-sibling" data-parent-id="{{ parentId ?? '' }}" role="button">{{ "Add sibling"|t('menu-builder') }}</a>
-                            </li>
-                            <li>
                                 <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a>
                             </li>
-                        </ul>
-                        <hr>
-                        <ul>
-                            <li><a data-mb-action="move-up" data-id="{{ item.id }}" role="button">{{ "Move up"|t('menu-builder') }}</a></li>
-                            <li><a data-mb-action="move-down" data-id="{{ item.id }}" role="button">{{ "Move down"|t('menu-builder') }}</a></li>
-                            <li><a class="{{ level > 1 ? '' : 'menu-builder-action-hidden' }}" data-mb-action="outdent" data-id="{{ item.id }}" role="button">{{ "Outdent (move up one level)"|t('menu-builder') }}</a></li>
-                            <li><a class="{{ not atMaxDepth ? '' : 'menu-builder-action-hidden' }}" data-mb-action="indent" data-id="{{ item.id }}" role="button">{{ "Indent (make child of item above)"|t('menu-builder') }}</a></li>
                         </ul>
                         <hr>
                         <ul>
@@ -81,6 +85,6 @@
     </li>
 
     {% if item.hasChildren() %}
-        {% include "menu-builder/dashboard/_items" with { items: item.children, level: level + 1, parentId: item.id, group: group, canEdit: canEdit } %}
+        {% include "menu-builder/dashboard/_items" with { items: item.children, level: level + 1, parentId: item.id, group: group, canEdit: canEdit, orphanedItemIds: orphanedItemIds } %}
     {% endif %}
 {% endfor %}

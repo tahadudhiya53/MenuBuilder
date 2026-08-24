@@ -5,6 +5,33 @@
  #   {% import "menu-builder/_macros/tree" as menuMacros %}
  #   {{ menuMacros.render(craft.menuBuilder.get('main')) }}
  #}
+{#
+ # Phase 7: optional mega-menu renderer for one node whose `megaMenu` is set
+ # (see MenuBuilderNode::$megaMenu / ::megaMenuColumns()). Renders each
+ # column's items as its own <ul>, with an accessible disclosure button
+ # (aria-haspopup/aria-expanded, toggled purely by CSS via the button's own
+ # `aria-expanded` attribute — no JS framework required, but a project using
+ # this markup as-is needs a few lines of vanilla JS to flip that attribute
+ # on click/keyboard, and CSS keyed off `[aria-expanded="true"]` to show the
+ # panel). Entirely optional, like render() above — hand-write your own
+ # markup for full control.
+ #
+ #   {{ menuMacros.renderMegaMenu(node) }}
+ #}
+{% macro renderMegaMenu(node) %}
+    {% import _self as self %}
+    <button type="button" class="menu-builder-megamenu-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="menu-builder-megamenu-{{ node.id }}">
+        {{ node.title }}
+    </button>
+    <div id="menu-builder-megamenu-{{ node.id }}" class="menu-builder-megamenu-panel" role="group" aria-label="{{ node.ariaLabel ?: node.title }}">
+        {% for column, columnNodes in node.megaMenuColumns() %}
+            <div class="menu-builder-megamenu-column">
+                {{ self.render(columnNodes) }}
+            </div>
+        {% endfor %}
+    </div>
+{% endmacro %}
+
 {% macro render(nodes) %}
     {% import _self as self %}
     <ul>
@@ -27,7 +54,9 @@
                         <span{% if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}>{{ node.title }}</span>
                     {% endif %}
 
-                    {% if node.hasChildren() %}
+                    {% if node.megaMenu %}
+                        {{ self.renderMegaMenu(node) }}
+                    {% elseif node.hasChildren() %}
                         {{ self.render(node.children) }}
                     {% endif %}
                 </li>

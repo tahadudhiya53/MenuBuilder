@@ -4,7 +4,7 @@
 {% set selectedSubnavItem = 'dashboard' %}
 
 {% block actionButton %}
-    {% if canCreate %}
+    {% if canManageSettings %}
         <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
     {% endif %}
 {% endblock %}
@@ -42,10 +42,13 @@
                                     <div class="menu">
                                         <ul>
                                             <li><a href="{{ url('menu-builder/' ~ group.handle) }}" role="button">{{ "Edit"|t('app') }}</a></li>
-                                            {% if canEdit %}
+                                            {% if canManageSettings %}
                                                 <li><a href="{{ url('menu-builder/groups/' ~ group.id) }}" role="button">{{ "Menu settings"|t('menu-builder') }}</a></li>
                                             {% endif %}
-                                            {% if canCreate %}
+                                            {% if canManageSettings %}
+                                                <li><a data-mb-action="toggle-group" data-id="{{ group.id }}" role="button">{{ group.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}</a></li>
+                                            {% endif %}
+                                            {% if canManageSettings %}
                                                 <li><a data-mb-action="duplicate-group" data-id="{{ group.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a></li>
                                             {% endif %}
                                             {% if canDelete %}
@@ -64,7 +67,7 @@
         <div class="zilch">
             <p>{{ "No menus yet"|t('menu-builder') }}</p>
             <p class="light">{{ "Create your first navigation menu to get started."|t('menu-builder') }}</p>
-            {% if canCreate %}
+            {% if canManageSettings %}
                 <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "Create Menu"|t('menu-builder') }}</a></p>
             {% endif %}
         </div>
@@ -84,6 +87,20 @@
                 })
                 .catch(function() {
                     Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t duplicate that navigation menu.'));
+                });
+        });
+    });
+
+    document.querySelectorAll('[data-mb-action="toggle-group"]').forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            event.preventDefault();
+            var id = link.getAttribute('data-id');
+            Craft.sendActionRequest('POST', 'menu-builder/groups/toggle', { data: { id: id } })
+                .then(function() {
+                    window.location.reload();
+                })
+                .catch(function() {
+                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t update that navigation menu.'));
                 });
         });
     });

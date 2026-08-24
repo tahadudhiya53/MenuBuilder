@@ -1,5 +1,8 @@
 {% import "_includes/forms" as forms %}
 
+{% set megaMenuConfig = item.metadata.megaMenu ?? [] %}
+{% set dynamicSource = item.metadata.dynamicSource ?? [] %}
+
 {% set loggedInRule = item.visibility|filter(r => r.type == 'loggedIn')|first %}
 {% set loggedOutRule = item.visibility|filter(r => r.type == 'loggedOut')|first %}
 {% set userGroupRule = item.visibility|filter(r => r.type == 'userGroup')|first %}
@@ -36,6 +39,7 @@
             { label: "Anchor"|t('menu-builder'), value: 'anchor' },
             { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
             { label: "Separator"|t('menu-builder'), value: 'separator' },
+            { label: "Dynamic navigation"|t('menu-builder'), value: 'dynamic' },
         ],
     }) }}
 
@@ -107,6 +111,51 @@
             name: 'customUrl',
             value: item.customUrl,
             errors: item.getErrors('handle'),
+        }) }}
+    </div>
+
+    <div data-link-section="dynamic" class="menu-builder-link-section">
+        {{ forms.selectField({
+            label: "Source"|t('menu-builder'),
+            id: 'dynamicSourceType',
+            name: 'dynamicSourceType',
+            value: dynamicSource.sourceType ?? 'entries',
+            options: [
+                { label: "Entries (by section)"|t('menu-builder'), value: 'entries' },
+                { label: "Categories (by group)"|t('menu-builder'), value: 'categories' },
+                { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
+            ],
+        }) }}
+        {{ forms.textField({
+            label: "Source ID"|t('menu-builder'),
+            instructions: "The section/category group/volume ID to pull from (see Settings → Sections/Categories/Assets in the CP for IDs)."|t('menu-builder'),
+            id: 'dynamicSourceId',
+            name: 'dynamicSourceId',
+            type: 'number',
+            min: 1,
+            value: dynamicSource.sourceId ?? '',
+        }) }}
+        {{ forms.textField({
+            label: "Limit"|t('menu-builder'),
+            instructions: "Maximum 50, enforced server-side regardless of what's entered here."|t('menu-builder'),
+            id: 'dynamicSourceLimit',
+            name: 'dynamicSourceLimit',
+            type: 'number',
+            min: 1,
+            max: 50,
+            value: dynamicSource.limit ?? 10,
+        }) }}
+        {{ forms.selectField({
+            label: "Order by"|t('menu-builder'),
+            id: 'dynamicSourceOrderBy',
+            name: 'dynamicSourceOrderBy',
+            value: dynamicSource.orderBy ?? 'dateCreated desc',
+            options: [
+                { label: "Newest first"|t('menu-builder'), value: 'dateCreated desc' },
+                { label: "Oldest first"|t('menu-builder'), value: 'dateCreated asc' },
+                { label: "Title (A-Z)"|t('menu-builder'), value: 'title asc' },
+                { label: "Title (Z-A)"|t('menu-builder'), value: 'title desc' },
+            ],
         }) }}
     </div>
 
@@ -234,6 +283,36 @@
     {{ forms.textField({ label: "Visible from"|t('menu-builder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
     {{ forms.textField({ label: "Visible until"|t('menu-builder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
     {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT).", id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule.environments ?? [] | join(', ') }) }}
+</div>
+
+<div data-mb-section="megaMenu">
+    <h2>{{ "Mega Menu"|t('menu-builder') }}</h2>
+    <p class="light">{{ "Enable to present this item's children as a mega-menu panel grouped into columns. Each child picks its own column below."|t('menu-builder') }}</p>
+    {{ forms.lightswitchField({
+        label: "Enable mega menu for this item's children"|t('menu-builder'),
+        id: 'megaMenuEnabled',
+        name: 'megaMenuEnabled',
+        on: megaMenuConfig.enabled ?? false,
+    }) }}
+    {{ forms.textField({
+        label: "Columns"|t('menu-builder'),
+        id: 'megaMenuColumns',
+        name: 'megaMenuColumns',
+        type: 'number',
+        min: 1,
+        max: 6,
+        value: megaMenuConfig.columns ?? 1,
+    }) }}
+    {{ forms.textField({
+        label: "This item's column (under its parent's mega menu)"|t('menu-builder'),
+        instructions: "Only meaningful when the parent item above has mega menu enabled."|t('menu-builder'),
+        id: 'megaMenuColumn',
+        name: 'megaMenuColumn',
+        type: 'number',
+        min: 1,
+        max: 6,
+        value: item.metadata.megaMenuColumn ?? '',
+    }) }}
 </div>
 
 <div data-mb-section="advanced">

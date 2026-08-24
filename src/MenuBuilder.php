@@ -13,6 +13,8 @@ use craft\web\UrlManager;
 use craft\web\View;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderActiveResolver;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderCacheService;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
@@ -29,6 +31,8 @@ use yii\base\Event;
  * @property-read MenuBuilderCacheService $cache
  * @property-read MenuBuilderActiveResolver $activeResolver
  * @property-read MenuBuilderResolver $resolver
+ * @property-read MenuBuilderElementService $elements
+ * @property-read MenuBuilderDynamicNavigationService $dynamicNavigation
  */
 class MenuBuilder extends Plugin
 {
@@ -47,6 +51,8 @@ class MenuBuilder extends Plugin
                 'cache' => MenuBuilderCacheService::class,
                 'activeResolver' => MenuBuilderActiveResolver::class,
                 'resolver' => MenuBuilderResolver::class,
+                'elements' => MenuBuilderElementService::class,
+                'dynamicNavigation' => MenuBuilderDynamicNavigationService::class,
             ],
         ];
     }
@@ -56,6 +62,8 @@ class MenuBuilder extends Plugin
         parent::init();
 
         $this->attachEventHandlers();
+        $this->attachProjectConfigHandlers();
+        $this->elements->attachListeners();
 
         Craft::$app->onInit(function() {
             $this->registerVariable();
@@ -84,7 +92,6 @@ class MenuBuilder extends Plugin
                 $event->rules['menu-builder/groups/new'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/groups/<groupId:\d+>'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>'] = 'menu-builder/dashboard/index';
-                $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/items/new'] = 'menu-builder/items/edit';
                 $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/items/<itemId:\d+>'] = 'menu-builder/items/edit';
             }
         );
@@ -100,21 +107,35 @@ class MenuBuilder extends Plugin
                             'label' => Craft::t('menu-builder', 'View navigation'),
                         ],
                         'menuBuilder:create' => [
-                            'label' => Craft::t('menu-builder', 'Create navigation groups and menus'),
+                            'label' => Craft::t('menu-builder', 'Create menu items'),
                         ],
                         'menuBuilder:edit' => [
-                            'label' => Craft::t('menu-builder', 'Edit navigation groups and menus'),
+                            'label' => Craft::t('menu-builder', 'Edit menu items'),
                         ],
                         'menuBuilder:delete' => [
                             'label' => Craft::t('menu-builder', 'Delete navigation groups and menus'),
                         ],
                         'menuBuilder:manageSettings' => [
-                            'label' => Craft::t('menu-builder', 'Manage navigation settings'),
+                            'label' => Craft::t('menu-builder', 'Manage navigation groups (create, edit, and duplicate)'),
                         ],
                     ],
                 ];
             }
         );
+    }
+
+    /**
+     * Phase 10 project config: applies a Group change that arrived
+     * from project.yaml (not one this same request just mirrored there —
+     * see MenuBuilderGroupService's docblock) to the local database.
+     */
+    private function attachProjectConfigHandlers(): void
+    {
+        $projectConfig = Craft::$app->getProjectConfig();
+
+        $projectConfig->onAdd(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleChangedConfig'])
+            ->onUpdate(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleChangedConfig'])
+            ->onRemove(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleDeletedConfig']);
     }
 
     private function registerVariable(): void

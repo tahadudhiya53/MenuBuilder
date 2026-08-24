@@ -23,17 +23,37 @@ class ItemsController extends Controller
 
         $this->requireCpRequest();
         $currentUser = Craft::$app->getUser()->getIdentity();
-        $requiredPermission = match ($action->id) {
-            'delete' => 'menuBuilder:delete',
-            'edit' => 'menuBuilder:view',
-            default => 'menuBuilder:edit',
-        };
+        $isNewSave = $action->id === 'save' && (int)Craft::$app->getRequest()->getBodyParam('itemId', 0) === 0;
+        $bulkOp = $action->id === 'bulk' ? $this->bodyString('op') : null;
+        $requiredPermission = self::requiredPermissionForAction($action->id, $isNewSave, $bulkOp);
 
         if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
             throw new ForbiddenHttpException('You are not permitted to manage navigation menus.');
         }
 
         return true;
+    }
+
+    /**
+     * Pure mapping from action (+ whether a `save` is creating a brand new
+     * item) to the permission it requires — factored out from
+     * beforeAction() so it's unit-testable without a booted Craft app or
+     * request. `duplicate` always creates a new item, so it always needs
+     * `create` regardless of which item is being cloned; `toggle`/`reorder`
+     * only ever act on an item that already exists, so they need `edit`.
+     */
+    public static function requiredPermissionForAction(string $actionId, bool $isNewSave, ?string $bulkOp = null): string
+    {
+        return match ($actionId) {
+            'delete' => 'menuBuilder:delete',
+            'edit' => 'menuBuilder:view',
+            'duplicate' => 'menuBuilder:create',
+            'save' => $isNewSave ? 'menuBuilder:create' : 'menuBuilder:edit',
+            // A bulk op needs whatever permission its single-item equivalent
+            // needs — 'delete' is the only op that needs more than 'edit'.
+            'bulk' => $bulkOp === 'delete' ? 'menuBuilder:delete' : 'menuBuilder:edit',
+            default => 'menuBuilder:edit',
+        };
     }
 
     public function actionEdit(string $groupHandle, ?int $itemId = null, ?MenuBuilderItem $item = null): Response
@@ -44,18 +64,19 @@ class ItemsController extends Controller
             throw new NotFoundHttpException('Navigation group not found.');
         }
 
+        // Edit-only: creating an item happens in exactly one place, the
+        // dashboard's quick-add panel (which posts straight to actionSave()).
+        // There is deliberately no second "new item" form here — see
+        // ARCHITECTURE.md, "Single path per behaviour".
         if ($item === null) {
-            if ($itemId !== null) {
-                $item = MenuBuilder::getInstance()->items->getById($itemId);
+            if ($itemId === null) {
+                throw new NotFoundHttpException('Navigation menu not found.');
+            }
 
-                if (!$item || $item->groupId !== $group->id) {
-                    throw new NotFoundHttpException('Navigation menu not found.');
-                }
-            } else {
-                $item = new MenuBuilderItem();
-                $item->groupId = $group->id;
-                $parentId = Craft::$app->getRequest()->getQueryParam('parentId');
-                $item->parentId = $parentId ? (int)$parentId : null;
+            $item = MenuBuilder::getInstance()->items->getById($itemId);
+
+            if (!$item || $item->groupId !== $group->id) {
+                throw new NotFoundHttpException('Navigation menu not found.');
             }
         }
 
@@ -93,7 +114,13 @@ class ItemsController extends Controller
             throw new NotFoundHttpException('Navigation menu not found.');
         }
 
-        $item->groupId = (int)$request->getRequiredBodyParam('groupId');
+        // An existing item's groupId is fixed at creation (see
+        // MenuBuilderItemService::isGroupChangeAllowed()) — the posted
+        // `groupId` is a hidden field and must not be trusted to move an
+        // existing item into a different group. Only a brand new item may
+        // pick its group from the posted value.
+        $postedGroupId = (int)$request->getRequiredBodyParam('groupId');
+        $item->groupId = $item->id !== null ? $item->groupId : $postedGroupId;
         $parentId = $request->getBodyParam('parentId');
         $item->parentId = ($parentId !== null && $parentId !== '') ? (int)$parentId : null;
         $item->type = $this->bodyString('type', MenuBuilderItem::TYPE_URL);
@@ -106,8 +133,8 @@ class ItemsController extends Controller
         $item->enabled = (bool)$request->getBodyParam('enabled', $item->id === null);
         $item->clickable = (bool)$request->getBodyParam('clickable', false);
 
-        $elementId = $this->bodyArray('elementId');
-        $item->elementId = !empty($elementId) ? (int)reset($elementId) : null;
+        $elementId = $request->getBodyParam('elementId');
+        $item->elementId = ($elementId !== null && $elementId !== '') ? (int)$elementId : null;
 
         $item->customUrl = $this->bodyString('customUrl') ?: null;
         $item->target = $this->bodyString('target', '_self');
@@ -122,15 +149,15 @@ class ItemsController extends Controller
         $item->badge = $this->bodyString('badge') ?: null;
         $item->description = $this->bodyString('description') ?: null;
 
-        $image = $this->bodyArray('image');
-        $item->image = !empty($image) ? (int)reset($image) : null;
+        $image = $request->getBodyParam('image');
+        $item->image = ($image !== null && $image !== '') ? (int)$image : null;
         $item->featured = (bool)$request->getBodyParam('featured', false);
 
         $item->fallbackBehavior = $this->bodyString('fallbackBehavior', MenuBuilderItem::FALLBACK_HIDE);
         $item->fallbackUrl = $this->bodyString('fallbackUrl') ?: null;
 
         $item->visibility = $this->buildVisibilityRules($this->bodyArray('visibility'));
-        $item->metadata = $this->bodyArray('metadata');
+        $item->metadata = $this->buildMetadata($request, $item->type);
 
         if (!MenuBuilder::getInstance()->items->save($item)) {
             Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation menu.'));
@@ -236,6 +263,36 @@ class ItemsController extends Controller
         return $this->asSuccess();
     }
 
+    /**
+     * Phase 11 bulk action endpoint. Body: `op` (enable|disable|delete),
+     * `ids[]`. Every posted ID is still individually validated/permission-
+     * scoped by MenuBuilderItemService (see beforeAction()'s per-op
+     * permission mapping) — the CP's multi-select checkboxes are UX only.
+     */
+    public function actionBulk(): Response
+    {
+        $this->requirePostRequest();
+
+        $request = Craft::$app->getRequest();
+        $op = $this->bodyString('op');
+        $ids = array_filter(array_map('intval', $this->bodyArray('ids')));
+
+        if (empty($ids)) {
+            return $this->asFailure(Craft::t('menu-builder', 'No menu items were selected.'));
+        }
+
+        $itemsService = MenuBuilder::getInstance()->items;
+
+        $success = match ($op) {
+            'enable' => $itemsService->bulkSetEnabled($ids, true),
+            'disable' => $itemsService->bulkSetEnabled($ids, false),
+            'delete' => $itemsService->bulkDelete($ids),
+            default => false,
+        };
+
+        return $this->asJsonResult($success, Craft::t('menu-builder', 'That bulk action couldn’t be completed.'));
+    }
+
     private function asJsonResult(bool $success, string $failureMessage, array $extraData = []): Response
     {
         if (Craft::$app->getRequest()->getAcceptsJson()) {
@@ -318,6 +375,44 @@ class ItemsController extends Controller
         }
 
         return $rules;
+    }
+
+    /**
+     * Builds the `metadata` bag from discrete, explicitly-named POST fields
+     * (Phases 6-8) rather than trusting a raw posted `metadata` array
+     * directly — an uncontrolled `metadata[...]` POST key would otherwise
+     * let a tampered request inject arbitrary data into a bag that's
+     * rendered/read by Twig (spec: "Do not allow arbitrary uncontrolled
+     * POST keys"). `MenuBuilderItem::validate*()` re-validates all of this
+     * server-side regardless.
+     */
+    private function buildMetadata(\craft\web\Request $request, string $itemType): array
+    {
+        $metadata = [];
+
+        if ((bool)$request->getBodyParam('megaMenuEnabled', false)) {
+            $columns = (int)$request->getBodyParam('megaMenuColumns', 1);
+            $metadata['megaMenu'] = ['enabled' => true, 'columns' => max(1, min(6, $columns))];
+        }
+
+        $column = $request->getBodyParam('megaMenuColumn');
+        if ($column !== null && $column !== '') {
+            $metadata['megaMenuColumn'] = max(1, min(6, (int)$column));
+        }
+
+        if ($itemType === MenuBuilderItem::TYPE_DYNAMIC) {
+            $sourceId = $request->getBodyParam('dynamicSourceId');
+            $limit = $request->getBodyParam('dynamicSourceLimit');
+
+            $metadata['dynamicSource'] = array_filter([
+                'sourceType' => $this->bodyString('dynamicSourceType') ?: null,
+                'sourceId' => ($sourceId !== null && $sourceId !== '') ? (int)$sourceId : null,
+                'limit' => ($limit !== null && $limit !== '') ? min((int)$limit, MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT) : null,
+                'orderBy' => $this->bodyString('dynamicSourceOrderBy') ?: null,
+            ], fn($value) => $value !== null);
+        }
+
+        return $metadata;
     }
 
     /** Parses `key: value` per-line input into an attributes array. */

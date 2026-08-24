@@ -4,6 +4,9 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
+use craft\elements\Asset;
+use craft\elements\Category;
+use craft\elements\Entry;
 use craft\helpers\Json;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
@@ -83,10 +86,6 @@ class MenuBuilderItemService extends Component
             return false;
         }
 
-        if (!$this->validateHierarchy($item)) {
-            return false;
-        }
-
         $record = $item->id
             ? MenuBuilderItemRecord::findOne($item->id)
             : new MenuBuilderItemRecord();
@@ -94,6 +93,16 @@ class MenuBuilderItemService extends Component
         if (!$record) {
             $item->addError('id', Craft::t('menu-builder', 'Navigation item not found.'));
 
+            return false;
+        }
+
+        if ($record->id !== null && !self::isGroupChangeAllowed((int)$record->groupId, $item->groupId)) {
+            $item->addError('groupId', Craft::t('menu-builder', 'A navigation menu item cannot be moved to a different navigation group.'));
+
+            return false;
+        }
+
+        if (!$this->validateHierarchy($item)) {
             return false;
         }
 
@@ -260,6 +269,153 @@ class MenuBuilderItemService extends Component
         }
     }
 
+    /**
+     * IDs of items in the group whose linked element (entry/category/asset)
+     * no longer exists — e.g. hard-deleted rather than soft-deleted/disabled,
+     * which `ElementLinkResolver` already handles via `fallbackBehavior`.
+     * Batched into at most one query per element type (never per item), so
+     * this stays cheap regardless of group size (spec §19, §25).
+     *
+     * @return array<int,true> Item IDs, as a set for O(1) lookup in Twig.
+     */
+    public function getOrphanedItemIds(int $groupId): array
+    {
+        $elementClasses = [
+            MenuBuilderItem::TYPE_ENTRY => Entry::class,
+            MenuBuilderItem::TYPE_CATEGORY => Category::class,
+            MenuBuilderItem::TYPE_ASSET => Asset::class,
+        ];
+
+        $orphaned = [];
+
+        foreach ($elementClasses as $type => $elementClass) {
+            $rows = MenuBuilderItemRecord::find()
+                ->select(['id', 'elementId'])
+                ->where(['groupId' => $groupId, 'type' => $type])
+                ->andWhere(['not', ['elementId' => null]])
+                ->asArray()
+                ->all();
+
+            if (empty($rows)) {
+                continue;
+            }
+
+            $elementIdToItemIds = [];
+            foreach ($rows as $row) {
+                $elementIdToItemIds[(int)$row['elementId']][] = (int)$row['id'];
+            }
+
+            $existingElementIds = $elementClass::find()
+                ->id(array_keys($elementIdToItemIds))
+                ->site('*')
+                ->unique()
+                ->status(null)
+                ->select(['elements.id'])
+                ->column();
+            $existingElementIds = array_map('intval', $existingElementIds);
+
+            foreach ($elementIdToItemIds as $elementId => $itemIds) {
+                if (!in_array($elementId, $existingElementIds, true)) {
+                    foreach ($itemIds as $itemId) {
+                        $orphaned[$itemId] = true;
+                    }
+                }
+            }
+        }
+
+        return $orphaned;
+    }
+
+    /**
+     * Groups containing at least one enabled `dynamic` item — a single
+     * indexed query on `type` (Phase 8). A newly-created entry/category/
+     * asset can't be matched by `elementId` the way
+     * MenuBuilderElementService::getAffectedGroupIds() matches an edited
+     * one, so callers invalidate this broader set too whenever any watched
+     * element changes; still far short of a global flush, and empty (no
+     * behavior change at all) for the common case of no dynamic items.
+     *
+     * @return int[] Distinct group IDs.
+     */
+    public function getGroupIdsWithDynamicItems(): array
+    {
+        return array_map(
+            'intval',
+            MenuBuilderItemRecord::find()
+                ->select(['groupId'])
+                ->distinct()
+                ->where(['type' => MenuBuilderItem::TYPE_DYNAMIC, 'enabled' => true])
+                ->column()
+        );
+    }
+
+    /**
+     * Phase 11 bulk actions. Every ID is independently existence/group-
+     * checked and saved through the same {@see save()} path a single toggle
+     * uses (so hierarchy/validation rules are never bypassed for a bulk
+     * op) inside one transaction — a failure on any ID rolls back the whole
+     * batch rather than leaving a partial bulk change applied.
+     *
+     * @param int[] $ids
+     */
+    public function bulkSetEnabled(array $ids, bool $enabled): bool
+    {
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            foreach ($ids as $id) {
+                $item = $this->getById((int)$id);
+
+                if ($item === null) {
+                    continue;
+                }
+
+                $item->enabled = $enabled;
+
+                if (!$this->save($item, runValidation: false)) {
+                    $transaction->rollBack();
+
+                    return false;
+                }
+            }
+
+            $transaction->commit();
+        } catch (Throwable $exception) {
+            $transaction->rollBack();
+            Craft::warning('Failed to bulk-update navigation items: ' . $exception->getMessage(), __METHOD__);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param int[] $ids
+     */
+    public function bulkDelete(array $ids): bool
+    {
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            foreach ($ids as $id) {
+                // deleteById() already invalidates the owning group's cache
+                // and relies on the cascading FK for descendants — a bulk
+                // delete is just that, repeated inside one transaction.
+                $this->deleteById((int)$id, keepChildren: false);
+            }
+
+            $transaction->commit();
+        } catch (Throwable $exception) {
+            $transaction->rollBack();
+            Craft::warning('Failed to bulk-delete navigation items: ' . $exception->getMessage(), __METHOD__);
+
+            return false;
+        }
+
+        return true;
+    }
+
     public function hasChildren(int $id): bool
     {
         return MenuBuilderItemRecord::find()->where(['parentId' => $id])->exists();
@@ -328,6 +484,19 @@ class MenuBuilderItemService extends Component
         $this->invalidateGroup($groupId);
 
         return $result;
+    }
+
+    /**
+     * An item's groupId is fixed at creation. Reassigning it isn't a
+     * supported feature: children keep their own (unchanged) groupId, so
+     * moving only the parent would silently detach them from the tree —
+     * they'd become orphaned roots in the old group and vanish from the
+     * new one. $original is null for a not-yet-persisted item, which is
+     * always allowed to pick its group.
+     */
+    public static function isGroupChangeAllowed(?int $original, int $requested): bool
+    {
+        return $original === null || $original === $requested;
     }
 
     /**

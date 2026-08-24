@@ -63,6 +63,18 @@
     errors: group.getErrors('maxDepth'),
 }) }}
 
+{% if craft.app.getIsMultiSite() %}
+    {{ forms.checkboxSelectField({
+        label: "Restrict to sites"|t('menu-builder'),
+        instructions: "Leave everything unchecked to make this menu available on every site. When restricted, `craft.menuBuilder.get()` returns nothing on the other sites."|t('menu-builder'),
+        id: 'siteIds',
+        name: 'siteIds',
+        values: group.siteIds,
+        options: craft.app.sites.getAllSites()|map(s => { label: s.name, value: s.id }),
+        errors: group.getErrors('siteIds'),
+    }) }}
+{% endif %}
+
 {{ forms.textField({
     label: "CSS class"|t('menu-builder'),
     instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menu-builder'),

@@ -77,7 +77,8 @@
     }
 
     /**
-     * @param {Object} params `groupHandle` plus either `itemId` or `parentId`.
+     * @param {Object} params `groupHandle` and `itemId`. Edit-only — new items
+     *               are created by the dashboard's quick-add panel.
      * @param {Function} [onSaved] called with the save response's data once the item is saved.
      */
     window.MenuBuilder.openItemSlideout = function(params, onSaved) {

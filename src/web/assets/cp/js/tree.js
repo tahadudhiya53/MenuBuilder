@@ -3,10 +3,12 @@
         return;
     }
 
+    // Same guard as menu-builder.js/slideout.js/item-fields.js — whichever
+    // file loads first creates the namespace.
+    window.MenuBuilder = window.MenuBuilder || {};
+
     /** Horizontal pixels of mouse movement per indent level, matching Craft's own structure tables. */
     var LEVEL_INDENT = 24;
-    /** Deliberate hover time before a row becomes a drop-as-child target. */
-    var DROP_PARENT_DELAY = 300;
 
     /**
      * Menu tree controller. The tree is rendered as a single FLAT list of
@@ -15,13 +17,16 @@
      * indentation is cosmetic (CSS padding), not real DOM nesting. A single
      * Garnish.DragSort (MenuBuilderTreeSorter) reorders vertically and
      * reparents by dragging horizontally, the same interaction the CP's own
-     * Navigation node listing uses. A row can also be dropped directly onto
-     * another row to make it a child. Indent/outdent/up/down remain available
-     * from each row's "⋮" context menu as a keyboard-reachable fallback
-     * (spec §6/§24). All server calls re-validate depth/circularity/
-     * cross-group — the client only disables obviously-invalid actions for
-     * UX, it never trusts itself as the source of truth.
+     * Navigation node listing uses. That horizontal drag is the ONLY way to
+     * reparent, just as drag/drop is the only way to reorder — there is
+     * deliberately no duplicate up/down/indent/outdent command set and no
+     * second drop-onto-a-row gesture. All server calls re-validate depth/
+     * circularity/cross-group — the client never trusts itself as the source
+     * of truth.
      */
+    /** The row-menu actions this controller owns; anything else is someone else's. */
+    var ROW_ACTIONS = ['edit', 'duplicate', 'toggle', 'delete'];
+
     var MenuBuilderTree = Garnish.Base.extend({
         $container: null,
         $list: null,
@@ -81,28 +86,6 @@
             return $subtree;
         },
 
-        nextSibling: function($item) {
-            var level = this.level($item);
-            var $next = $item.next('li.menu-builder-item');
-
-            while ($next.length && this.level($next) > level) {
-                $next = $next.next('li.menu-builder-item');
-            }
-
-            return ($next.length && this.level($next) === level) ? $next : $();
-        },
-
-        prevSibling: function($item) {
-            var level = this.level($item);
-            var $prev = $item.prev('li.menu-builder-item');
-
-            while ($prev.length && this.level($prev) > level) {
-                $prev = $prev.prev('li.menu-builder-item');
-            }
-
-            return ($prev.length && this.level($prev) === level) ? $prev : $();
-        },
-
         /** Walks backward from `$item` to find the nearest shallower row — that row is the parent. */
         findParentId: function($item, level) {
             var $scan = $item.prev('li.menu-builder-item');
@@ -153,18 +136,6 @@
                 .data('level', level)
                 .attr('data-level', level)
                 .css('--mb-level', level);
-
-            $li.find('[data-mb-action="outdent"]').toggleClass('menu-builder-action-hidden', level <= 1);
-
-            var atMaxDepth = this.maxDepth && level >= this.maxDepth;
-            $li.find('[data-mb-action="indent"]').toggleClass(
-                'menu-builder-action-hidden',
-                atMaxDepth || $li.data('no-children') == '1'
-            );
-            $li.find('[data-mb-action="add-child"]').toggleClass(
-                'menu-builder-action-hidden',
-                atMaxDepth || $li.data('no-children') == '1'
-            );
         },
 
         shiftLevels: function($subtree, diff) {
@@ -184,12 +155,9 @@
             this.persistMove($item.data('id'), newParentId, siblingIds);
         },
 
-        /** Keeps parent ids, action-menu state, and child-count badges in sync without a page reload. */
+        /** Keeps parent ids and child-count badges in sync without a page reload. */
         syncHierarchyMetadata: function($item, newParentId) {
             $item
-                .data('parent-id', newParentId || '')
-                .attr('data-parent-id', newParentId || '')
-                .find('[data-mb-action="add-sibling"]')
                 .data('parent-id', newParentId || '')
                 .attr('data-parent-id', newParentId || '');
 
@@ -234,6 +202,29 @@
 
                 self.setLevel($parent, self.level($parent));
             });
+
+            this.syncLastSiblingFlags();
+        },
+
+        /**
+         * Recomputes which rows are the last child at their level (used by the
+         * CSS connector lines to decide whether a row's rail elbows off or
+         * continues straight into the next sibling's rail). Twig computes this
+         * via `loop.last` on initial render, but nothing kept it in sync after
+         * a client-side drag — leaving stale lines until the page was
+         * reloaded.
+         */
+        syncLastSiblingFlags: function() {
+            var $items = this.$list.children('li.menu-builder-item');
+            var self = this;
+
+            $items.each(function(index) {
+                var $item = $(this);
+                var $next = $item.next('li.menu-builder-item');
+                var isLast = !$next.length || self.level($next) < self.level($item);
+
+                $item.toggleClass('menu-builder-item-last', isLast);
+            });
         },
 
         persistMove: function(itemId, newParentId, siblingIds) {
@@ -259,43 +250,29 @@
                 return;
             }
 
+            var action = $target.data('mb-action');
+
+            // The listener is document-wide (see init()), so it also sees
+            // `data-mb-action` links this controller doesn't own — the
+            // dashboard template's own quick-add trigger, for one. Leave
+            // those entirely alone, default behaviour included.
+            if (ROW_ACTIONS.indexOf(action) === -1) {
+                return;
+            }
+
             event.preventDefault();
 
-            var action = $target.data('mb-action');
             var id = $target.data('id');
-            var $item = id != null
-                ? this.$container.find('li.menu-builder-item[data-id="' + id + '"]')
-                : $target.closest('li.menu-builder-item');
 
             switch (action) {
-                case 'focus-quick-add':
-                    return; // handled by the dashboard template itself
                 case 'edit':
                     this.editItem(id);
-                    break;
-                case 'add-child':
-                    this.addItem($target.data('parent-id'));
-                    break;
-                case 'add-sibling':
-                    this.addItem($target.data('parent-id') || null);
                     break;
                 case 'duplicate':
                     this.duplicate(id);
                     break;
                 case 'toggle':
-                    this.toggle(id, $target);
-                    break;
-                case 'move-up':
-                    this.moveWithinSiblings($item, -1);
-                    break;
-                case 'move-down':
-                    this.moveWithinSiblings($item, 1);
-                    break;
-                case 'indent':
-                    this.indent($item);
-                    break;
-                case 'outdent':
-                    this.outdent($item);
+                    this.toggle(id);
                     break;
                 case 'delete':
                     this.remove(id, $target.data('title'), $target.data('has-children') == '1');
@@ -309,28 +286,54 @@
             });
         },
 
-        addItem: function(parentId) {
-            window.MenuBuilder.openItemSlideout({ groupHandle: this.groupHandle, parentId: parentId || '' }, function() {
-                window.location.reload();
-            });
+        /**
+         * The single place a row's enabled state is reflected in the UI —
+         * called by the row menu's toggle and by the dashboard's bulk
+         * enable/disable, so the two can't drift apart.
+         *
+         * Rows are looked up by id, NOT via the clicked element's ancestors:
+         * Craft moves an open disclosure `.menu` out to near <body>, so the
+         * clicked <a> has no `li.menu-builder-item` ancestor any more (same
+         * reason init() binds its click listener document-wide). Deriving the
+         * row from the anchor silently yielded an empty set, which is why the
+         * status used to update only after a page reload.
+         */
+        setRowEnabled: function(id, enabled) {
+            var $item = this.$container.find('li.menu-builder-item[data-id="' + id + '"]');
+
+            if (!$item.length) {
+                return;
+            }
+
+            var $row = $item.children('.menu-builder-item-row');
+
+            $item.toggleClass('menu-builder-item-disabled', !enabled);
+
+            // Scoped to this badge's own class — `.menu-builder-item-status`
+            // alone would also match the mega-menu and orphaned-element
+            // badges, removing them on enable and suppressing this one on
+            // disable whenever either was already present.
+            var $flag = $row.find('.menu-builder-item-disabled-flag');
+
+            if (enabled) {
+                $flag.remove();
+            } else if (!$flag.length) {
+                $('<span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">' + Craft.t('menu-builder', 'Disabled') + '</span>')
+                    .insertAfter($row.find('.menu-builder-item-type'));
+            }
+
+            // The row menu itself may be detached (see above), so reach its
+            // Disable/Enable entry by id rather than through the row.
+            Garnish.$bod.find('[data-mb-action="toggle"][data-id="' + id + '"]')
+                .text(enabled ? Craft.t('menu-builder', 'Disable') : Craft.t('menu-builder', 'Enable'));
         },
 
-        toggle: function(id, $target) {
+        toggle: function(id) {
+            var self = this;
+
             window.MenuBuilder.request('POST', 'menu-builder/items/toggle', { data: { id: id } })
                 .then(function(response) {
-                    var enabled = response.data && response.data.enabled;
-                    var $item = $target.closest('li.menu-builder-item');
-                    $item.toggleClass('menu-builder-item-disabled', !enabled);
-                    $target.text(enabled ? Craft.t('menu-builder', 'Disable') : Craft.t('menu-builder', 'Enable'));
-
-                    var $status = $item.children('.menu-builder-item-row').find('.menu-builder-item-status');
-                    if (enabled) {
-                        $status.remove();
-                    } else if (!$status.length) {
-                        $('<span class="menu-builder-item-status badge disabled-badge">' + Craft.t('menu-builder', 'Disabled') + '</span>')
-                            .insertAfter($item.children('.menu-builder-item-row').find('.menu-builder-item-type'));
-                    }
-
+                    self.setRowEnabled(id, !!(response.data && response.data.enabled));
                     window.MenuBuilder.success(Craft.t('menu-builder', 'Updated.'));
                 })
                 .catch(function(error) {
@@ -404,65 +407,6 @@
                 });
         },
 
-        moveWithinSiblings: function($item, direction) {
-            var $subtree = this.getSubtree($item);
-            var $sibling = direction < 0 ? this.prevSibling($item) : this.nextSibling($item);
-
-            if (!$sibling.length) {
-                return;
-            }
-
-            if (direction < 0) {
-                $subtree.insertBefore($sibling);
-            } else {
-                $subtree.insertAfter(this.getSubtree($sibling).last());
-            }
-
-            this.persistReorder($item);
-        },
-
-        /** Becomes the last child of its previous sibling. */
-        indent: function($item) {
-            var $prevSibling = this.prevSibling($item);
-
-            if (!$prevSibling.length || $prevSibling.data('no-children') == '1') {
-                return;
-            }
-
-            var $subtree = this.getSubtree($item);
-            var levelDiff = (this.level($prevSibling) + 1) - this.level($item);
-
-            this.shiftLevels($subtree, levelDiff);
-            $subtree.insertAfter(this.getSubtree($prevSibling).last());
-
-            this.persistReorder($item);
-        },
-
-        /** Moves up one level, placed immediately after its current parent's subtree. */
-        outdent: function($item) {
-            var level = this.level($item);
-
-            if (level <= 1) {
-                return; // already top-level
-            }
-
-            var $subtree = this.getSubtree($item);
-            var parentId = this.findParentId($item, level);
-            var $parentItem = this.$container.find('li.menu-builder-item[data-id="' + parentId + '"]');
-
-            this.shiftLevels($subtree, -1);
-
-            if ($parentItem.length) {
-                var $lastNode = this.getSubtree($parentItem).last();
-
-                // If $item was already the last thing in its parent's subtree, it's already in the right spot.
-                if (!$subtree.filter($lastNode).length) {
-                    $subtree.insertAfter($lastNode);
-                }
-            }
-
-            this.persistReorder($item);
-        },
     });
 
     /**
@@ -480,10 +424,6 @@
         _draggeeLevelDelta: null,
         _targetLevel: null,
         _targetLevelBounds: null,
-        _$dropParentCandidate: null,
-        _$dropParent: null,
-        _dropParentCandidateSince: null,
-        _dropParentTimer: null,
         _insertionPreviousTop: null,
 
         init: function(tree, items) {
@@ -637,7 +577,6 @@
         },
 
         onDragStart: function() {
-            this.clearDropParent();
             this.setTargetLevelBounds();
             Garnish.$bod.addClass('menu-builder-is-dragging');
             this.base();
@@ -647,13 +586,11 @@
             this.rememberInsertionPosition();
             this.base();
             this.updateIndent();
-            this.updateDropParent();
         },
 
         onInsertionPointChange: function() {
             this.setTargetLevelBounds();
             this.updateIndent();
-            this.updateDropParent();
             this.animateInsertionMove();
             this.base();
         },
@@ -698,125 +635,6 @@
             });
         },
 
-        /**
-         * Returns a valid row under the pointer's central drop zone. The top
-         * and bottom 20% remain available for ordinary before/after sorting.
-         */
-        getDropParentCandidate: function() {
-            var self = this;
-            var $candidate = $();
-            var pointerX = this.realMouseX;
-            var pointerY = this.realMouseY;
-
-            this.tree.$list.children('li.menu-builder-item').each(function() {
-                var $item = $(this);
-
-                if (self.$draggee.filter(this).length || $item.data('no-children') == '1') {
-                    return;
-                }
-
-                var offset = $item.offset();
-                var height = $item.outerHeight();
-                var zoneTop = offset.top + height * 0.2;
-                var zoneBottom = offset.top + height * 0.8;
-
-                if (pointerX >= offset.left && pointerX <= offset.left + $item.outerWidth() &&
-                    pointerY >= zoneTop && pointerY <= zoneBottom) {
-                    var childLevel = self.tree.level($item) + 1;
-
-                    if (!self.tree.maxDepth || childLevel + self._draggeeLevelDelta <= self.tree.maxDepth) {
-                        $candidate = $item;
-                        return false;
-                    }
-                }
-            });
-
-            return $candidate;
-        },
-
-        /** Highlights a row once it has been hovered long enough to show clear nesting intent. */
-        updateDropParent: function() {
-            var $candidate = this.getDropParentCandidate();
-            var candidateChanged = !this._$dropParentCandidate ||
-                !$candidate.length ||
-                this._$dropParentCandidate[0] !== $candidate[0];
-
-            if (candidateChanged) {
-                this.clearDropParent();
-
-                if ($candidate.length) {
-                    this._$dropParentCandidate = $candidate;
-                    this._dropParentCandidateSince = Date.now();
-                    $candidate.addClass('menu-builder-drop-parent-pending');
-                    this._dropParentTimer = setTimeout(this.activateDropParent.bind(this), DROP_PARENT_DELAY);
-                }
-
-                return;
-            }
-
-            if (!this._$dropParent && Date.now() - this._dropParentCandidateSince >= DROP_PARENT_DELAY) {
-                this.activateDropParent();
-            } else if (this._$dropParent) {
-                this.positionDropParentInsertion();
-            }
-        },
-
-        activateDropParent: function() {
-            if (!this.dragging || !this._$dropParentCandidate || !this._$dropParentCandidate.length) {
-                return;
-            }
-
-            this._$dropParent = this._$dropParentCandidate;
-            this._$dropParent
-                .removeClass('menu-builder-drop-parent-pending')
-                .addClass('menu-builder-drop-parent');
-            this.positionDropParentInsertion();
-        },
-
-        /** Places the destination slot after the parent's current children at the child indentation level. */
-        positionDropParentInsertion: function() {
-            if (!this._$dropParent || !this._$dropParent.length || !this.$insertion || !this.$insertion.length) {
-                return;
-            }
-
-            var previousTop = this.$insertion.is(':visible') ? this.$insertion.offset().top : null;
-            this.$insertion.detach();
-
-            var $anchor = this.tree.getSubtree(this._$dropParent).not(this.$draggee).last();
-            var parentTitle = $.trim(this._$dropParent.find('.menu-builder-item-title').first().text());
-            var targetLevel = this.tree.level(this._$dropParent) + 1;
-
-            this._targetLevel = targetLevel;
-            this.updateHelperLevel(targetLevel);
-
-            this.$insertion
-                .css('--mb-level', targetLevel)
-                .attr('data-level', targetLevel)
-                .insertAfter($anchor.length ? $anchor : this._$dropParent);
-            this.$insertion.find('.menu-builder-drop-position-label').text(
-                Craft.t('menu-builder', 'Inside “{title}”', { title: parentTitle })
-            );
-            this.animateInsertionMove(previousTop);
-        },
-
-        clearDropParent: function() {
-            if (this._dropParentTimer) {
-                clearTimeout(this._dropParentTimer);
-            }
-
-            this.tree.$list.children('li.menu-builder-item')
-                .removeClass('menu-builder-drop-parent menu-builder-drop-parent-pending');
-            this._$dropParentCandidate = null;
-            this._$dropParent = null;
-            this._dropParentCandidateSince = null;
-            this._dropParentTimer = null;
-
-            if (this.$insertion && this.$insertion.length) {
-                this.$insertion.find('.menu-builder-drop-position-label')
-                    .text(Craft.t('menu-builder', 'Drop here'));
-            }
-        },
-
         /** Reads how far the mouse has moved horizontally since mousedown and turns that into a target level. */
         updateIndent: function() {
             var mouseDist = this.realMouseX - this.mousedownX;
@@ -838,7 +656,7 @@
             this._targetLevel = targetLevel;
             this.updateHelperLevel(targetLevel);
 
-            if (this.$insertion && this.$insertion.length && !this._$dropParent) {
+            if (this.$insertion && this.$insertion.length) {
                 this.$insertion
                     .attr('data-level', targetLevel)
                     .css('--mb-level', targetLevel);
@@ -858,30 +676,7 @@
         },
 
         onDragStop: function() {
-            var $dropParent = this._$dropParent;
             Garnish.$bod.removeClass('menu-builder-is-dragging');
-            this.clearDropParent();
-
-            if ($dropParent && $dropParent.length) {
-                // Move the real (currently hidden) rows before Garnish animates
-                // the helper home, so the animation lands on the shown slot.
-                if (this.$insertion && this.$insertion.length) {
-                    this.$insertion.detach();
-                }
-
-                var $anchor = this.tree.getSubtree($dropParent).not(this.$draggee).last();
-                var targetLevel = this.tree.level($dropParent) + 1;
-                var directDropLevelDiff = targetLevel - this._draggeeLevel;
-
-                if (directDropLevelDiff !== 0) {
-                    this.tree.shiftLevels(this.$draggee, directDropLevelDiff);
-                }
-
-                this.$draggee.insertAfter($anchor.length ? $anchor : $dropParent);
-                this.base();
-                this.tree.persistReorder(this.$draggee.first());
-                return;
-            }
 
             var levelDiff = this._targetLevel - this._draggeeLevel;
 
@@ -900,7 +695,9 @@
         var container = document.getElementById('menu-builder-tree');
 
         if (container) {
-            new MenuBuilderTree(container);
+            // Exposed so the dashboard's bulk toolbar can reuse
+            // setRowEnabled() instead of reimplementing it.
+            window.MenuBuilder.tree = new MenuBuilderTree(container);
         }
     });
 })(jQuery);

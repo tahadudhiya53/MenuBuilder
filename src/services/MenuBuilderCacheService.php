@@ -4,8 +4,8 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
-use yii\caching\TagDependency;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
+use yii\caching\TagDependency;
 
 /**
  * Caches the link-resolved (but not yet visibility-filtered or active-state
@@ -28,11 +28,14 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
  * resolve to a different URL, title, or availability on each site. Without
  * the site in the key, two sites rendering the same group handle would read
  * and overwrite each other's resolved tree.
+ *
+ * Entries are written with Craft's `cacheDuration` as a ceiling rather than
+ * no expiry at all — see {@see duration()} for why (time-based entry status
+ * transitions fire no event to invalidate on).
  */
 class MenuBuilderCacheService extends Component
 {
     private const CACHE_TAG = 'menu-builder';
-    private const DURATION = null; // cache until explicitly invalidated
 
     /**
      * @param callable():array<int,MenuBuilderNode> $generator
@@ -49,7 +52,7 @@ class MenuBuilderCacheService extends Component
         }
 
         $tree = $generator();
-        $cache->set($key, $tree, self::DURATION, new TagDependency(['tags' => [self::CACHE_TAG]]));
+        $cache->set($key, $tree, $this->duration(), new TagDependency(['tags' => [self::CACHE_TAG]]));
 
         return $tree;
     }
@@ -83,6 +86,37 @@ class MenuBuilderCacheService extends Component
     public function invalidateAll(): void
     {
         TagDependency::invalidate(Craft::$app->getCache(), self::CACHE_TAG);
+    }
+
+    /**
+     * Entry/category/asset lifecycle events cover every *edited* change, but
+     * two status transitions happen on a clock with no event at all: a
+     * pending entry going live when its `postDate` arrives, and a live entry
+     * expiring at its `expiryDate`. With a never-expiring cache entry those
+     * would be invisible to navigation indefinitely, so the resolved tree is
+     * written with Craft's own `cacheDuration` as a ceiling — the same bound
+     * Craft puts on its element query caches. Explicit invalidation is still
+     * what normally refreshes a tree; this only limits how long an
+     * event-less change can go unnoticed.
+     */
+    private function duration(): ?int
+    {
+        return self::resolveDuration(Craft::$app->getConfig()->getGeneral()->cacheDuration);
+    }
+
+    /**
+     * `cacheDuration` is normalized to an int number of seconds by
+     * GeneralConfig, where 0 (or a negative/non-numeric value) means "no
+     * expiry" — Yii spells that as null. Pure + static so the mapping is
+     * unit-testable without a booted Craft app.
+     */
+    public static function resolveDuration(mixed $configured): ?int
+    {
+        if (!is_numeric($configured) || (int)$configured <= 0) {
+            return null;
+        }
+
+        return (int)$configured;
     }
 
     public static function cacheKey(string $groupHandle, int $siteId): string

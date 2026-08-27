@@ -45,7 +45,7 @@
 
     {{ forms.textField({
         label: "Title"|t('menu-builder'),
-        instructions: item.type in ['entry', 'category', 'asset'] ? "Leave blank to use the linked element's own title."|t('menu-builder') : null,
+        instructions: item.type in ['entry', 'category', 'asset'] ? "Leave blank to use the linked element's own title — required if the item stays visible when that element becomes unavailable."|t('menu-builder') : null,
         id: 'title',
         name: 'title',
         value: item.title,
@@ -257,7 +257,7 @@
 
 <div data-mb-section="visibility">
     <h2>{{ "Visibility"|t('menu-builder') }}</h2>
-    <p class="light">{{ "This menu item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it."|t('menu-builder') }}</p>
+    <p class="light">{{ "This menu item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it. Ticking both logged-in and logged-out can never be satisfied, so the item would be hidden for everyone."|t('menu-builder') }}</p>
 
     {{ forms.checkboxField({ label: "Only show to logged-in users"|t('menu-builder'), id: 'visibilityLoggedIn', name: 'visibility[loggedIn]', checked: loggedInRule is not null }) }}
     {{ forms.checkboxField({ label: "Only show to logged-out (anonymous) visitors"|t('menu-builder'), id: 'visibilityLoggedOut', name: 'visibility[loggedOut]', checked: loggedOutRule is not null }) }}
@@ -282,7 +282,9 @@
 
     {{ forms.textField({ label: "Visible from"|t('menu-builder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
     {{ forms.textField({ label: "Visible until"|t('menu-builder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
-    {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT).", id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule.environments ?? [] | join(', ') }) }}
+    {# `envRule.environments ?? [] | join(', ')` parsed as `envRule.environments ?? ([]|join(', '))`, #}
+    {# so an item that *had* an environment rule rendered the raw array into the field. #}
+    {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT). An unrecognized environment hides the item."|t('menu-builder'), id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule is not null ? envRule.environments|join(', ') : '' }) }}
 </div>
 
 <div data-mb-section="megaMenu">

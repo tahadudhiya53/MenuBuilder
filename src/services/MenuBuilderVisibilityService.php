@@ -38,6 +38,13 @@ class MenuBuilderVisibilityService extends Component
         );
     }
 
+    /**
+     * An item's rules are combined with AND: visible only if every one of
+     * them passes. Everything that isn't an unambiguous pass fails closed —
+     * an entry that isn't even an array of config, a missing or non-string
+     * `type`, a type no rule is registered for, or a rule that throws.
+     * A malformed `visibility` bag must hide the item, never expose it.
+     */
     public function isVisible(MenuBuilderItem $item, VisibilityContext $context): bool
     {
         if (empty($item->visibility)) {
@@ -47,12 +54,42 @@ class MenuBuilderVisibilityService extends Component
         $rules = $this->getRules();
 
         foreach ($item->visibility as $ruleConfig) {
-            $type = $ruleConfig['type'] ?? null;
-            $rule = $type ? ($rules[$type] ?? null) : null;
+            // Guarded rather than assumed: `visibility` is persisted as free-form
+            // JSON, so a directly-posted or imported bag can hold a scalar here,
+            // and `$ruleConfig['type']` on a string is a TypeError in PHP 8 — an
+            // uncaught one would surface as a 500 instead of a hidden item.
+            if (!is_array($ruleConfig)) {
+                return false;
+            }
 
-            // An unknown/misconfigured rule type fails closed rather than silently
-            // showing content that was meant to be gated.
-            if ($rule === null || !$rule->passes($ruleConfig, $context)) {
+            $type = $ruleConfig['type'] ?? null;
+
+            // Non-string type (an array or int) would be an illegal offset on
+            // the rules map, so it's rejected before the lookup.
+            if (!is_string($type) || $type === '') {
+                return false;
+            }
+
+            $rule = $rules[$type] ?? null;
+
+            if ($rule === null) {
+                return false;
+            }
+
+            // A rule is allowed to be third-party (EVENT_REGISTER_VISIBILITY_RULES).
+            // If one throws on config it didn't expect, that's still a rule that
+            // did not pass — hide the item rather than letting the exception
+            // escape and take out the whole page render.
+            try {
+                if (!$rule->passes($ruleConfig, $context)) {
+                    return false;
+                }
+            } catch (\Throwable $e) {
+                Craft::warning(
+                    "MenuBuilder visibility rule \"{$type}\" threw while evaluating item {$item->id}; failing closed: " . $e->getMessage(),
+                    __METHOD__
+                );
+
                 return false;
             }
         }

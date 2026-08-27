@@ -6,11 +6,11 @@ use Craft;
 use craft\base\Component;
 use craft\base\ElementInterface;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
-use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
@@ -88,7 +88,7 @@ class MenuBuilderResolver extends Component
                 continue;
             }
 
-            $isClickable = $item->isLinkable() && $item->clickable && $resolvedLink->url !== null;
+            $isClickable = LinkAttributeHelper::isClickable($item->isLinkable(), $item->clickable, $resolvedLink->url);
             $megaMenuConfig = $this->buildMegaMenuConfig($item);
 
             $node = new MenuBuilderNode(
@@ -176,6 +176,11 @@ class MenuBuilderResolver extends Component
     {
         $url = method_exists($element, 'getUrl') ? $element->getUrl() : null;
         $title = (string)($element->title ?? '');
+        // A synthesized child is always "linkable" and always clickable when
+        // it has a URL — there is no editor-set `clickable` flag to respect —
+        // but it goes through the same helper so a blank URL is treated the
+        // same way here as on a persisted item.
+        $isClickable = LinkAttributeHelper::isClickable(true, true, $url);
 
         return new MenuBuilderNode(
             id: (int)$element->id,
@@ -183,7 +188,7 @@ class MenuBuilderResolver extends Component
             type: MenuBuilderItem::TYPE_DYNAMIC,
             title: $title,
             url: $url,
-            isClickable: $url !== null,
+            isClickable: $isClickable,
             isLinkAvailable: true,
             target: '_self',
             rel: null,
@@ -224,14 +229,35 @@ class MenuBuilderResolver extends Component
             // their own (see MenuBuilderResolver::buildDynamicChildren()),
             // so they're always visible here — they're already
             // site/status-scoped by the query that produced them.
-            $item = $node->isDynamic ? null : ($itemsById[$node->id] ?? null);
+            if ($node->isDynamic) {
+                $item = null;
+            } else {
+                $item = $itemsById[$node->id] ?? null;
+
+                // A cached node whose persisted item is gone from the fresh
+                // read — deleted, or disabled since the tree was cached —
+                // is hidden rather than passed through unchecked: its
+                // visibility rules are exactly what can't be evaluated any
+                // more. Invalidation should already have prevented this
+                // (MenuBuilderCacheService), so this is the fail-closed
+                // backstop for a stale entry that outlived its item.
+                if ($item === null) {
+                    continue;
+                }
+            }
 
             if ($item !== null && !$visibilityService->isVisible($item, $context)) {
                 continue;
             }
 
-            $node->children = $this->filterVisible($node->children, $itemsById, $visibilityService, $context);
-            $filtered[] = $node;
+            // withChildren() rather than `$node->children = ...`: these
+            // nodes came from the cache, and the filtered result is then
+            // active-state marked, so writing either back onto them would
+            // put per-request state on shared objects. See
+            // MenuBuilderNode::withChildren().
+            $filtered[] = $node->withChildren(
+                $this->filterVisible($node->children, $itemsById, $visibilityService, $context)
+            );
         }
 
         return $filtered;

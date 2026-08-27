@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\visibility;
 
 use DateTime;
+use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 
 /**
  * Config: {"start": "2026-01-01T00:00:00", "end": "2026-02-01T00:00:00"} —
@@ -12,8 +13,9 @@ use DateTime;
  * CP means the same instant it did when the editor typed it.
  *
  * Fails closed — hides the item — for anything that would otherwise mean
- * silently showing gated navigation: an unparseable date string, or a start
- * that's after the end (spec §4/§10 forbid guessing at malformed config).
+ * silently showing gated navigation: an unparseable date string, a start
+ * that's after the end, or neither bound configured at all. Malformed
+ * config is never guessed at.
  */
 class DateRangeRule implements VisibilityRuleInterface
 {
@@ -24,6 +26,15 @@ class DateRangeRule implements VisibilityRuleInterface
 
         $hasStart = $rawStart !== null && $rawStart !== '';
         $hasEnd = $rawEnd !== null && $rawEnd !== '';
+
+        // A date-range rule with neither bound constrains nothing, so it can
+        // only be missing configuration — the CP never persists one and
+        // MenuBuilderItem::validateVisibility() rejects it on save. "Always
+        // visible" is the absence of a rule (or the `always` type), not an
+        // empty range.
+        if (!$hasStart && !$hasEnd) {
+            return false;
+        }
 
         $start = $hasStart ? $this->toDate($rawStart, $context) : null;
         $end = $hasEnd ? $this->toDate($rawEnd, $context) : null;
@@ -60,7 +71,7 @@ class DateRangeRule implements VisibilityRuleInterface
             return null;
         }
 
-        if (!$this->hasValidCalendarDate($value)) {
+        if (!DateValidationHelper::hasValidCalendarDate($value)) {
             return null;
         }
 
@@ -69,24 +80,5 @@ class DateRangeRule implements VisibilityRuleInterface
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    /**
-     * DateTime's parser silently normalizes an out-of-range calendar date
-     * instead of rejecting it (e.g. "2026-02-30" becomes March 2), so a
-     * typo'd persisted date would otherwise pass through as a shifted date
-     * rather than failing closed. Reject any leading Y-m-d component that
-     * isn't a real calendar date before handing the value to DateTime.
-     * Values with an explicit offset/timezone (e.g. trailing "+02:00") are
-     * unaffected — the offset is preserved by DateTime itself, this only
-     * validates the date portion.
-     */
-    private function hasValidCalendarDate(string $value): bool
-    {
-        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $value, $m)) {
-            return true;
-        }
-
-        return checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
     }
 }

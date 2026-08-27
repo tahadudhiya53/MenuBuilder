@@ -12,7 +12,7 @@ class ResolvedLink
     public function __construct(
         public readonly ?string $url = null,
         public readonly bool $isAvailable = true,
-        /** The linked element's own title, used when the item has no explicit title override (spec §14). */
+        /** The linked element's own title, used when the item has no explicit title override. */
         public readonly ?string $label = null,
     ) {
     }

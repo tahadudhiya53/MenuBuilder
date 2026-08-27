@@ -6,7 +6,7 @@
  #   {{ menuMacros.render(craft.menuBuilder.get('main')) }}
  #}
 {#
- # Phase 7: optional mega-menu renderer for one node whose `megaMenu` is set
+ # Optional mega-menu renderer for one node whose `megaMenu` is set
  # (see MenuBuilderNode::$megaMenu / ::megaMenuColumns()). Renders each
  # column's items as its own <ul>, with an accessible disclosure button
  # (aria-haspopup/aria-expanded, toggled purely by CSS via the button's own
@@ -37,9 +37,10 @@
     <ul>
         {% for node in nodes %}
             {% if node.type == 'separator' %}
-                <li role="separator" class="{{ node.cssClass }}"{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
+                <li role="separator"{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
             {% else %}
-                <li class="{{ node.cssClass }}{{ node.isActiveOrAncestor() ? ' is-active' : '' }}"{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}>
+                {% set liClasses = (node.cssClass ? node.cssClass ~ ' ' : '') ~ (node.isActiveOrAncestor() ? 'is-active' : '') %}
+                <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}>
                     {% if node.isClickable %}
                         <a href="{{ node.url }}"
                            target="{{ node.target }}"
@@ -50,8 +51,12 @@
                            {% for key, value in node.htmlAttributes %}{{ key }}="{{ value }}" {% endfor %}
                         >{{ node.title }}</a>
                     {% else %}
-                        {# A non-clickable heading is a label, never a fake link — no href, ever. #}
-                        <span{% if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}>{{ node.title }}</span>
+                        {# A non-clickable heading is a label, never a fake link — no href, ever.
+                         # It still carries the accessibility/appearance options an
+                         # editor set on it: those are properties of the item, not of
+                         # its link. #}
+                        <span{% if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}{% if node.titleAttribute %} title="{{ node.titleAttribute }}"{% endif %}
+                              {%- for key, value in node.htmlAttributes %} {{ key }}="{{ value }}"{% endfor %}>{{ node.title }}</span>
                     {% endif %}
 
                     {% if node.megaMenu %}

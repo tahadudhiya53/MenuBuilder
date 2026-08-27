@@ -48,6 +48,37 @@ class MenuBuilderNode
     ) {
     }
 
+    /**
+     * A copy of this node carrying the given (already-copied) children,
+     * with each child's `parent` rewired to the copy.
+     *
+     * The per-request half of the pipeline — visibility filtering and
+     * active-state marking — writes to `children`, `isActive` and
+     * `isActiveAncestor`. Those nodes come out of
+     * MenuBuilderCacheService, so writing to them in place means writing
+     * to the cached tree: harmless with a serializing cache backend (every
+     * read hands back a fresh object graph), but a per-request visibility
+     * decision baked into a shared cache entry the moment the backend
+     * hands back the same instances. Copying here keeps the cached tree
+     * immutable by construction rather than by backend choice — the
+     * property ARCHITECTURE.md's cache boundary depends on.
+     *
+     * @param MenuBuilderNode[] $children
+     */
+    public function withChildren(array $children): self
+    {
+        $copy = clone $this;
+        $copy->children = $children;
+        $copy->isActive = false;
+        $copy->isActiveAncestor = false;
+
+        foreach ($children as $child) {
+            $child->parent = $copy;
+        }
+
+        return $copy;
+    }
+
     public function hasChildren(): bool
     {
         return !empty($this->children);

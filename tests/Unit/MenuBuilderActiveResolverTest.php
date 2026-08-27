@@ -68,4 +68,56 @@ class MenuBuilderActiveResolverTest extends TestCase
 
         $this->assertTrue($home->isActive);
     }
+
+    /**
+     * Craft's own Request::getFullUri() has no leading slash, while an item's
+     * URL almost always does — so this is the shape every real request takes,
+     * and the case that regressed active state entirely.
+     */
+    public function testCurrentUriWithoutLeadingSlashStillMatches(): void
+    {
+        $about = $this->node(2, '/about');
+        $parent = $this->node(1, null, [$about]);
+
+        (new MenuBuilderActiveResolver())->mark([$parent], 'about');
+
+        $this->assertTrue($about->isActive);
+        $this->assertTrue($parent->isActiveAncestor);
+    }
+
+    public function testAbsoluteElementUrlMatchesRelativeCurrentUri(): void
+    {
+        $news = $this->node(1, 'https://example.test/news/latest');
+
+        (new MenuBuilderActiveResolver())->mark([$news], 'news/latest');
+
+        $this->assertTrue($news->isActive);
+    }
+
+    public function testHomepageMatchesEmptyCurrentUri(): void
+    {
+        $home = $this->node(1, 'https://example.test/');
+
+        (new MenuBuilderActiveResolver())->mark([$home], '');
+
+        $this->assertTrue($home->isActive);
+    }
+
+    public function testItemWithoutLeadingSlashMatchesAbsoluteCurrentUri(): void
+    {
+        $contact = $this->node(1, 'contact');
+
+        (new MenuBuilderActiveResolver())->mark([$contact], '/contact');
+
+        $this->assertTrue($contact->isActive);
+    }
+
+    public function testSimilarPrefixIsNotTreatedAsAMatch(): void
+    {
+        $news = $this->node(1, '/news');
+
+        (new MenuBuilderActiveResolver())->mark([$news], 'newsletter');
+
+        $this->assertFalse($news->isActive);
+    }
 }

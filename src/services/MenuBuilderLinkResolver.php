@@ -8,6 +8,7 @@ use craft\elements\Category;
 use craft\elements\Entry;
 use Tahadudhiya\MenuBuilder\events\RegisterLinkTypesEvent;
 use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
+use Tahadudhiya\MenuBuilder\linktypes\DynamicLinkResolver;
 use Tahadudhiya\MenuBuilder\linktypes\ElementLinkResolver;
 use Tahadudhiya\MenuBuilder\linktypes\LinkTypeResolverInterface;
 use Tahadudhiya\MenuBuilder\linktypes\NonClickableLinkResolver;
@@ -44,6 +45,7 @@ class MenuBuilderLinkResolver extends Component
                     MenuBuilderItem::TYPE_ANCHOR => new AnchorLinkResolver(),
                     MenuBuilderItem::TYPE_NONCLICKABLE => new NonClickableLinkResolver(),
                     MenuBuilderItem::TYPE_SEPARATOR => new NonClickableLinkResolver(),
+                    MenuBuilderItem::TYPE_DYNAMIC => new DynamicLinkResolver(),
                 ],
             ]);
             $this->trigger(self::EVENT_REGISTER_LINK_TYPES, $event);

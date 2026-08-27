@@ -44,10 +44,18 @@ class MenuBuilderActiveResolver extends Component
         return $node->isActive || $anyChildActive;
     }
 
+    /**
+     * Both sides of the comparison are reduced to a leading-slash, no-trailing-slash
+     * path. The leading slash matters: an item's URL carries one (either because the
+     * editor typed a root-relative path, or because an element URL was absolute and
+     * parse_url kept it), while Craft's own `getFullUri()` does not — so without
+     * normalizing it, "/news" never matched the request for "news" and nothing was
+     * ever marked active.
+     */
     private function normalize(string $url): string
     {
         $path = parse_url($url, PHP_URL_PATH) ?: $url;
 
-        return rtrim($path, '/') ?: '/';
+        return rtrim('/' . ltrim($path, '/'), '/') ?: '/';
     }
 }

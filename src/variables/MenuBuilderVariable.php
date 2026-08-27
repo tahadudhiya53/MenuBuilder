@@ -2,10 +2,10 @@
 
 namespace Tahadudhiya\MenuBuilder\variables;
 
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
-use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 /**
  * Exposed in Twig as `craft.menuBuilder`. `get()` is the primary/documented

@@ -25,9 +25,4 @@ class MenuBuilderGroupRecord extends ActiveRecord
     {
         return '{{%menubuilder_groups}}';
     }
-
-    public function getItems(): \yii\db\ActiveQuery
-    {
-        return $this->hasMany(MenuBuilderItemRecord::class, ['groupId' => 'id']);
-    }
 }

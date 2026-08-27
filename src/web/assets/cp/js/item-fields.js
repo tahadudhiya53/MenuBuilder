@@ -4,7 +4,7 @@
     }
 
     /**
-     * Drives the item editor's type-contingent field visibility (spec §12).
+     * Drives the item editor's type-contingent field visibility.
      * Runs identically whether the fields markup came from a full page load
      * or was injected into a slide-out, since both paths call this on the
      * same `[data-menu-builder-item-fields]` root.

@@ -25,7 +25,6 @@ Everything below is implemented and shipping in 1.0.0.
 | CSS class + HTML attributes | Rendered onto your `<nav>`/wrapper; attributes are validated server-side |
 | Description | Internal note for editors |
 | Duplicate | Clone a menu — its settings **and** all its items, in one transaction, with a unique handle |
-| Project config | Menu structure/settings are mirrored into `project.yaml` and applied on deploy |
 
 ### Menu items
 
@@ -39,10 +38,10 @@ Everything below is implemented and shipping in 1.0.0.
 | Open in new tab | `target="_blank"`, with `rel="noopener"` merged in automatically (your own `rel` values are kept) |
 | `rel` presets + custom | `nofollow`, `sponsored` checkboxes plus a free-form `rel` field |
 | Anchor links | `#fragment` links, validated (no spaces/quotes/angle brackets) |
-| Appearance fields | Icon, badge, description, image, "featured" flag, CSS class |
+| Appearance fields | Icon, badge, description, image, "featured" flag, CSS class, HTML id — CSS class and id are validated like the attributes bag |
 | Accessibility fields | ARIA label, `title` attribute; `aria-current="page"` on the active item |
-| Custom HTML attributes | Arbitrary `data-*`/HTML attributes, validated against event-handler keys and `javascript:` values |
-| Enable / disable | Per item, inline from the row menu |
+| Custom HTML attributes | Arbitrary `data-*`/HTML attributes, validated against event-handler keys (`onclick`, `onload`, `onerror`, anything starting `on`) and `javascript:`/`vbscript:` values, obfuscation included |
+| Enable / disable | Per item, inline from the row menu. Disabling an item hides **its whole subtree** — enabled children are never promoted to top-level items |
 | Duplicate | Clones the item *and its whole subtree* in one transaction |
 | Orphaned element warning | A "Linked element unavailable" badge when a linked entry/category/asset was hard-deleted |
 
@@ -58,6 +57,14 @@ rather than leaking gated navigation.
 - `dateRange` — visible from / until, evaluated in the app's configured timezone
 - `environment` — restrict to named environments (matches `CRAFT_ENVIRONMENT`)
 - `always` — explicit no-op
+
+**"No restriction" means no rule, not an empty one.** `userGroup`, `site`, `environment` and
+`dateRange` exist only to restrict, so a rule with nothing to match against (an empty or malformed
+list, a date range with neither bound, an unidentifiable current site or environment) hides the item
+and is rejected at save time. The editor form only writes a rule you actually filled in, so this
+only comes up for imports and direct API writes. "Any signed-in user" is `loggedIn`, not a
+`userGroup` rule with no groups selected — and ticking both `loggedIn` and `loggedOut` on one item
+can never be satisfied, so it hides the item for everyone.
 
 ### Mega menus
 
@@ -269,7 +276,9 @@ Event::on(
 ```
 
 A rule implements `VisibilityRuleInterface::passes(array $config, VisibilityContext $context): bool`.
-Unknown rule types fail closed, so a rule that isn't registered hides its item rather than showing it.
+Unknown rule types fail closed, so a rule that isn't registered hides its item rather than showing
+it — and so does a rule that throws: the exception is caught and logged rather than escaping into
+the page render. Return `false` for config your rule doesn't recognise; don't guess.
 
 ---
 
@@ -291,26 +300,28 @@ No manual cache clearing is needed in normal use.
 
 ---
 
-## Project config
+## Where menus are stored
 
-Menus (groups) are mirrored into `project.yaml` under `menuBuilder.groups.<uid>`, so menu structure
-and settings are diffable and deployable like sections and fields. Menu **items** are deliberately
-*not* in project config — like entries, they're per-environment content.
+Menus and their items live in the database (`menubuilder_groups`, `menubuilder_items`), and the
+database is the single source of truth. Nothing about a menu is written to `project.yaml` — menus
+are editor-managed data, not deployable structure, so there's no config to drift, apply, or rebuild.
+Deploy them like any other content: with your database.
 
 ---
 
 ## Development
 
 ```sh
-composer test        # PHPUnit — 113 unit tests
-composer check-cs    # ECS (no ecs.php checked in yet)
-composer phpstan     # PHPStan (no phpstan.neon checked in yet)
+composer test        # PHPUnit — 225 unit tests
+composer check-cs    # ECS
+composer phpstan     # PHPStan (level 5)
 ```
 
 The unit suite covers pure logic without booting Craft: link resolvers, visibility rules and
 context, mega-menu grouping, validation, permission mapping, cache keys, and link-attribute
 helpers. Code that needs a live Craft app/DB (`ElementLinkResolver`, `MenuBuilderElementService`,
-`MenuBuilderDynamicNavigationService`, project-config handlers) is verified manually — see
+`MenuBuilderDynamicNavigationService`, the group/item services' database writes) is verified
+manually — see
 [ARCHITECTURE.md](ARCHITECTURE.md#known-limitations).
 
 Internals, invariants, and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)**.

@@ -305,7 +305,7 @@ ul.menu-builder-draghelper > li.menu-builder-item {
     cursor: move;
 }
 
-/* Keyboard focus must remain visible on interactive tree elements (spec §8/§24). */
+/* Keyboard focus must remain visible on interactive tree elements. */
 .menu-builder-drag-handle:focus-visible,
 .menu-builder-item-row a[data-mb-action]:focus-visible,
 .menu-builder-item-actions .menubtn:focus-visible {
@@ -388,9 +388,9 @@ ul.menu-builder-draghelper > li.menu-builder-item {
 }
 
 /* Item editor sections (Basic / Behavior / Appearance / …) — give each
-   section its own breathing room and a visible divider from the next, in
-   both the full-page editor and the slide-out (spec: sections were
-   touching, with no way to tell where one ended and the next began). */
+   section its own breathing room and a visible divider from the next, so
+   it stays clear where one ends and the next begins, in both the full-page
+   editor and the slide-out. */
 .menu-builder-item-fields > [data-mb-section] {
     padding-top: 20px;
     padding-bottom: 20px;

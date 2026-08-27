@@ -13,7 +13,7 @@
      * shape we control end to end (see ItemsController::actionEdit/actionSave).
      *
      * Only one instance exists at a time — opening a new item closes
-     * whatever's already open (after confirming unsaved changes, spec §22).
+     * whatever's already open, after confirming unsaved changes.
      */
     window.MenuBuilder = window.MenuBuilder || {};
 

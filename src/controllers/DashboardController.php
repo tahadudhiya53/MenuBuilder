@@ -4,29 +4,33 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
-use yii\web\ForbiddenHttpException;
+use yii\base\Action;
 use yii\web\Response;
 
-class DashboardController extends Controller
+class DashboardController extends BaseMenuBuilderController
 {
-    public function beforeAction($action): bool
+    /**
+     * The dashboard is read-only — every action on it renders the tree, so
+     * `view` covers all of them. Exposed as a pure static for the same
+     * reason the other two controllers' mappings are (see
+     * ControllerPermissionTest).
+     */
+    public static function requiredPermissionForAction(string $actionId): string
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
+        return 'menuBuilder:view';
+    }
 
-        $this->requireCpRequest();
-        $currentUser = Craft::$app->getUser()->getIdentity();
+    protected function requiredPermission(Action $action): string
+    {
+        return self::requiredPermissionForAction($action->id);
+    }
 
-        if (!$currentUser || (!$currentUser->admin && !$currentUser->can('menuBuilder:view'))) {
-            throw new ForbiddenHttpException('You are not permitted to view navigation.');
-        }
-
-        return true;
+    protected function permissionDeniedMessage(): string
+    {
+        return 'You are not permitted to view navigation.';
     }
 
     public function actionIndex(string $groupHandle): Response

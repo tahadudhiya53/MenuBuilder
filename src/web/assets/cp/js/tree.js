@@ -35,6 +35,8 @@
         maxDepth: null,
         canEdit: false,
         sorter: null,
+        _pendingMove: null,
+        _reloading: false,
 
         init: function(container) {
             this.$container = $(container);
@@ -227,20 +229,47 @@
             });
         },
 
+        /**
+         * Drags are optimistic — the row sits at its new depth and position
+         * before the server has agreed to anything. Two rules keep that
+         * honest.
+         *
+         * Requests are chained, never fired in parallel: a second drag begun
+         * while the first is still in flight would otherwise race it, and
+         * the server would resolve both against the same stale sibling
+         * order. And a refused move reloads the page rather than trying to
+         * invert the drag locally — after a rejection the server is the only
+         * thing that knows the real tree, and the rejection message (which
+         * rule was broken, straight from the service) is shown first.
+         */
         persistMove: function(itemId, newParentId, siblingIds) {
-            window.MenuBuilder.request('POST', 'menu-builder/items/reorder', {
-                data: {
-                    itemId: itemId,
-                    groupId: this.groupId,
-                    newParentId: newParentId,
-                    siblingIds: siblingIds,
-                },
-            }).then(function() {
-                window.MenuBuilder.success(Craft.t('menu-builder', 'Menu order updated.'));
-            }).catch(function(error) {
-                window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'That move isn’t allowed.'));
-                window.location.reload();
+            var self = this;
+            var queue = this._pendingMove || Promise.resolve();
+
+            this._pendingMove = queue.then(function() {
+                // A reload is already on its way; anything still queued
+                // would be posting positions from a page that's going away.
+                if (self._reloading) {
+                    return;
+                }
+
+                return window.MenuBuilder.request('POST', 'menu-builder/items/reorder', {
+                    data: {
+                        itemId: itemId,
+                        groupId: self.groupId,
+                        newParentId: newParentId,
+                        siblingIds: siblingIds,
+                    },
+                }).then(function() {
+                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menu order updated.'));
+                }).catch(function(error) {
+                    self._reloading = true;
+                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'That move isn’t allowed.'));
+                    window.location.reload();
+                });
             });
+
+            return this._pendingMove;
         },
 
         handleClick: function(event) {

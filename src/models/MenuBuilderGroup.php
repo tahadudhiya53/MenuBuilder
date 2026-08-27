@@ -49,7 +49,13 @@ class MenuBuilderGroup extends Model
             [['name', 'handle'], 'required'],
             [['name'], 'string', 'max' => 255],
             [['handle'], 'match', 'pattern' => '/^[a-zA-Z][a-zA-Z0-9_]*$/', 'message' => 'Handle must start with a letter and contain only letters, numbers, and underscores.'],
-            [['description', 'cssClass'], 'string'],
+            // `handle` and `cssClass` are varchar(255) columns (see the
+            // Install migration); without an explicit max, an over-long
+            // value reached the database as an integrity error (or, on a
+            // non-strict MySQL, was silently truncated into a *different*
+            // handle than the one the user typed) instead of a field error.
+            [['handle', 'cssClass'], 'string', 'max' => 255],
+            [['description'], 'string'],
             [['enabled'], 'boolean'],
             [['sortOrder'], 'integer'],
             [['maxDepth'], 'integer', 'min' => 1, 'max' => 10],

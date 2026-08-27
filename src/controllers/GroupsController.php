@@ -4,30 +4,24 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use yii\web\ForbiddenHttpException;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use yii\base\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
-class GroupsController extends Controller
+class GroupsController extends BaseMenuBuilderController
 {
-    public function beforeAction($action): bool
+    protected function requiredPermission(Action $action): string
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
+        return self::requiredPermissionForAction($action->id);
+    }
 
-        $this->requireCpRequest();
-        $currentUser = Craft::$app->getUser()->getIdentity();
-        $requiredPermission = self::requiredPermissionForAction($action->id);
-
-        if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
-            throw new ForbiddenHttpException('You are not permitted to manage navigation groups.');
-        }
-
-        return true;
+    protected function permissionDeniedMessage(): string
+    {
+        return 'You are not permitted to manage navigation groups.';
     }
 
     /**
@@ -49,8 +43,8 @@ class GroupsController extends Controller
     }
 
     /**
-     * Quick enable/disable, parity with ItemsController::actionToggle() —
-     * previously a group could only be toggled by opening the full edit form.
+     * Quick enable/disable without opening the full edit form; parity with
+     * ItemsController::actionToggle().
      */
     public function actionToggle(): Response
     {
@@ -138,12 +132,12 @@ class GroupsController extends Controller
         $group->cssClass = $this->bodyString('cssClass') ?: null;
         $maxDepth = $request->getBodyParam('maxDepth');
         $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
-        $group->htmlAttributes = $this->parseAttributeLines($this->bodyString('htmlAttributes'));
-        $group->siteIds = $this->postedSiteIds($request->getBodyParam('siteIds'));
+        $group->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
+        $group->siteIds = ConfigHelper::normalizeIdList($request->getBodyParam('siteIds'));
 
         if (!MenuBuilder::getInstance()->groups->save($group)) {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation group.'));
-
+            // asModelFailure() sets the error flash itself — setting one
+            // here as well surfaced the same message twice in the CP.
             return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save navigation group.'), 'group');
         }
 
@@ -189,53 +183,5 @@ class GroupsController extends Controller
         }
 
         return $this->redirect(UrlHelper::cpUrl('menu-builder'));
-    }
-
-    /**
-     * Normalizes the posted site restriction into `int[]`. Craft's
-     * checkbox-select posts a zero-value padding field alongside the checked
-     * `[]` entries, and posts a bare string instead of an array when nothing
-     * is checked (same shape ItemsController::buildVisibilityRules() guards
-     * against for the per-item `site` rule) — both collapse to "no
-     * restriction" here.
-     *
-     * @return int[]
-     */
-    private function postedSiteIds(mixed $posted): array
-    {
-        if (!is_array($posted)) {
-            return [];
-        }
-
-        $siteIds = array_filter(array_map('intval', array_filter($posted, 'is_scalar')), fn(int $id) => $id > 0);
-
-        return array_values(array_unique($siteIds));
-    }
-
-    /** Parses `key: value` per-line input into an attributes array. */
-    private function parseAttributeLines(string $input): array
-    {
-        $attributes = [];
-
-        foreach (explode("\n", $input) as $line) {
-            if (!str_contains($line, ':')) {
-                continue;
-            }
-
-            [$key, $value] = array_map('trim', explode(':', $line, 2));
-
-            if ($key !== '') {
-                $attributes[$key] = $value;
-            }
-        }
-
-        return $attributes;
-    }
-
-    private function bodyString(string $name, string $default = ''): string
-    {
-        $value = Craft::$app->getRequest()->getBodyParam($name, $default);
-
-        return is_scalar($value) ? (string)$value : $default;
     }
 }

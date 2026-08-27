@@ -62,7 +62,6 @@ class MenuBuilder extends Plugin
         parent::init();
 
         $this->attachEventHandlers();
-        $this->attachProjectConfigHandlers();
         $this->elements->attachListeners();
 
         Craft::$app->onInit(function() {
@@ -122,20 +121,6 @@ class MenuBuilder extends Plugin
                 ];
             }
         );
-    }
-
-    /**
-     * Phase 10 project config: applies a Group change that arrived
-     * from project.yaml (not one this same request just mirrored there —
-     * see MenuBuilderGroupService's docblock) to the local database.
-     */
-    private function attachProjectConfigHandlers(): void
-    {
-        $projectConfig = Craft::$app->getProjectConfig();
-
-        $projectConfig->onAdd(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleChangedConfig'])
-            ->onUpdate(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleChangedConfig'])
-            ->onRemove(MenuBuilderGroupService::CONFIG_PATH . '.{uid}', [$this->groups, 'handleDeletedConfig']);
     }
 
     private function registerVariable(): void

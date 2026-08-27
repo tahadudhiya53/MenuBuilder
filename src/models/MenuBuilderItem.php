@@ -4,12 +4,21 @@ namespace Tahadudhiya\MenuBuilder\models;
 
 use Craft;
 use craft\base\Model;
+use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
 
 /**
  * A single navigation node. `clickable` is an explicit, independent flag —
- * never inferred from whether a URL/element is set (a "Products" heading can
- * have no link at all, or a link, editor's choice; see MenuBuilderLinkResolver).
+ * never inferred from whether a URL/element is set, so an editor can keep a
+ * resolvable link on an item and still render it as a plain label.
+ *
+ * It is not, however, a way to *add* a link to a structural type: for
+ * `nonclickable` and `separator`, {@see isLinkable()} is authoritative and
+ * NonClickableLinkResolver never produces a URL regardless of `clickable` or
+ * a leftover `customUrl` — and the editor exposes no link field for them
+ * (see items/_fields.twig).
  */
 class MenuBuilderItem extends Model
 {
@@ -33,7 +42,7 @@ class MenuBuilderItem extends Model
         self::TYPE_DYNAMIC,
     ];
 
-    /** Phase 8: element sources a `dynamic` item's children can be pulled from. */
+    /** Element sources a `dynamic` item's children can be pulled from. */
     public const DYNAMIC_SOURCE_TYPES = ['entries', 'categories', 'assets'];
 
     /** Hard server-side cap, regardless of what's stored in metadata — see MenuBuilderDynamicNavigationService. */
@@ -108,9 +117,20 @@ class MenuBuilderItem extends Model
             [['groupId'], 'required'],
             [['type'], 'in', 'range' => self::TYPES],
             // Element-backed types may leave title blank to inherit the linked
-            // element's own title at render time (spec §14) — an explicit
+            // element's own title at render time — an explicit
             // title, once given, is never overwritten by that fallback.
             [['title'], 'required', 'when' => fn($model) => $model->type !== self::TYPE_SEPARATOR && !in_array($model->type, self::ELEMENT_TYPES, true)],
+            // …but an element-backed item that is meant to *survive* its
+            // element (fallback "keep the item" / "use a fallback URL") has
+            // nothing left to inherit a title from once that element is
+            // gone, and would render as an empty label. The title is
+            // therefore required up front for those two behaviours; only
+            // FALLBACK_HIDE can safely leave it blank.
+            [
+                ['title'], 'required',
+                'message' => Craft::t('menu-builder', 'A title is required unless the item is hidden when its linked element becomes unavailable.'),
+                'when' => fn($model) => in_array($model->type, self::ELEMENT_TYPES, true) && $model->fallbackBehavior !== self::FALLBACK_HIDE,
+            ],
             [['title'], 'string', 'max' => 255],
             [['handle'], 'match', 'pattern' => '/^[a-zA-Z][a-zA-Z0-9_-]*$/', 'message' => 'Handle must start with a letter and contain only letters, numbers, underscores, and hyphens.', 'skipOnEmpty' => true],
             [['enabled', 'clickable', 'featured'], 'boolean'],
@@ -122,7 +142,15 @@ class MenuBuilderItem extends Model
             [['fallbackUrl'], 'validateFallbackUrl', 'skipOnEmpty' => false],
             [['handle'], 'validateAnchorTarget', 'skipOnEmpty' => false],
             [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
-            [['rel', 'cssClass', 'htmlId', 'ariaLabel', 'titleAttribute', 'icon', 'badge', 'description'], 'string'],
+            // `description` is the only one of these on a TEXT column; the
+            // rest are varchar(255) (see migrations/Install.php), and without
+            // a matching max here an over-long value passed validation and
+            // then failed at the database, surfacing as a save that "didn't
+            // work" with no field error to explain it.
+            [['rel', 'cssClass', 'htmlId', 'ariaLabel', 'titleAttribute', 'icon', 'badge'], 'string', 'max' => 255],
+            [['description'], 'string'],
+            [['htmlId'], 'validateHtmlId', 'skipOnEmpty' => true],
+            [['cssClass'], 'validateCssClass', 'skipOnEmpty' => true],
             [['visibility'], 'validateVisibility', 'skipOnEmpty' => false],
             [['metadata'], 'validateMegaMenu', 'skipOnEmpty' => false],
             [['metadata'], 'validateDynamicSource', 'skipOnEmpty' => false],
@@ -136,7 +164,7 @@ class MenuBuilderItem extends Model
      * fail-closed shape-validation pattern as {@see validateVisibility()}.
      * Both are independent of `type`: any item can be a mega-menu parent or
      * a column member, since mega menu is presentation on top of the
-     * existing hierarchy, not a separate item type (spec §Phase 7).
+     * existing hierarchy, not a separate item type.
      */
     public function validateMegaMenu(): void
     {
@@ -214,7 +242,7 @@ class MenuBuilderItem extends Model
      * way — or, for third-party rule types registered via
      * MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES, an
      * unknown type is accepted here (this model can't know about them) and
-     * left to fail closed at evaluation time, per spec §10.
+     * left to fail closed at evaluation time.
      */
     private const BUILTIN_VISIBILITY_RULE_TYPES = [
         'always', 'loggedIn', 'loggedOut', 'userGroup', 'site', 'dateRange', 'environment',
@@ -255,29 +283,20 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * An empty (or absent) ID list is a deliberate no-op, not malformed
-     * config: UserGroupRule/SiteRule both treat "no IDs configured" as an
-     * unconditional pass, so rejecting an empty list here would make the CP
-     * disagree with how the rule actually evaluates.
+     * An empty (or absent) ID list is rejected, not treated as a no-op:
+     * UserGroupRule/SiteRule exist only to restrict, so they fail closed on
+     * one (an item with nothing to match against would silently vanish from
+     * every menu). Erroring at save time turns that into a message the
+     * editor or importer can act on, and keeps the model in agreement with
+     * how the rule actually evaluates.
+     *
+     * Shares ConfigHelper::strictIdList() with the rules themselves so the
+     * two can't drift on what counts as a valid ID.
      */
     private function validateIdListRule(array $config, string $key, int|string $index): void
     {
-        if (!isset($config[$key])) {
-            return;
-        }
-
-        if (!is_array($config[$key])) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a list of numeric IDs.', ['index' => $index, 'key' => $key]));
-
-            return;
-        }
-
-        foreach ($config[$key] as $value) {
-            if (!self::isValidPositiveId($value)) {
-                $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a list of numeric IDs.', ['index' => $index, 'key' => $key]));
-
-                return;
-            }
+        if (empty(ConfigHelper::strictIdList($config[$key] ?? null))) {
+            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of numeric IDs.', ['index' => $index, 'key' => $key]));
         }
     }
 
@@ -295,15 +314,11 @@ class MenuBuilderItem extends Model
         return is_string($value) && $value !== '' && ctype_digit($value) && (int)$value > 0;
     }
 
-    /** An empty (or absent) list is a valid no-op, same reasoning as {@see validateIdListRule}. */
+    /** An empty (or absent) list is rejected, same reasoning as {@see validateIdListRule}. */
     private function validateStringListRule(array $config, string $key, int|string $index): void
     {
-        if (!isset($config[$key])) {
-            return;
-        }
-
-        if (!is_array($config[$key]) || array_filter($config[$key], fn($v) => !is_string($v) || trim($v) === '')) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a list of non-empty strings.', ['index' => $index, 'key' => $key]));
+        if (empty(ConfigHelper::strictStringList($config[$key] ?? null))) {
+            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of non-empty strings.', ['index' => $index, 'key' => $key]));
         }
     }
 
@@ -350,7 +365,7 @@ class MenuBuilderItem extends Model
             return null;
         }
 
-        if (!self::hasValidCalendarDate($value)) {
+        if (!DateValidationHelper::hasValidCalendarDate($value)) {
             return null;
         }
 
@@ -359,22 +374,6 @@ class MenuBuilderItem extends Model
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    /**
-     * DateTime's parser silently normalizes an out-of-range calendar date
-     * (e.g. "2026-02-30" becomes March 2) instead of rejecting it — reject
-     * any leading Y-m-d component that isn't a real calendar date up front
-     * so the CP can't save a date that would later fail closed at render
-     * time in a confusing way. Mirrors DateRangeRule::hasValidCalendarDate().
-     */
-    private static function hasValidCalendarDate(string $value): bool
-    {
-        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $value, $m)) {
-            return true;
-        }
-
-        return checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
     }
 
     public function validateCustomUrl(): void
@@ -394,16 +393,22 @@ class MenuBuilderItem extends Model
         }
     }
 
-    /** An anchor link resolves from handle, falling back to customUrl (see AnchorLinkResolver) — at least one must be set. */
+    /**
+     * An anchor link resolves from the editor's anchor field (`customUrl`),
+     * falling back to `handle` — the single source of that precedence is
+     * AnchorLinkResolver::anchorTarget(), so validation can never accept a
+     * different field than the one that ends up rendered. At least one must
+     * be set.
+     */
     public function validateAnchorTarget(): void
     {
         if ($this->type !== self::TYPE_ANCHOR) {
             return;
         }
 
-        $target = trim((string)$this->handle) !== '' ? trim((string)$this->handle) : trim((string)$this->customUrl);
+        $target = AnchorLinkResolver::anchorTarget($this);
 
-        if ($target === '') {
+        if ($target === null) {
             $this->addError('handle', 'An anchor target (handle) is required for this link type.');
 
             return;
@@ -415,9 +420,8 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Rejects the malformed fragments spec §7 calls out (quotes, whitespace,
-     * angle brackets) while staying permissive about what's otherwise a
-     * valid HTML id/fragment. A leading '#' is tolerated since the resolver
+     * Rejects malformed fragments (quotes, whitespace, angle brackets) while
+     * staying permissive about what's otherwise a valid HTML id/fragment. A leading '#' is tolerated since the resolver
      * strips it before use.
      */
     public static function isValidAnchorTarget(string $value): bool
@@ -447,14 +451,30 @@ class MenuBuilderItem extends Model
     }
 
     /**
+     * Schemes that execute rather than navigate. `filter_var()` is not a
+     * safety check: it rejects `javascript:alert(1)` only because that has
+     * no authority component, and happily accepts
+     * `javascript://example.com%0Aalert(1)` — which browsers do execute,
+     * the `%0A` ending the `//` comment. Since a resolved URL is rendered
+     * straight into `href` (see `_macros/tree.twig`), where Twig's escaping
+     * stops injection but not scheme execution, the scheme is rejected up
+     * front instead.
+     */
+    private const DENIED_URL_SCHEMES = ['javascript', 'data', 'vbscript'];
+
+    /**
      * Accepts absolute URLs, root-relative paths, fragments, and mailto:/tel:
-     * links without forcing a scheme onto internal paths (spec §12).
+     * links without forcing a scheme onto internal paths.
      */
     public static function isPermissiveUrl(string $value): bool
     {
         $value = trim($value);
 
         if ($value === '') {
+            return false;
+        }
+
+        if (self::hasDeniedScheme($value)) {
             return false;
         }
 
@@ -474,7 +494,25 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Defense-in-depth beyond Twig's own output escaping (spec §16): rejects
+     * Browsers ignore whitespace and control characters embedded in a
+     * scheme ("java\tscript:", "\x01javascript:"), so both are stripped
+     * before the prefix comparison rather than trusting the literal string.
+     */
+    private static function hasDeniedScheme(string $value): bool
+    {
+        $normalized = strtolower((string)preg_replace('/[\s\x00-\x1f\x7f]+/', '', $value));
+
+        foreach (self::DENIED_URL_SCHEMES as $scheme) {
+            if (str_starts_with($normalized, $scheme . ':')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Defense-in-depth beyond Twig's own output escaping: rejects
      * event-handler-shaped attribute keys and `javascript:`-scheme values so
      * a custom Twig loop that renders `htmlAttributes` unescaped-as-markup
      * can't be turned into script execution by editor input.
@@ -489,6 +527,28 @@ class MenuBuilderItem extends Model
 
         foreach (LinkAttributeHelper::validateHtmlAttributes($this->htmlAttributes) as $error) {
             $this->addError('htmlAttributes', $error);
+        }
+    }
+
+    /**
+     * `htmlId` and `cssClass` end up in exactly the same attribute position
+     * as the `htmlAttributes` bag, so they get the same treatment
+     * ({@see validateHtmlAttributes()}) rather than being trusted because
+     * they happen to have their own column. Twig escapes both on the way
+     * out; this is the defence-in-depth half, for the custom template that
+     * interpolates them somewhere Twig isn't looking.
+     */
+    public function validateHtmlId(): void
+    {
+        if ($this->htmlId !== null && !LinkAttributeHelper::isValidHtmlId($this->htmlId)) {
+            $this->addError('htmlId', Craft::t('menu-builder', 'Enter a valid HTML id — no spaces, quotes, or angle brackets.'));
+        }
+    }
+
+    public function validateCssClass(): void
+    {
+        if ($this->cssClass !== null && !LinkAttributeHelper::isValidCssClassList($this->cssClass)) {
+            $this->addError('cssClass', Craft::t('menu-builder', 'Enter a valid CSS class list — no quotes or angle brackets.'));
         }
     }
 

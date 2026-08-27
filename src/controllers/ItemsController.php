@@ -4,34 +4,23 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use yii\web\ForbiddenHttpException;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use yii\base\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
-class ItemsController extends Controller
+class ItemsController extends BaseMenuBuilderController
 {
     protected array|bool|int $allowAnonymous = false;
 
-    public function beforeAction($action): bool
+    protected function requiredPermission(Action $action): string
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
-
-        $this->requireCpRequest();
-        $currentUser = Craft::$app->getUser()->getIdentity();
         $isNewSave = $action->id === 'save' && (int)Craft::$app->getRequest()->getBodyParam('itemId', 0) === 0;
         $bulkOp = $action->id === 'bulk' ? $this->bodyString('op') : null;
-        $requiredPermission = self::requiredPermissionForAction($action->id, $isNewSave, $bulkOp);
 
-        if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
-            throw new ForbiddenHttpException('You are not permitted to manage navigation menus.');
-        }
-
-        return true;
+        return self::requiredPermissionForAction($action->id, $isNewSave, $bulkOp);
     }
 
     /**
@@ -127,7 +116,7 @@ class ItemsController extends Controller
         $item->title = $this->bodyString('title');
         $item->handle = $this->bodyString('handle') ?: null;
         // The "Enabled" toggle only exists once an item can be saved a second
-        // time (basic-only new-item forms don't show it — see spec §12/isNew
+        // time (basic-only new-item forms don't show it — see the isNew
         // handling in items/_fields.twig), so a missing param means "leave
         // the default" rather than "explicitly disabled".
         $item->enabled = (bool)$request->getBodyParam('enabled', $item->id === null);
@@ -142,7 +131,7 @@ class ItemsController extends Controller
 
         $item->cssClass = $this->bodyString('cssClass') ?: null;
         $item->htmlId = $this->bodyString('htmlId') ?: null;
-        $item->htmlAttributes = $this->parseAttributeLines($this->bodyString('htmlAttributes'));
+        $item->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $item->ariaLabel = $this->bodyString('ariaLabel') ?: null;
         $item->titleAttribute = $this->bodyString('titleAttribute') ?: null;
         $item->icon = $this->bodyString('icon') ?: null;
@@ -232,8 +221,15 @@ class ItemsController extends Controller
     /**
      * Drag-and-drop / keyboard reorder endpoint. Body:
      * `groupId`, `itemId`, `newParentId` (nullable), `siblingIds` (ordered array
-     * including itemId, for the new parent). Re-validates depth/circularity/
-     * cross-group server-side regardless of the client's own checks.
+     * including itemId, for the new parent).
+     *
+     * One service call, therefore one transaction: reparenting and
+     * renumbering the affected sibling sets can't half-commit and leave the
+     * tree in a state neither editor asked for. Depth, circularity and
+     * cross-group are all re-validated server-side regardless of the
+     * client's own checks, and the posted `groupId` is only ever used to
+     * confirm the client is looking at the menu it thinks it is — never to
+     * decide which group the item ends up in.
      */
     public function actionReorder(): Response
     {
@@ -245,26 +241,38 @@ class ItemsController extends Controller
         $newParentId = $request->getBodyParam('newParentId');
         $newParentId = ($newParentId !== null && $newParentId !== '') ? (int)$newParentId : null;
         $siblingIds = $request->getBodyParam('siblingIds', []);
-        $siblingIds = is_array($siblingIds) ? array_map('intval', $siblingIds) : [];
+        $siblingIds = is_array($siblingIds) ? array_values(array_map('intval', $siblingIds)) : [];
+
+        $itemsService = MenuBuilder::getInstance()->items;
+        $item = $itemsService->getById($itemId);
+
+        if ($item === null) {
+            throw new NotFoundHttpException('Navigation menu not found.');
+        }
+
+        // An item's group is fixed at creation. A posted groupId that
+        // disagrees means the client is acting on a stale page (the item was
+        // moved or the menu reloaded) or the payload was tampered with —
+        // either way, refuse rather than silently reordering against the
+        // wrong menu's sibling set.
+        if ($item->groupId !== $groupId) {
+            return $this->asFailure(Craft::t('menu-builder', 'A navigation menu item cannot be moved to a different navigation group.'));
+        }
 
         $newSortOrder = array_search($itemId, $siblingIds, true);
         $newSortOrder = $newSortOrder === false ? count($siblingIds) : $newSortOrder;
 
-        $itemsService = MenuBuilder::getInstance()->items;
-
-        if (!$itemsService->move($itemId, $newParentId, $newSortOrder)) {
-            return $this->asFailure(Craft::t('menu-builder', 'That move isn’t allowed.'));
-        }
-
-        if (!empty($siblingIds)) {
-            $itemsService->reorderSiblings($groupId, $newParentId, $siblingIds);
+        if (!$itemsService->move($itemId, $newParentId, $newSortOrder, $siblingIds)) {
+            return $this->asFailure(
+                $itemsService->getLastMoveError() ?? Craft::t('menu-builder', 'That move isn’t allowed.')
+            );
         }
 
         return $this->asSuccess();
     }
 
     /**
-     * Phase 11 bulk action endpoint. Body: `op` (enable|disable|delete),
+     * Bulk action endpoint. Body: `op` (enable|disable|delete),
      * `ids[]`. Every posted ID is still individually validated/permission-
      * scoped by MenuBuilderItemService (see beforeAction()'s per-op
      * permission mapping) — the CP's multi-select checkboxes are UX only.
@@ -308,25 +316,23 @@ class ItemsController extends Controller
         return $this->redirectToPostedUrl();
     }
 
+    /**
+     * The two checkboxes plus the free-text `rel` field, merged into one
+     * attribute value. `array_unique()` over the raw parts wasn't enough:
+     * the custom field holds a whole (possibly multi-token, possibly
+     * differently-cased) rel value, so a `nofollow` checkbox alongside a
+     * typed "nofollow noreferrer" needs token-level, case-insensitive
+     * deduping — the same merge
+     * {@see LinkAttributeHelper::mergeRelForTarget()} performs at render
+     * time, so the stored value and the rendered one agree.
+     */
     private function buildRel(\craft\web\Request $request): ?string
     {
-        $parts = [];
-
-        if ($request->getBodyParam('nofollow')) {
-            $parts[] = 'nofollow';
-        }
-
-        if ($request->getBodyParam('sponsored')) {
-            $parts[] = 'sponsored';
-        }
-
-        $custom = $this->bodyString('rel');
-
-        if ($custom) {
-            $parts[] = $custom;
-        }
-
-        return !empty($parts) ? implode(' ', array_unique($parts)) : null;
+        return LinkAttributeHelper::combineRel([
+            $request->getBodyParam('nofollow') ? 'nofollow' : null,
+            $request->getBodyParam('sponsored') ? 'sponsored' : null,
+            $this->bodyString('rel'),
+        ]);
     }
 
     /**
@@ -361,15 +367,21 @@ class ItemsController extends Controller
             $rules[] = ['type' => 'site', 'siteIds' => array_values($sites)];
         }
 
-        if (!empty($posted['dateStart']) || !empty($posted['dateEnd'])) {
+        // Scalars only: a tampered `visibility[dateStart][]=x` post would
+        // otherwise put an array into a rule config (and `explode()` on the
+        // environments field would be an outright TypeError).
+        $dateStart = $this->scalarOrNull($posted['dateStart'] ?? null);
+        $dateEnd = $this->scalarOrNull($posted['dateEnd'] ?? null);
+
+        if ($dateStart !== null || $dateEnd !== null) {
             $rules[] = array_filter([
                 'type' => 'dateRange',
-                'start' => $posted['dateStart'] ?? null,
-                'end' => $posted['dateEnd'] ?? null,
+                'start' => $dateStart,
+                'end' => $dateEnd,
             ]);
         }
 
-        $environments = array_filter(array_map('trim', explode(',', $posted['environments'] ?? '')));
+        $environments = array_filter(array_map('trim', explode(',', $this->scalarOrNull($posted['environments'] ?? null) ?? '')));
         if (!empty($environments)) {
             $rules[] = ['type' => 'environment', 'environments' => array_values($environments)];
         }
@@ -377,14 +389,19 @@ class ItemsController extends Controller
         return $rules;
     }
 
+    /** Non-empty scalar POST values only — anything else (array, null, '') becomes null. */
+    private function scalarOrNull(mixed $value): ?string
+    {
+        return is_scalar($value) && (string)$value !== '' ? (string)$value : null;
+    }
+
     /**
      * Builds the `metadata` bag from discrete, explicitly-named POST fields
-     * (Phases 6-8) rather than trusting a raw posted `metadata` array
+     * rather than trusting a raw posted `metadata` array
      * directly — an uncontrolled `metadata[...]` POST key would otherwise
      * let a tampered request inject arbitrary data into a bag that's
-     * rendered/read by Twig (spec: "Do not allow arbitrary uncontrolled
-     * POST keys"). `MenuBuilderItem::validate*()` re-validates all of this
-     * server-side regardless.
+     * rendered/read by Twig. `MenuBuilderItem::validate*()` re-validates all
+     * of this server-side regardless.
      */
     private function buildMetadata(\craft\web\Request $request, string $itemType): array
     {
@@ -413,39 +430,5 @@ class ItemsController extends Controller
         }
 
         return $metadata;
-    }
-
-    /** Parses `key: value` per-line input into an attributes array. */
-    private function parseAttributeLines(string $input): array
-    {
-        $attributes = [];
-
-        foreach (explode("\n", $input) as $line) {
-            if (!str_contains($line, ':')) {
-                continue;
-            }
-
-            [$key, $value] = array_map('trim', explode(':', $line, 2));
-
-            if ($key !== '') {
-                $attributes[$key] = $value;
-            }
-        }
-
-        return $attributes;
-    }
-
-    private function bodyArray(string $name): array
-    {
-        $value = Craft::$app->getRequest()->getBodyParam($name, []);
-
-        return is_array($value) ? $value : [];
-    }
-
-    private function bodyString(string $name, string $default = ''): string
-    {
-        $value = Craft::$app->getRequest()->getBodyParam($name, $default);
-
-        return is_scalar($value) ? (string)$value : $default;
     }
 }

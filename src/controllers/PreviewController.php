@@ -12,7 +12,7 @@ use yii\web\Response;
 
 /**
  * The preview screen: one saved menu, rendered through the production Twig
- * macros for a simulated audience, device, site and current page.
+ * macros for a simulated audience, device and site.
  *
  * Read-only in the strict sense — the only action is a GET that renders a
  * template, and MenuBuilderPreviewService performs no writes — so `view` is
@@ -61,11 +61,6 @@ class PreviewController extends BaseMenuBuilderController
             $preview->allowedSiteIds(),
             $preview->allowedUserGroupIds(),
             (int)Craft::$app->getSites()->getCurrentSite()->id,
-            // Only the *default*: a menu named "Footer navigation" opens in
-            // the footer rather than making the editor switch every time.
-            // Nothing records where a menu is really rendered, so the screen
-            // offers both and says which one it chose.
-            MenuBuilderPreviewOptions::guessPlacement($group->handle, $group->name),
         );
 
         $tree = $preview->getTree($group->handle, $options);
@@ -86,11 +81,8 @@ class PreviewController extends BaseMenuBuilderController
             'group' => $group,
             'tree' => $tree,
             'options' => $options,
-            // Stage furniture: the brand placeholder and the address the
-            // preview's browser bar shows. Both are labels, never links —
-            // nothing is fetched from them.
+            // Stage furniture: a brand label only, never a link.
             'siteName' => $site->name,
-            'addressLabel' => MenuBuilderPreviewService::addressLabel($site->getBaseUrl(), $options->uri),
             'siteOptions' => $preview->siteOptions(),
             'userGroupOptions' => $preview->userGroupOptions(),
             'itemCount' => count($items),

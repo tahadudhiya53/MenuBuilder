@@ -37,9 +37,17 @@ class MenuBuilderResolver extends Component
      *                                        entry a visitor reads and cannot leave its
      *                                        simulated audience behind in one (see
      *                                        ARCHITECTURE.md "Caching" and "Preview").
+     * @param bool $markActive Whether to compare the tree with a current page. The generic
+     *                         control-panel preview disables this because it no longer
+     *                         simulates a particular page; front-end callers keep the
+     *                         existing active-state behaviour by default.
      */
-    public function getTree(string $groupHandle, ?string $currentUri = null, ?VisibilityContext $context = null): ?MenuBuilderTree
-    {
+    public function getTree(
+        string $groupHandle,
+        ?string $currentUri = null,
+        ?VisibilityContext $context = null,
+        bool $markActive = true,
+    ): ?MenuBuilderTree {
         $group = MenuBuilder::getInstance()->groups->getByHandle($groupHandle);
 
         if ($group === null || !$group->enabled) {
@@ -68,16 +76,18 @@ class MenuBuilderResolver extends Component
 
         $filtered = $this->filterVisible($resolvedNodes, $itemsById, $visibilityService, $context);
 
-        $request = Craft::$app->getRequest();
-        $isConsoleRequest = $request->getIsConsoleRequest();
+        if ($markActive) {
+            $request = Craft::$app->getRequest();
+            $isConsoleRequest = $request->getIsConsoleRequest();
 
-        $currentUri ??= $isConsoleRequest ? '/' : $request->getFullUri();
+            $currentUri ??= $isConsoleRequest ? '/' : $request->getFullUri();
 
-        MenuBuilder::getInstance()->activeResolver->mark(
-            $filtered,
-            $currentUri,
-            $isConsoleRequest ? [] : self::internalHosts($request->getHostName(), $this->currentSiteBaseUrl())
-        );
+            MenuBuilder::getInstance()->activeResolver->mark(
+                $filtered,
+                $currentUri,
+                $isConsoleRequest ? [] : self::internalHosts($request->getHostName(), $this->currentSiteBaseUrl())
+            );
+        }
 
         return new MenuBuilderTree($group, $filtered);
     }

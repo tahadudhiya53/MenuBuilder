@@ -62,7 +62,6 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame(MenuBuilderPreviewOptions::AUDIENCE_LOGGED_OUT, $options->audience);
         $this->assertSame([], $options->userGroupIds);
         $this->assertSame(1, $options->siteId);
-        $this->assertSame('/', $options->uri);
     }
 
     /**
@@ -101,60 +100,23 @@ class MenuBuilderPreviewTest extends TestCase
     // Placement — a preview control, never a stored setting
     // ---------------------------------------------------------------------
 
-    public function testPlacementDefaultsToTheHeaderAndHonoursAKnownValue(): void
+    public function testPlacementDefaultsToBothAndHonoursEachKnownValue(): void
     {
-        $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_HEADER, $this->normalize([])->placement);
-        $this->assertFalse($this->normalize([])->isFooter());
+        $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_BOTH, $this->normalize([])->placement);
+        $this->assertTrue($this->normalize([])->isHeader());
+        $this->assertTrue($this->normalize([])->isFooter());
+        $this->assertTrue($this->normalize([])->isBoth());
         $this->assertTrue($this->normalize(['placement' => 'footer'])->isFooter());
+        $this->assertFalse($this->normalize(['placement' => 'footer'])->isHeader());
+        $this->assertTrue($this->normalize(['placement' => 'header'])->isHeader());
         $this->assertFalse($this->normalize(['placement' => 'header'])->isFooter());
-    }
-
-    /** The caller's guess is only a default: an explicit choice always wins over it. */
-    public function testAnExplicitPlacementBeatsTheCallersGuess(): void
-    {
-        $footerDefault = MenuBuilderPreviewOptions::normalize(['placement' => 'header'], [1], [], 1, 'footer');
-        $headerDefault = MenuBuilderPreviewOptions::normalize(['placement' => 'footer'], [1], [], 1, 'header');
-
-        $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_HEADER, $footerDefault->placement);
-        $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_FOOTER, $headerDefault->placement);
-        $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_FOOTER, MenuBuilderPreviewOptions::normalize([], [1], [], 1, 'footer')->placement);
     }
 
     public function testAnUnrecognisedPlacementFallsBackRatherThanRenderingNowhere(): void
     {
         foreach ([null, '', 'sidebar', 'FOOTER', ['footer'], 3, true] as $value) {
-            $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_HEADER, $this->normalize(['placement' => $value])->placement);
+            $this->assertSame(MenuBuilderPreviewOptions::PLACEMENT_BOTH, $this->normalize(['placement' => $value])->placement);
         }
-
-        $this->assertSame(
-            MenuBuilderPreviewOptions::PLACEMENT_HEADER,
-            MenuBuilderPreviewOptions::normalize([], [1], [], 1, 'sidebar')->placement,
-            'A default the caller got wrong falls back too.'
-        );
-    }
-
-    /**
-     * @dataProvider placementGuessProvider
-     */
-    public function testThePlacementGuessReadsTheMenusOwnNameAndHandle(string $handle, string $name, string $expected): void
-    {
-        $this->assertSame($expected, MenuBuilderPreviewOptions::guessPlacement($handle, $name));
-    }
-
-    /**
-     * @return array<string,array{string,string,string}>
-     */
-    public static function placementGuessProvider(): array
-    {
-        return [
-            'a main menu is a header menu' => ['main', 'Main Navigation', 'header'],
-            'by handle' => ['footerNav', 'Secondary', 'footer'],
-            'by name' => ['secondary', 'Footer Navigation', 'footer'],
-            'case-insensitively' => ['FOOTER', '', 'footer'],
-            'legal menus live down there too' => ['legal', 'Legal links', 'footer'],
-            'utility menus too' => ['utility', 'Utility', 'footer'],
-            'nothing to go on' => ['nav', '', 'header'],
-        ];
     }
 
     // ---------------------------------------------------------------------
@@ -300,55 +262,6 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
-    // The "seen from" URI
-    // ---------------------------------------------------------------------
-
-    /**
-     * @dataProvider uriProvider
-     */
-    public function testTheSeenFromUriIsReducedToASiteRelativePath(mixed $input, string $expected): void
-    {
-        $this->assertSame($expected, MenuBuilderPreviewOptions::normalizeUri($input));
-    }
-
-    /**
-     * @return array<string,array{mixed,string}>
-     */
-    public static function uriProvider(): array
-    {
-        return [
-            'a path is kept' => ['/news/latest', '/news/latest'],
-            'a relative path gains a leading slash' => ['news/latest', '/news/latest'],
-            'surrounding whitespace is trimmed' => ['  /news  ', '/news'],
-            'a query string is dropped' => ['/news?page=2', '/news'],
-            'a fragment is dropped' => ['/news#top', '/news'],
-            'a bare query string is the home page' => ['?page=2', '/'],
-            'a bare fragment is the home page' => ['#top', '/'],
-            'an empty value is the home page' => ['', '/'],
-            'a non-string is the home page' => [['/news'], '/'],
-            'null is the home page' => [null, '/'],
-            'an absolute URL is rejected' => ['https://example.test/news', '/'],
-            'a javascript: URL is rejected' => ['javascript:alert(1)', '/'],
-            'a data: URL is rejected' => ['data:text/html,<script>', '/'],
-            'a protocol-relative host is rejected' => ['//elsewhere.test/news', '/'],
-            'a backslash host is rejected' => ['\\\\elsewhere.test/news', '/'],
-            'a scheme smuggled past a newline is rejected' => ["java\nscript:alert(1)", '/'],
-            'a NUL byte is rejected' => ["/news\0", '/'],
-        ];
-    }
-
-    public function testAnAbsurdlyLongUriIsDiscarded(): void
-    {
-        $long = '/' . str_repeat('a', MenuBuilderPreviewOptions::MAX_URI_LENGTH);
-
-        $this->assertSame('/', MenuBuilderPreviewOptions::normalizeUri($long));
-        $this->assertSame(
-            '/' . str_repeat('a', MenuBuilderPreviewOptions::MAX_URI_LENGTH - 1),
-            MenuBuilderPreviewOptions::normalizeUri('/' . str_repeat('a', MenuBuilderPreviewOptions::MAX_URI_LENGTH - 1))
-        );
-    }
-
-    // ---------------------------------------------------------------------
     // The "N of M items" summary
     // ---------------------------------------------------------------------
 
@@ -441,9 +354,12 @@ class MenuBuilderPreviewTest extends TestCase
     {
         $parameters = (new ReflectionMethod(MenuBuilderResolver::class, 'getTree'))->getParameters();
 
-        $this->assertCount(3, $parameters);
+        $this->assertCount(4, $parameters);
         $this->assertSame('context', $parameters[2]->getName());
         $this->assertTrue($parameters[2]->isOptional(), 'A front-end call must keep working unchanged.');
+        $this->assertSame('markActive', $parameters[3]->getName());
+        $this->assertTrue($parameters[3]->isOptional(), 'Front-end active-state behaviour remains the default.');
+        $this->assertTrue($parameters[3]->getDefaultValue());
 
         $type = $parameters[2]->getType();
 
@@ -452,12 +368,13 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertTrue($type->allowsNull());
     }
 
-    /** Active state must be resolved against the previewed page, not the control-panel URL. */
-    public function testThePreviewResolvesActiveStateAgainstTheSimulatedUri(): void
+    /** A generic presentation preview must not invent a current page. */
+    public function testThePreviewExplicitlyDisablesActiveState(): void
     {
         $source = $this->sourceOf(MenuBuilderPreviewService::class);
 
-        $this->assertStringContainsString('getTree($groupHandle, $options->uri, $context)', $source);
+        $this->assertStringContainsString('markActive: false', $source);
+        $this->assertStringNotContainsString('$options->uri', $source);
     }
 
     // ---------------------------------------------------------------------
@@ -467,6 +384,21 @@ class MenuBuilderPreviewTest extends TestCase
     public function testPreviewRequiresOnlyTheViewPermission(): void
     {
         $this->assertSame('menuBuilder:view', PreviewController::requiredPermissionForAction('index'));
+    }
+
+    public function testThePreviewNoLongerSimulatesASeenFromPage(): void
+    {
+        $template = $this->previewTemplate();
+        $properties = array_map(
+            static fn($property): string => $property->getName(),
+            (new ReflectionClass(MenuBuilderPreviewOptions::class))->getProperties()
+        );
+
+        $this->assertStringNotContainsString('Seen from', $template);
+        $this->assertStringNotContainsString('name="uri"', $template);
+        $this->assertNotContains('uri', $properties);
+        $this->assertFalse(method_exists(MenuBuilderPreviewOptions::class, 'normalizeUri'));
+        $this->assertFalse(method_exists(MenuBuilderPreviewService::class, 'addressLabel'));
     }
 
     /**
@@ -552,30 +484,28 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertStringContainsString('aria-expanded', $script, 'Disclosure state is expressed as the attribute the CSS keys off.');
     }
 
-    // ---------------------------------------------------------------------
-    // The address label on the stage
-    // ---------------------------------------------------------------------
-
-    /**
-     * @dataProvider addressProvider
-     */
-    public function testTheStageAddressIsTheSiteHostPlusThePreviewedPath(?string $baseUrl, string $uri, string $expected): void
+    /** Pointer, keyboard and accessibility preferences all have an explicit preview path. */
+    public function testTheIllustrativePreviewIncludesEveryInteractionMode(): void
     {
-        $this->assertSame($expected, MenuBuilderPreviewService::addressLabel($baseUrl, $uri));
-    }
+        $root = dirname(__DIR__, 2);
+        $script = (string)file_get_contents($root . '/src/web/assets/cp/js/preview.js');
+        $styles = (string)file_get_contents($root . '/src/web/assets/cp/menu-builder-cp.css');
 
-    /**
-     * @return array<string,array{?string,string,string}>
-     */
-    public static function addressProvider(): array
-    {
-        return [
-            'host and path' => ['https://example.test/', '/news', 'example.test/news'],
-            'a base URL with a path keeps only the host' => ['https://example.test/en/', '/news', 'example.test/news'],
-            'a site with no base URL shows the path alone' => [null, '/news', '/news'],
-            'an unparseable base URL shows the path alone' => ['not a url', '/news', '/news'],
-            'the home page' => ['https://example.test', '/', 'example.test/'],
-        ];
+        $this->assertStringContainsString("'mouseenter'", $script, 'Desktop menu panels open from pointer hover.');
+        $this->assertStringContainsString(".menu-builder-preview-siteheader li:has(> details)", $script, 'Hover disclosure is scoped to the header, never the footer.');
+        $this->assertStringContainsString(".menu-builder-preview-siteheader li:has(> ul)", $script, 'Plain submenu interaction is scoped to the header, never the footer.');
+        $this->assertStringContainsString('}, 140)', $script, 'Pointer travel into a wide mega panel has a short close grace period.');
+        $this->assertStringContainsString("'focusin'", $script, 'Compact submenus open when reached from the keyboard.');
+        $this->assertStringContainsString("event.key !== 'Escape'", $script, 'Open panels can be dismissed from the keyboard.');
+        $this->assertStringContainsString('nav.hidden = !open', $script, 'The mobile disclosure changes the navigation visibility.');
+        $this->assertStringContainsString('scrim.hidden = !open', $script, 'The rest of the compact page is covered only while navigation is open.');
+        $this->assertStringContainsString('burger.focus()', $script, 'Closing the compact menu returns focus to its control.');
+        $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $styles);
+        $this->assertStringContainsString('@media (forced-colors: active)', $styles);
+        $this->assertStringContainsString('grid-column: 1 / -1', $styles, 'A desktop footer mega group spans the full navigation grid instead of collapsing vertically.');
+        $this->assertStringContainsString('grid-template-columns: minmax(170px, 0.72fr) minmax(0, 2.2fr) minmax(130px, 0.55fr)', $styles, 'The reference-inspired footer has brand, links and social columns.');
+        $this->assertStringContainsString('linear-gradient(145deg, #080d1b, #111a31 55%, #0b1328)', $styles, 'The redesigned footer retains the original dark background treatment.');
+        $this->assertStringContainsString('grid-template-columns: repeat(auto-fit, minmax(135px, 1fr))', $styles, 'Real menu groups remain responsive horizontal columns.');
     }
 
     // ---------------------------------------------------------------------

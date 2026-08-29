@@ -47,8 +47,8 @@ All services are registered as plugin components in `MenuBuilder::config()`, so 
   iterable/countable wrapper around a group's top-level `MenuBuilderNode[]`, plus `flatten()`.
 - **ResolvedLink** — the outcome of resolving one item's link (url, availability, element label).
 - **MenuBuilderMegaMenuConfig** — validated mega-menu config for one node.
-- **MenuBuilderPreviewOptions** — the validated description of one CP preview (device, audience,
-  user groups, site, "seen from" URI). Request-scoped, never persisted — see "Preview".
+- **MenuBuilderPreviewOptions** — the validated description of one CP preview (device, placement,
+  audience, user groups and site). Request-scoped, never persisted — see "Preview".
 - **MenuBuilderLinkHealth** — why one item's link would or wouldn't work, plus the wording the CP
   shows for it. Request-scoped, never persisted, and deliberately holds no element data — see
   "Link health".
@@ -774,7 +774,7 @@ The pipeline is unchanged — `MenuBuilderPreviewService::getTree()` calls the s
 | Substituted | Left alone |
 |---|---|
 | The `VisibilityContext`'s `isLoggedIn`, `userGroupIds` and `currentSiteId` | `now`, the timezone and `CRAFT_ENVIRONMENT` — so `dateRange` and `environment` rules answer what they answer for a visitor *right now*, and a scheduled item cannot be made to appear early |
-| The current site, for the duration of one resolve (`withSite()`, restored in a `finally`) | Everything else: link resolution, the cache, hierarchy, mega menus, dynamic sources, active-state matching |
+| The current site, for the duration of one resolve (`withSite()`, restored in a `finally`) | Everything else: link resolution, the cache, hierarchy, mega menus and dynamic sources. Active-state matching is disabled because the presentation preview has no current page |
 | The URI active state is matched against (the existing `currentUri` argument) | The `MenuBuilderNode` contract and the shipped `_macros/tree.twig` renderer, which the screen imports unchanged |
 
 Consequences worth stating out loud, because the whole feature is only useful if its boundaries are
@@ -810,10 +810,8 @@ and it fails closed in the same sense the visibility layer does:
 - The **site** is checked against `MenuBuilderPreviewService::allowedSiteIds()` — Craft's own
   editable-sites boundary, reused rather than reinvented, because previewing a site resolves that
   site's elements. A user with no site permissions gets their own current site.
-- The **"seen from" URI** is reduced to a site-root-relative path: schemes (`javascript:`,
-  `data:`, `https://…`), protocol-relative hosts, backslashes and control characters are discarded
-  rather than repaired, and the query string and fragment are dropped because active matching drops
-  them too.
+- An unrecognised **placement** becomes `both`, so the preview always presents the menu somewhere
+  useful rather than rendering an empty or misleading region.
 
 The normalized options — never the raw query string — are what the screen echoes back into its
 form, so it can only ever describe the audience it actually rendered.
@@ -828,12 +826,13 @@ is no state-changing request on the screen for CSRF to protect.
 
 ### The stage, and why it isn't a second renderer
 
-The preview surface is `_macros/tree.twig`'s own output, captured once in `preview/index.twig` and
-used twice: rendered live inside the stage, and printed **escaped** in the "Rendered markup" panel
-so `aria-current`, `aria-label`, the mega menu's `<details>` disclosure, `rel` and `target` can be
-read without leaving the CP. A CP-only renderer would be a second thing to keep true, and the day it
-drifted the preview would be confidently wrong about the one thing it exists to answer. Nothing on
-the screen is printed with `|raw`.
+The preview surface is `_macros/tree.twig`'s own output. `preview/index.twig` captures a canonical
+copy for the escaped "Rendered markup" panel and two presentation instances, with fixed header and
+footer ID prefixes, for the stage. The prefixes keep IDs unique when the default `both` placement
+renders one saved menu twice; the macro's normal front-end output remains unchanged when no prefix
+is supplied. A CP-only renderer would be a second thing to keep true, and the day it drifted the
+preview would be confidently wrong about the one thing it exists to answer. Nothing on the screen
+is printed with `|raw`.
 
 The panel prints that capture through `MenuBuilderPreviewService::formatMarkup()` — a pure, static
 re-indenter — because Twig emits readable *templates*, not readable *output*: the macro's
@@ -847,24 +846,26 @@ comparing both strings with all whitespace stripped. It is safe to run because i
 and cannot be mistaken for a tag — and the formatted lines are still printed through `{{ }}`, so
 autoescaping is what puts them on screen as text.
 
-Around that markup sits `preview/_stage.twig`: a browser bar, a brand, a site header, a skeleton
-page, a footer. It is **chrome only** — it takes the captured markup as a string and never touches a node.
+Around that markup sits `preview/_stage.twig`: a complete illustrative company page with a brand,
+site header, representative content and a full footer. It is **chrome only** — it takes captured
+markup as strings and never touches a node.
 It does not read `children`, ask whether something `isActive`, group a mega-menu column or resolve
 an icon; `MenuBuilderPreviewTest` asserts that against the file, because the moment the stage starts
 reasoning about menu data it becomes the second renderer this design exists to avoid. It is a
 separate partial rather than inline markup so it can be rendered on its own, against real
 `MenuBuilderNode` objects, in `MenuBuilderPreviewRenderTest`.
 
-**Placement** — header or footer — is a preview *control*, not a stored setting. Nothing in
+**Placement** — both, header or footer — is a preview *control*, not a stored setting. Nothing in
 MenuBuilder records where a template renders a menu, deliberately: `craft.menuBuilder.get('footer')`
 can be called in a masthead, so a stored placement would be a second, unenforceable truth. The
-screen offers both, defaults to `MenuBuilderPreviewOptions::guessPlacement()`'s reading of the
-menu's own handle and name (pure, unit-tested), and states which one it used — so a wrong guess
-costs one click rather than misrepresenting anything. The region the menu is *not* in is drawn as
-grey pills, which is what makes "this is the footer menu" legible at a glance. A footer navigation
-is rendered fully expanded in columns, because that is what a footer is and it is also the fastest
-way to read a whole menu's structure at once. Both placements emit the navigation through **one**
-macro in the stage, so they cannot drift into two renderings.
+screen defaults to showing both common treatments and can isolate either one. A footer navigation
+is rendered as a polished column grid, because that is both familiar to visitors and the fastest
+way to read a whole menu's structure at once.
+
+The preview no longer simulates a current URI. `MenuBuilderResolver::getTree()` keeps active-state
+marking enabled by default for every front-end caller, while the preview passes `markActive: false`.
+This prevents the control-panel request URL—or an invented page—from placing `aria-current` on a
+generic presentation preview.
 
 Everything that makes it *look* like a navigation is CSS keyed to attributes and classes the macro
 already emits — `li.is-active`, `a[aria-current="page"]`, `.menu-builder-megamenu-trigger`,
@@ -872,9 +873,10 @@ already emits — `li.is-active`, `a[aria-current="page"]`, `.menu-builder-megam
 `.menu-builder-badge`, `li[role="separator"]`. **No preview-only class is added to a single
 navigation element.** Desktop lays the top level out horizontally and opens level two as a dropdown
 card on `:hover` *and* `:focus-within` (so the keyboard demonstrates the same state a pointer does),
-with level three and deeper shown in place as an indented group. Mobile is a 390px device frame with
-the same markup stacked and railed, and its own disclosure button — chrome, since a real site owns
-that control. The stage uses a fixed light palette rather than Craft's CP variables: it stands in
+with level three and deeper shown in place as an indented group. Mobile is a clean 390px viewport:
+the header navigation starts closed behind its hamburger and opens as an overlaid panel, while the
+footer becomes stacked disclosure rows instead of compressed desktop columns. The toggle and
+backdrop are chrome, since a real site owns those controls. The stage uses a fixed light palette rather than Craft's CP variables: it stands in
 for a website, and a navigation that inherits the CP's colours reads as another CP widget.
 
 `web/assets/cp/js/preview.js` is the interaction layer, and it is deliberately tiny: make the
@@ -1214,8 +1216,8 @@ level 5, Craft's extension) both run clean over `src` and `tests`. Covered:
 | Controller permission mappings and the shared permission gate | `ControllerPermissionTest` |
 | CP affordance flags, the permission each control is gated on, no nested `<form>` on full-page screens, filtered-tree row counts | `CpAffordanceTest` |
 | Quick-add offering every `MenuBuilderItem::TYPES` entry, the dynamic source fields it posts, one shared picker toggle, the native-form fallback | `QuickAddCreationTest` |
-| Preview: option normalization (audience, user-group and site allowlists, the "seen from" URI), the audience → `VisibilityContext` mapping, the no-writes and site-restore guarantees, and that the simulated audience is applied after the cache | `MenuBuilderPreviewTest` |
-| Preview rendering, against a real DOM: nesting, separators, headings, unavailable links, every link shape, dynamic children, `aria-current` on the active node only, icons (class, asset, deleted asset, unsafe class), badges and styles, mega-menu disclosure/columns, attribute escaping, the markup panel's formatter, and the stage's chrome | `MenuBuilderPreviewRenderTest` |
+| Preview: option normalization (placement, audience, user-group and site allowlists), the audience → `VisibilityContext` mapping, the no-writes and site-restore guarantees, disabled active state, and that the simulated audience is applied after the cache | `MenuBuilderPreviewTest` |
+| Preview rendering, against a real DOM: nesting, separators, headings, unavailable links, every link shape, dynamic children, icons (class, asset, deleted asset, unsafe class), badges and styles, mega-menu disclosure/columns, unique IDs in the dual-placement view, attribute escaping, the markup panel's formatter, and the illustrative stage | `MenuBuilderPreviewRenderTest` |
 | Attribute parsing, title fallback, rel merging, JSON bags, ID lists, calendar dates | `MenuBuilderHelpersTest` |
 | Link health: the element-status → health mapping (live, no URL, disabled, pending/expired, archived, unknown), agreement with the resolver's availability rule, custom-URL / anchor / structural / dynamic-source checks, the front-end consequence per `fallbackBehavior`, the summary, which statuses offer recovery actions, and the no-disclosure guarantee | `MenuBuilderLinkHealthTest` |
 

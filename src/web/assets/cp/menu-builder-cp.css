@@ -1761,19 +1761,19 @@ li.menu-builder-item.menu-builder-item-added {
 /* A footer navigation is not a bar with dropdowns: every level is on show, in
    columns. That is what a footer *is*, and it is also the fastest way to
    check a whole menu's structure in one look. */
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
     flex: 1 1 auto;
     margin: 0;
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 36px;
     align-items: flex-start;
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
     min-width: 130px;
 }
 
@@ -1783,8 +1783,8 @@ li.menu-builder-item.menu-builder-item-added {
    the disclosure is closed would put this screen back where the front-end
    macro started, with a panel visible to the eye and closed to a screen
    reader. The editor opens it here the same way a visitor would. */
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul,
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav details[open] > .menu-builder-megamenu-panel {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav details[open] > .menu-builder-megamenu-panel {
     position: static;
     display: block;
     min-width: 0;
@@ -1796,8 +1796,8 @@ li.menu-builder-item.menu-builder-item-added {
     animation: none;
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
     padding: 4px 6px;
     font-size: 12px;
     font-weight: 700;
@@ -1805,8 +1805,8 @@ li.menu-builder-item.menu-builder-item-added {
     text-transform: uppercase;
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
     padding: 4px 6px;
     font-size: 13px;
     font-weight: 400;
@@ -1815,7 +1815,7 @@ li.menu-builder-item.menu-builder-item-added {
     color: var(--mb-preview-muted);
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover {
     color: var(--mb-preview-ink);
     background: var(--mb-preview-surface);
 }
@@ -1823,11 +1823,11 @@ li.menu-builder-item.menu-builder-item-added {
 /* A footer column is a heading with its links under it, so a mega-menu row
    stacks here rather than sitting on one line: the item's label, its
    disclosure, then the panel once that is open. */
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) {
     display: block;
 }
 
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav .menu-builder-megamenu-trigger {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav .menu-builder-megamenu-trigger {
     justify-content: flex-start;
     min-width: 24px;
     min-height: 24px;
@@ -1840,8 +1840,8 @@ li.menu-builder-item.menu-builder-item-added {
    unreachable — an editor could no longer see the panel at all, and neither
    could anyone using the keyboard. The flat footer layout applies once it is
    open. */
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li > a::after,
-.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li > span::after {
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav li > a::after,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav li > span::after {
     display: none;
 }
 
@@ -1852,11 +1852,11 @@ li.menu-builder-item.menu-builder-item-added {
     padding: 20px 14px 26px;
 }
 
-.menu-builder-preview-stage--mobile.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
     display: block;
 }
 
-.menu-builder-preview-stage--mobile.menu-builder-preview-stage--footer .menu-builder-preview-nav > ul > li:not(:last-child) {
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-nav > ul > li:not(:last-child) {
     border-bottom: 0;
 }
 
@@ -1872,4 +1872,1777 @@ li.menu-builder-item.menu-builder-item-added {
 
 .menu-builder-preview-stage--mobile .menu-builder-preview-pill {
     width: 34px;
+}
+
+/* ==========================================================================
+   Polished illustrative site surface
+
+   This layer replaces the old browser/device wireframe with a complete sample
+   website. It intentionally changes only preview furniture; all navigation
+   selectors above still style the exact markup emitted by the public macro.
+   ========================================================================== */
+
+.menu-builder-preview-stage {
+    min-height: 0;
+    padding: 20px;
+    border: 1px solid rgba(148, 163, 184, 0.26);
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.14), transparent 30%),
+        radial-gradient(circle at 95% 90%, rgba(14, 165, 233, 0.12), transparent 28%),
+        #eef2f7;
+}
+
+.menu-builder-preview-stage-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 1440px;
+    margin: 0 auto 12px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.menu-builder-preview-stage-label,
+.menu-builder-preview-stage-viewport {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 3px 9px;
+    border: 1px solid rgba(148, 163, 184, 0.42);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    letter-spacing: 0.035em;
+}
+
+.menu-builder-preview-stage-label::before {
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+    content: "";
+}
+
+.menu-builder-preview-stage-context {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.menu-builder-preview-stage-viewport {
+    margin-left: auto;
+}
+
+.menu-builder-preview-device {
+    max-width: 1440px;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow:
+        0 2px 4px rgba(15, 23, 42, 0.06),
+        0 24px 70px rgba(15, 23, 42, 0.16);
+    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.menu-builder-preview-page {
+    position: relative;
+    min-height: 0;
+    background: #fff;
+}
+
+.menu-builder-preview-announcement {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 32px;
+    padding: 6px 20px;
+    background: #111827;
+    color: #e2e8f0;
+    font-size: 11px;
+    font-weight: 550;
+    letter-spacing: 0.015em;
+}
+
+.menu-builder-preview-announcement-arrow {
+    color: #a5b4fc;
+    font-size: 14px;
+}
+
+.menu-builder-preview-siteheader {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    min-height: 72px;
+    padding: 14px clamp(20px, 4vw, 62px);
+    border-bottom: 1px solid #e7eaf0;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.menu-builder-preview-brand {
+    gap: 10px;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 760;
+    letter-spacing: -0.025em;
+}
+
+.menu-builder-preview-brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px 9px 9px 3px;
+    background: linear-gradient(145deg, #4f46e5, #2563eb);
+    box-shadow: 0 7px 16px rgba(79, 70, 229, 0.25);
+    font-size: 14px;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav {
+    order: 2;
+    margin: 0 auto;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul {
+    justify-content: center;
+    gap: 4px;
+}
+
+.menu-builder-preview-nav li > a,
+.menu-builder-preview-nav li > span {
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 570;
+}
+
+.menu-builder-preview-nav li > a {
+    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.menu-builder-preview-nav li > a:hover {
+    background: #f1f5ff;
+    color: #3730a3;
+}
+
+.menu-builder-preview-nav li > a:active {
+    transform: translateY(1px);
+}
+
+.menu-builder-preview-nav li > a:focus-visible,
+.menu-builder-preview-nav button:focus-visible,
+.menu-builder-preview-burger:focus-visible {
+    outline: 3px solid #60a5fa;
+    outline-offset: 3px;
+}
+
+.menu-builder-preview-header-slot {
+    order: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 104px;
+    min-height: 36px;
+    padding: 8px 15px;
+    border-radius: 9px;
+    border: 0;
+    background: linear-gradient(120deg, #4f46e5, #2563eb);
+    box-shadow: 0 8px 18px rgba(79, 70, 229, 0.2);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li > ul {
+    top: calc(100% + 12px);
+    padding: 8px;
+    border-color: #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav .menu-builder-megamenu-panel {
+    top: calc(100% + 12px);
+    padding: 22px;
+    border-color: #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 26px 70px rgba(15, 23, 42, 0.2);
+}
+
+.menu-builder-preview-canvas {
+    min-height: 0;
+    padding: 0;
+    background: #fff;
+}
+
+.menu-builder-preview-hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+    gap: clamp(28px, 6vw, 90px);
+    align-items: center;
+    max-width: none;
+    min-height: 390px;
+    padding: clamp(54px, 7vw, 100px) clamp(24px, 7vw, 104px);
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 82% 24%, rgba(99, 102, 241, 0.15), transparent 23%),
+        linear-gradient(135deg, #f8fafc 0%, #fff 52%, #eef2ff 100%);
+}
+
+.menu-builder-preview-hero::before {
+    position: absolute;
+    top: -180px;
+    right: -130px;
+    width: 420px;
+    height: 420px;
+    border: 1px solid rgba(79, 70, 229, 0.12);
+    border-radius: 50%;
+    content: "";
+}
+
+.menu-builder-preview-hero-copy,
+.menu-builder-preview-display,
+.menu-builder-preview-lede,
+.menu-builder-preview-hero-actions {
+    display: flex;
+}
+
+.menu-builder-preview-hero-copy {
+    position: relative;
+    z-index: 1;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.menu-builder-preview-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    color: #4f46e5;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.menu-builder-preview-eyebrow::before {
+    width: 22px;
+    height: 2px;
+    border-radius: 2px;
+    background: #6366f1;
+    content: "";
+}
+
+.menu-builder-preview-display {
+    max-width: 690px;
+    color: #0f172a;
+    font-size: clamp(34px, 4.3vw, 64px);
+    font-weight: 780;
+    letter-spacing: -0.055em;
+    line-height: 0.98;
+}
+
+.menu-builder-preview-lede {
+    max-width: 560px;
+    margin-top: 22px;
+    color: #526077;
+    font-size: clamp(14px, 1.35vw, 17px);
+    line-height: 1.65;
+}
+
+.menu-builder-preview-hero-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 28px;
+}
+
+.menu-builder-preview-primary-action,
+.menu-builder-preview-secondary-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 10px 17px;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.menu-builder-preview-primary-action {
+    gap: 12px;
+    background: linear-gradient(120deg, #4f46e5, #2563eb);
+    box-shadow: 0 10px 24px rgba(79, 70, 229, 0.25);
+    color: #fff;
+}
+
+.menu-builder-preview-secondary-action {
+    border: 1px solid #dbe2ea;
+    background: rgba(255, 255, 255, 0.72);
+    color: #334155;
+}
+
+.menu-builder-preview-hero-visual {
+    position: relative;
+    min-height: 260px;
+}
+
+.menu-builder-preview-orbit {
+    position: absolute;
+    border: 1px solid rgba(99, 102, 241, 0.19);
+    border-radius: 50%;
+}
+
+.menu-builder-preview-orbit--one {
+    inset: 6% 5% 2% 9%;
+}
+
+.menu-builder-preview-orbit--two {
+    inset: 23% 20% 18% 0;
+}
+
+.menu-builder-preview-visual-card {
+    position: absolute;
+    display: flex;
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 24px 60px rgba(55, 48, 163, 0.17);
+    backdrop-filter: blur(12px);
+}
+
+.menu-builder-preview-visual-card--main {
+    top: 8%;
+    right: 8%;
+    flex-direction: column;
+    width: 68%;
+    min-width: 210px;
+    height: 205px;
+    padding: 24px;
+    border-radius: 20px;
+    transform: rotate(2deg);
+}
+
+.menu-builder-preview-visual-kicker {
+    width: 38%;
+    height: 7px;
+    border-radius: 999px;
+    background: #dbe4f0;
+}
+
+.menu-builder-preview-visual-number {
+    margin-top: 16px;
+    color: #1e293b;
+    font-size: 36px;
+    font-weight: 780;
+    letter-spacing: -0.05em;
+}
+
+.menu-builder-preview-visual-bars {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    height: 70px;
+    margin-top: auto;
+}
+
+.menu-builder-preview-visual-bars > span {
+    flex: 1;
+    border-radius: 5px 5px 2px 2px;
+    background: linear-gradient(#818cf8, #4f46e5);
+}
+
+.menu-builder-preview-visual-bars > span:nth-child(1) { height: 38%; opacity: 0.45; }
+.menu-builder-preview-visual-bars > span:nth-child(2) { height: 58%; opacity: 0.58; }
+.menu-builder-preview-visual-bars > span:nth-child(3) { height: 48%; opacity: 0.7; }
+.menu-builder-preview-visual-bars > span:nth-child(4) { height: 78%; opacity: 0.84; }
+.menu-builder-preview-visual-bars > span:nth-child(5) { height: 100%; }
+
+.menu-builder-preview-visual-card--small {
+    bottom: 1%;
+    left: 0;
+    align-items: center;
+    gap: 14px;
+    width: 58%;
+    min-width: 190px;
+    padding: 15px;
+    border-radius: 15px;
+    transform: rotate(-3deg);
+}
+
+.menu-builder-preview-avatar-stack {
+    display: flex;
+}
+
+.menu-builder-preview-avatar-stack > span {
+    width: 24px;
+    height: 24px;
+    margin-left: -7px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #c7d2fe;
+}
+
+.menu-builder-preview-avatar-stack > span:first-child {
+    margin-left: 0;
+    background: #bfdbfe;
+}
+
+.menu-builder-preview-avatar-stack > span:last-child {
+    background: #ddd6fe;
+}
+
+.menu-builder-preview-visual-lines {
+    flex: 1;
+}
+
+.menu-builder-preview-visual-lines > span {
+    display: block;
+    height: 6px;
+    margin: 6px 0;
+    border-radius: 999px;
+    background: #dbe4f0;
+}
+
+.menu-builder-preview-visual-lines > span:last-child {
+    width: 65%;
+}
+
+.menu-builder-preview-proof {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 28px;
+    padding: 22px clamp(24px, 7vw, 104px);
+    border-top: 1px solid #edf0f5;
+    border-bottom: 1px solid #edf0f5;
+    color: #7c879b;
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.menu-builder-preview-logo-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(20px, 4vw, 52px);
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+}
+
+.menu-builder-preview-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 40px clamp(24px, 7vw, 104px) 54px;
+    background: #fff;
+}
+
+.menu-builder-preview-feature-card {
+    display: flex;
+    min-height: 180px;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px;
+    border: 1px solid #e8ecf2;
+    border-radius: 14px;
+    background: linear-gradient(150deg, #fff, #f8fafc);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.menu-builder-preview-feature-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.menu-builder-preview-feature-title {
+    margin-top: 18px;
+    color: #172033;
+    font-size: 16px;
+    font-weight: 750;
+}
+
+.menu-builder-preview-feature-copy {
+    margin-top: 8px;
+    color: #778397;
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.menu-builder-preview-feature-link {
+    margin-top: auto;
+    padding-top: 16px;
+    color: #4f46e5;
+    font-size: 10px;
+    font-weight: 750;
+}
+
+.menu-builder-preview-sitefooter {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.75fr) minmax(300px, 1.5fr);
+    gap: 34px clamp(36px, 7vw, 100px);
+    align-items: start;
+    margin: 0;
+    padding: 42px clamp(24px, 7vw, 104px) 24px;
+    border-top: 4px solid #4f46e5;
+    background:
+        radial-gradient(circle at 88% -10%, rgba(79, 70, 229, 0.3), transparent 34%),
+        linear-gradient(145deg, #0b1120, #111a30);
+}
+
+.menu-builder-preview-footer-intro {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.menu-builder-preview-footer-tagline {
+    max-width: 250px;
+    color: #8592a8;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.menu-builder-preview-footer-placeholder {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(72px, 1fr));
+    gap: 24px;
+}
+
+.menu-builder-preview-footer-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.menu-builder-preview-footer-column > span {
+    width: 72%;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.2);
+}
+
+.menu-builder-preview-footer-column > .menu-builder-preview-footer-heading {
+    width: 45%;
+    height: 7px;
+    margin-bottom: 4px;
+    background: rgba(226, 232, 240, 0.55);
+}
+
+.menu-builder-preview-footer-column > span:nth-child(3) { width: 58%; }
+.menu-builder-preview-footer-column > span:nth-child(4) { width: 64%; }
+
+.menu-builder-preview-footer-bottom {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 18px;
+    border-top: 1px solid rgba(226, 232, 240, 0.12);
+    color: #64748b;
+    font-size: 9px;
+}
+
+.menu-builder-preview-footer-socials {
+    display: flex;
+    gap: 6px;
+}
+
+.menu-builder-preview-footer-socials > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(226, 232, 240, 0.18);
+    border-radius: 50%;
+    color: #94a3b8;
+    font-size: 8px;
+    font-weight: 750;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    align-self: start;
+    padding: 2px 0 0;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 26px clamp(22px, 4vw, 48px);
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+    min-width: 0;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
+    position: relative;
+    margin-bottom: 10px;
+    padding: 0 0 11px;
+    border-radius: 0;
+    color: #f8fafc;
+    font-size: 11px;
+    letter-spacing: 0.085em;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a::before,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span::before {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 28px;
+    height: 2px;
+    border-radius: 2px;
+    background: #818cf8;
+    content: "";
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
+    padding: 6px 0;
+    border-radius: 5px;
+    color: #9aa8be;
+    line-height: 1.4;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a {
+    transition: color 0.16s ease, transform 0.16s ease;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover {
+    background: transparent;
+    color: #fff;
+    transform: translateX(3px);
+}
+
+.menu-builder-preview-hint {
+    margin: 12px 0 0;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 550;
+}
+
+/* Compact preview: a clean viewport card, not a fake phone model. */
+.menu-builder-preview-stage--mobile {
+    padding: 18px 12px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-stage-meta {
+    width: 390px;
+    max-width: 100%;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-stage-context {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-device {
+    display: block;
+    width: 390px;
+    max-width: 100%;
+    height: 720px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 18px;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-device::after {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-page {
+    height: 100%;
+    overflow-y: auto;
+    border-radius: inherit;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-announcement {
+    justify-content: flex-start;
+    min-height: 28px;
+    padding: 6px 14px;
+    overflow: hidden;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader {
+    position: sticky;
+    top: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 62px;
+    padding: 12px 14px;
+    backdrop-filter: blur(12px);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-brand-mark {
+    width: 28px;
+    height: 28px;
+}
+
+.menu-builder-preview-burger {
+    width: 40px;
+    height: 38px;
+    border-color: #dbe2ea;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.menu-builder-preview-burger[aria-expanded="true"] {
+    border-color: #c7d2fe;
+    background: #eef2ff;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav {
+    padding-top: 10px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > span {
+    min-height: 44px;
+    border-radius: 8px;
+}
+
+/* A non-clickable mobile parent cannot be a disclosure control. Its children
+   remain visible so keyboard users can always reach them. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> span):has(> ul) > ul {
+    display: block;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-hero {
+    display: block;
+    min-height: 0;
+    padding: 46px 20px 38px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-display {
+    font-size: 39px;
+    line-height: 1.02;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-lede {
+    margin-top: 18px;
+    font-size: 13px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-hero-visual {
+    min-height: 230px;
+    margin-top: 34px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-visual-card--main {
+    right: 5%;
+    width: 74%;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-proof {
+    display: block;
+    padding: 22px 20px;
+    text-align: center;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-logo-row {
+    justify-content: center;
+    gap: 18px;
+    margin-top: 14px;
+    font-size: 9px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-feature-grid {
+    grid-template-columns: 1fr;
+    padding: 28px 20px 36px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-feature-card {
+    min-height: 160px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 32px 20px 20px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-placeholder {
+    width: 100%;
+    gap: 16px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-bottom {
+    width: 100%;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    width: 100%;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-header-slot {
+    display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Production-like footer composition and compact navigation
+
+   Desktop follows the common enterprise pattern: a conversion band, brand
+   context, grouped navigation, then legal/meta content. Compact view turns
+   the header into an off-canvas-style panel and the footer into stacked
+   disclosure rows instead of squeezing desktop columns onto a phone.
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-footer-cta {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 0 0 34px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.14);
+}
+
+.menu-builder-preview-footer-cta > span:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.menu-builder-preview-footer-eyebrow {
+    color: #818cf8;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.menu-builder-preview-footer-cta-title {
+    color: #f8fafc;
+    font-size: clamp(21px, 2.8vw, 34px);
+    font-weight: 740;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+}
+
+.menu-builder-preview-footer-cta-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 42px;
+    padding: 10px 17px;
+    border: 1px solid rgba(165, 180, 252, 0.36);
+    border-radius: 9px;
+    background: #f8fafc;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    color: #111827;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.menu-builder-preview-footer-locale {
+    margin-top: 4px;
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 650;
+}
+
+.menu-builder-preview-footer-legal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    color: #94a3b8;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader {
+    z-index: 30;
+    flex-wrap: nowrap;
+    min-height: 64px;
+    padding: 12px 16px;
+    border-bottom-color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.05);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-brand {
+    min-width: 0;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-brand-name {
+    max-width: 18ch;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-burger {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 40px;
+    margin-left: auto;
+    border: 1px solid #dbe3ee;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(15, 23, 42, 0.05);
+}
+
+.menu-builder-preview-burger-bars,
+.menu-builder-preview-burger-bars::before,
+.menu-builder-preview-burger-bars::after {
+    transition: top 0.18s ease, transform 0.18s ease, background-color 0.18s ease;
+}
+
+.menu-builder-preview-burger[aria-expanded="true"] .menu-builder-preview-burger-bars {
+    background: transparent;
+}
+
+.menu-builder-preview-burger[aria-expanded="true"] .menu-builder-preview-burger-bars::before {
+    top: 0;
+    transform: rotate(45deg);
+}
+
+.menu-builder-preview-burger[aria-expanded="true"] .menu-builder-preview-burger-bars::after {
+    top: 0;
+    transform: rotate(-45deg);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 31;
+    display: block;
+    width: 100%;
+    max-height: 560px;
+    padding: 10px 14px 18px;
+    overflow-y: auto;
+    border: 0;
+    border-top: 1px solid #edf0f5;
+    border-radius: 0 0 16px 16px;
+    background: #fff;
+    box-shadow: 0 22px 45px rgba(15, 23, 42, 0.22);
+    animation: menu-builder-preview-mobile-panel 0.18s ease-out;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav[hidden] {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li {
+    border-bottom: 1px solid #edf0f5;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li:last-child {
+    border-bottom: 0;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > span {
+    min-height: 50px;
+    padding: 13px 6px;
+    border-radius: 7px;
+    color: #172033;
+    font-size: 15px;
+    font-weight: 650;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav ul ul {
+    margin: 0 0 10px 5px;
+    padding: 4px 0 6px 14px;
+    border-left-color: #c7d2fe;
+    background: #f8faff;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav ul ul li > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader > .menu-builder-preview-nav ul ul li > span {
+    min-height: 40px;
+    padding: 9px 10px;
+    color: #556176;
+    font-size: 13px;
+    font-weight: 540;
+}
+
+.menu-builder-preview-mobile-scrim {
+    position: absolute;
+    inset: 92px 0 0;
+    z-index: 20;
+    display: block;
+    min-height: calc(100% - 92px);
+    background: rgba(15, 23, 42, 0.46);
+    backdrop-filter: blur(2px);
+}
+
+.menu-builder-preview-mobile-scrim[hidden] {
+    display: none;
+}
+
+@keyframes menu-builder-preview-mobile-panel {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter {
+    gap: 0;
+    padding: 0 18px 20px;
+    border-top-width: 3px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-cta {
+    align-items: flex-start;
+    width: 100%;
+    flex-direction: column;
+    gap: 18px;
+    padding: 30px 0 26px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-cta-title {
+    font-size: 26px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-cta-action {
+    width: 100%;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-intro {
+    width: 100%;
+    padding: 26px 0 22px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.13);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-tagline {
+    max-width: 300px;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    padding: 8px 0;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: block;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+    position: relative;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.14);
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
+    width: 100%;
+    min-height: 54px;
+    margin: 0;
+    padding: 16px 42px 15px 0;
+    border-radius: 0;
+    color: #f8fafc;
+    font-size: 12px;
+    letter-spacing: 0.075em;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a::before,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span::before {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> ul) > a::after,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> ul) > span::after {
+    position: absolute;
+    top: 18px;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    content: "+";
+    color: #a5b4fc;
+    font-size: 18px;
+    font-weight: 400;
+    opacity: 1;
+    transform: none;
+    transition: transform 0.16s ease;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li[data-mb-open] > a::after,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li[data-mb-open] > span::after {
+    transform: rotate(45deg);
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > ul {
+    display: none;
+    margin: 0;
+    padding: 0 0 14px;
+    border: 0;
+    background: transparent;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li[data-mb-open] > ul,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> span):has(> ul) > ul {
+    display: block;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
+    min-height: 40px;
+    padding: 9px 4px;
+    color: #9eabc0;
+    font-size: 12px;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav .menu-builder-megamenu-trigger {
+    top: 10px;
+    right: 2px;
+    border-color: rgba(226, 232, 240, 0.16);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 18px;
+    padding-top: 18px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-legal {
+    gap: 12px;
+}
+
+@media (max-width: 900px) {
+    .menu-builder-preview-stage--desktop .menu-builder-preview-siteheader {
+        gap: 12px;
+        padding-inline: 20px;
+    }
+
+    .menu-builder-preview-stage--desktop .menu-builder-preview-header-slot {
+        display: none;
+    }
+
+    .menu-builder-preview-stage--desktop .menu-builder-preview-nav li > a,
+    .menu-builder-preview-stage--desktop .menu-builder-preview-nav li > span {
+        padding-inline: 8px;
+        font-size: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .menu-builder-preview-nav *,
+    .menu-builder-preview-nav *::before,
+    .menu-builder-preview-nav *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (forced-colors: active) {
+    .menu-builder-preview-nav a[aria-current="page"] {
+        border: 2px solid Highlight;
+    }
+
+    .menu-builder-preview-nav li > a:focus-visible,
+    .menu-builder-preview-nav button:focus-visible,
+    .menu-builder-preview-burger:focus-visible {
+        outline: 3px solid Highlight;
+    }
+}
+
+/* ---------------------------------------------------------------------------
+   Navigation refinement: resilient mega panels and a richer site footer
+
+   The masthead owns dropdown behaviour. Wide footers expose their hierarchy
+   as stable columns; compact footers keep native disclosure controls. Keeping
+   these contexts separate prevents a footer hover from becoming a flyout.
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-siteheader {
+    isolation: isolate;
+    border-bottom-color: #e3e8f2;
+    background:
+        linear-gradient(90deg, rgba(79, 70, 229, 0.035), transparent 24%),
+        rgba(255, 255, 255, 0.985);
+}
+
+.menu-builder-preview-siteheader::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    z-index: -1;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 4%, #4f46e5 36%, #22d3ee 64%, transparent 96%);
+    content: "";
+    opacity: 0.24;
+}
+
+.menu-builder-preview-header-slot {
+    gap: 8px;
+    min-width: 0;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+}
+
+.menu-builder-preview-header-search,
+.menu-builder-preview-header-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.menu-builder-preview-header-search {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #dce3ed;
+    border-radius: 10px;
+    background: #fff;
+    color: #475569;
+    font-size: 17px;
+}
+
+.menu-builder-preview-header-cta {
+    gap: 9px;
+    min-height: 36px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: linear-gradient(120deg, #4338ca, #2563eb);
+    box-shadow: 0 8px 20px rgba(67, 56, 202, 0.2);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > span {
+    position: relative;
+    min-height: 40px;
+    padding: 10px 11px;
+    background: transparent;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > a::before {
+    position: absolute;
+    right: 11px;
+    bottom: 4px;
+    left: 11px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #4f46e5, #38bdf8);
+    content: "";
+    opacity: 0;
+    transform: scaleX(0.35);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > a:hover,
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li:focus-within > a {
+    background: #f7f8ff;
+    color: #312e81;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > a:hover::before,
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li:focus-within > a::before {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+/* Mega panels are positioned against the header, not against one small menu
+   item. This makes every column fit inside the preview even when the trigger
+   sits at the far right of a long navigation. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li:has(> details.menu-builder-megamenu) {
+    position: static;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader .menu-builder-megamenu-panel {
+    top: 100%;
+    right: clamp(18px, 4vw, 62px);
+    left: clamp(18px, 4vw, 62px);
+    grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+    gap: 14px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 18px;
+    max-height: min(430px, calc(100vh - 180px));
+    overflow: auto;
+    border: 1px solid #dde4ef;
+    border-top: 0;
+    border-radius: 0 0 18px 18px;
+    background:
+        radial-gradient(circle at 95% 0%, rgba(99, 102, 241, 0.11), transparent 28%),
+        #fff;
+    box-shadow: 0 26px 60px rgba(15, 23, 42, 0.2);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li:nth-last-child(-n + 2) > ul {
+    right: 0;
+    left: auto;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader .menu-builder-megamenu-column {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid #edf0f6;
+    border-radius: 12px;
+    background: rgba(248, 250, 252, 0.72);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader .menu-builder-megamenu-column > ul > li > a,
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader .menu-builder-megamenu-column > ul > li > span {
+    min-height: 38px;
+    padding: 9px 10px;
+    border-radius: 8px;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader .menu-builder-megamenu-column > ul > li > a:hover {
+    background: #eef2ff;
+    color: #3730a3;
+    box-shadow: inset 3px 0 0 #6366f1;
+}
+
+/* Bridge the small visual gap on ordinary dropdown cards so pointer travel
+   from a top-level label into its submenu does not close the submenu. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-siteheader > .menu-builder-preview-nav > ul > li > ul::before {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 13px;
+    content: "";
+}
+
+.menu-builder-preview-sitefooter {
+    position: relative;
+    isolation: isolate;
+    grid-template-columns: minmax(190px, 0.62fr) minmax(0, 1.55fr);
+    gap: 42px clamp(34px, 6vw, 86px);
+    overflow: hidden;
+    border-top: 0;
+    background:
+        radial-gradient(circle at 8% 25%, rgba(14, 165, 233, 0.13), transparent 24%),
+        radial-gradient(circle at 92% 8%, rgba(99, 102, 241, 0.3), transparent 29%),
+        linear-gradient(145deg, #080d1b, #111a31 55%, #0b1328);
+}
+
+.menu-builder-preview-sitefooter::before {
+    position: absolute;
+    top: -120px;
+    right: -70px;
+    z-index: -1;
+    width: 330px;
+    height: 330px;
+    border: 1px solid rgba(165, 180, 252, 0.12);
+    border-radius: 50%;
+    box-shadow: 0 0 0 42px rgba(99, 102, 241, 0.035), 0 0 0 88px rgba(99, 102, 241, 0.025);
+    content: "";
+}
+
+.menu-builder-preview-footer-cta {
+    position: relative;
+    padding: 28px 30px;
+    overflow: hidden;
+    border: 1px solid rgba(165, 180, 252, 0.2);
+    border-radius: 18px;
+    background:
+        radial-gradient(circle at 82% 20%, rgba(56, 189, 248, 0.18), transparent 25%),
+        linear-gradient(115deg, rgba(79, 70, 229, 0.26), rgba(30, 41, 59, 0.62));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 22px 54px rgba(0, 0, 0, 0.2);
+}
+
+.menu-builder-preview-footer-cta::after {
+    position: absolute;
+    top: -45px;
+    right: 18%;
+    width: 120px;
+    height: 120px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    content: "";
+}
+
+.menu-builder-preview-footer-cta-action {
+    position: relative;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.menu-builder-preview-footer-cta:hover .menu-builder-preview-footer-cta-action {
+    border-color: #fff;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.26), 0 0 0 4px rgba(165, 180, 252, 0.12);
+    transform: translateY(-2px);
+}
+
+.menu-builder-preview-footer-intro {
+    padding-right: 12px;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
+    gap: 30px clamp(20px, 3vw, 42px);
+}
+
+/* `disclosure: none` makes desktop footer mega groups honest, always-visible
+   columns instead of closed details that JavaScript has to force open. */
+.menu-builder-preview-stage--desktop:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> .menu-builder-megamenu-panel) {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
+.menu-builder-preview-stage--desktop:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+    gap: 18px clamp(24px, 4vw, 52px);
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a {
+    position: relative;
+    margin-left: -8px;
+    padding: 7px 24px 7px 8px;
+    transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a:hover,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a:focus-visible {
+    background: transparent;
+    color: #c7d2fe;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a::after {
+    position: absolute;
+    right: 8px;
+    content: "\2192";
+    color: #818cf8;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:focus-visible {
+    background: rgba(129, 140, 248, 0.1);
+    color: #fff;
+    transform: none;
+}
+
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover::after,
+:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:focus-visible::after {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-header-slot {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader .menu-builder-megamenu-panel,
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter .menu-builder-megamenu-panel {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid rgba(99, 102, 241, 0.14);
+    border-radius: 10px;
+    background: rgba(238, 242, 255, 0.62);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter .menu-builder-megamenu-panel {
+    margin: 0 0 12px;
+    border-color: rgba(165, 180, 252, 0.14);
+    background: rgba(129, 140, 248, 0.055);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    width: 100%;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter .menu-builder-megamenu-column + .menu-builder-megamenu-column {
+    padding-top: 8px;
+    border-top: 1px solid rgba(226, 232, 240, 0.1);
+}
+
+/* Footer navigation is an index, not a disclosure menu. Every ordinary
+   child list stays visible too, and no plus/caret suggests a click state. */
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > ul {
+    display: block;
+    padding-bottom: 14px;
+}
+
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> ul) > a::after,
+.menu-builder-preview-stage--mobile:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> ul) > span::after {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .menu-builder-preview-sitefooter {
+        grid-template-columns: 1fr;
+    }
+
+    .menu-builder-preview-footer-cta {
+        padding: 24px;
+    }
+
+    .menu-builder-preview-stage--desktop:where(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> .menu-builder-megamenu-panel--static) {
+        grid-column: 1 / -1;
+    }
+}
+
+/* Desktop footer navigation uses an explicit horizontal flow. These selectors
+   intentionally carry the desktop + placement context so older generic list
+   rules cannot collapse the production-style footer back to one column. */
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    width: 100%;
+    min-width: 0;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 34px clamp(28px, 4vw, 60px);
+    width: 100%;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+    flex: 1 1 150px;
+    width: auto;
+    min-width: 140px;
+    max-width: 240px;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> .menu-builder-megamenu-panel--static) {
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
+    padding-top: 8px;
+    border-top: 1px solid rgba(226, 232, 240, 0.11);
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 20px clamp(34px, 5vw, 72px);
+    width: 100%;
+    margin-top: 4px;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static > .menu-builder-megamenu-column {
+    flex: 1 1 180px;
+    min-width: 160px;
+    max-width: 280px;
+}
+
+/* Reference-inspired desktop footer: a simple branded field with scannable
+   link groups and a dedicated social column. The menu remains the real macro
+   output; only the illustrative site's composition changes. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-sitefooter {
+    display: grid;
+    grid-template-columns: minmax(170px, 0.72fr) minmax(0, 2.2fr) minmax(130px, 0.55fr);
+    gap: 34px clamp(34px, 5vw, 76px);
+    align-items: start;
+    padding: 48px clamp(32px, 7vw, 104px) 24px;
+    overflow: hidden;
+    border: 0;
+    background:
+        radial-gradient(circle at 8% 25%, rgba(14, 165, 233, 0.13), transparent 24%),
+        radial-gradient(circle at 92% 8%, rgba(99, 102, 241, 0.3), transparent 29%),
+        linear-gradient(145deg, #080d1b, #111a31 55%, #0b1328);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-sitefooter::before {
+    top: -180px;
+    right: -100px;
+    width: 390px;
+    height: 390px;
+    border-color: rgba(255, 255, 255, 0.07);
+    box-shadow: 0 0 0 52px rgba(255, 255, 255, 0.018), 0 0 0 104px rgba(255, 255, 255, 0.012);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-cta {
+    display: none;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-intro {
+    grid-column: 1;
+    gap: 12px;
+    min-width: 0;
+    padding: 0;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-brand--footer,
+.menu-builder-preview-stage--desktop .menu-builder-preview-brand--footer .menu-builder-preview-brand-name {
+    color: #fff;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-brand--footer .menu-builder-preview-brand-mark {
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(11, 8, 90, 0.22);
+    color: #3730a3;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-tagline {
+    max-width: 210px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-locale {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    grid-column: 2;
+    width: 100%;
+    padding: 0;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    gap: 32px clamp(26px, 4vw, 54px);
+    width: 100%;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li:has(> .menu-builder-megamenu-panel--static) {
+    grid-column: span 2;
+    width: auto;
+    padding: 0;
+    border: 0;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 20px 34px;
+    width: 100%;
+    margin: 0;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-megamenu-panel--static > .menu-builder-megamenu-column {
+    min-width: 0;
+    max-width: none;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
+    margin-bottom: 8px;
+    padding: 0 0 7px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a::before,
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span::before {
+    display: none;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
+    min-height: 0;
+    margin: 0;
+    padding: 5px 6px;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover,
+.menu-builder-preview-stage--desktop:is(.menu-builder-preview-stage--footer, .menu-builder-preview-stage--both) .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:focus-visible {
+    background: rgba(255, 255, 255, 0.13);
+    color: #fff;
+}
+
+.menu-builder-preview-footer-follow {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-follow {
+    grid-column: 3;
+    color: #fff;
+}
+
+.menu-builder-preview-footer-follow-label {
+    font-size: 12px;
+    font-weight: 620;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-socials {
+    gap: 10px;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-socials > span {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 7px;
+    background: #fff;
+    color: #3730a3;
+    font-size: 10px;
+    box-shadow: 0 8px 18px rgba(13, 8, 94, 0.2);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-bottom {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+    padding-top: 18px;
+    border-top-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.58);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-footer-legal {
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-footer-follow {
+    width: 100%;
+    padding: 20px 0 4px;
+    border-top: 1px solid rgba(226, 232, 240, 0.13);
+    color: #f8fafc;
 }

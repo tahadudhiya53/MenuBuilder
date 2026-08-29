@@ -517,7 +517,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
     public function testTheStageWrapsTheNavigationInALandmarkWithoutAlteringIt(): void
     {
         $nodes = [$this->node(1, title: 'Home', url: '/', badge: 'New')];
-        $stage = $this->renderStage($nodes);
+        $stage = $this->renderStage($nodes, placement: 'header');
         $nav = $this->renderNav($nodes);
 
         $this->assertCount(1, $this->query($stage, '//nav[@aria-label="Preview of Main"]'));
@@ -534,8 +534,8 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//button[@data-mb-preview-burger]'));
     }
 
-    /** The mobile viewport gets a real disclosure button, wired to the nav it controls. */
-    public function testTheMobileStageAddsADisclosureButtonBoundToTheNavigation(): void
+    /** The compact header starts closed and its button controls the hidden header navigation. */
+    public function testTheMobileStageStartsWithAClosedDisclosureBoundToTheHeaderNavigation(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], isMobile: true);
 
@@ -544,43 +544,71 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $burger = $this->query($stage, '//button[@data-mb-preview-burger]');
 
         $this->assertCount(1, $burger);
-        $this->assertSame('true', $burger[0]->getAttribute('aria-expanded'));
+        $this->assertSame('false', $burger[0]->getAttribute('aria-expanded'));
         $this->assertSame(
             $burger[0]->getAttribute('aria-controls'),
             $this->query($stage, '//nav')[0]->getAttribute('id'),
             'The toggle must control the navigation it sits above.'
         );
+        $this->assertTrue($this->query($stage, '//header//nav')[0]->hasAttribute('hidden'));
+
+        $scrim = $this->query($stage, '//*[@data-mb-preview-scrim]');
+
+        $this->assertCount(1, $scrim);
+        $this->assertTrue($scrim[0]->hasAttribute('hidden'));
+        $this->assertSame('true', $scrim[0]->getAttribute('aria-hidden'));
+        $this->assertCount(0, $this->query($stage, '//footer//nav[@hidden]'), 'The footer stays available when the header menu is closed.');
     }
 
-    /** Decorative furniture must not be read out or become part of the navigation. */
-    public function testTheStageChromeIsHiddenFromAssistiveTechnology(): void
+    /** Representative page furniture must not be read out or become part of the navigation. */
+    public function testTheIllustrativePageIsHiddenFromAssistiveTechnology(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
 
-        $this->assertSame('true', $this->query($stage, '//div[contains(@class, "menu-builder-preview-chrome")]')[0]->getAttribute('aria-hidden'));
-        $this->assertSame('true', $this->query($stage, '//div[contains(@class, "menu-builder-preview-canvas")]')[0]->getAttribute('aria-hidden'));
-        $this->assertCount(0, $this->query($stage, '//nav//div[contains(@class, "menu-builder-preview-skeleton")]'));
+        $this->assertSame('true', $this->query($stage, '//div[contains(@class, "menu-builder-preview-stage-meta")]')[0]->getAttribute('aria-hidden'));
+        $this->assertSame('true', $this->query($stage, '//main[contains(@class, "menu-builder-preview-canvas")]')[0]->getAttribute('aria-hidden'));
+        $this->assertSame('true', $this->query($stage, '//div[contains(@class, "menu-builder-preview-announcement")]')[0]->getAttribute('aria-hidden'));
+        $this->assertCount(0, $this->query($stage, '//nav//*[contains(@class, "menu-builder-preview-feature")]'));
+    }
+
+    /** The page is a finished sample site, not the old browser-and-skeleton client mock. */
+    public function testTheStageRendersACompleteIllustrativeWebsiteRatherThanAWireframe(): void
+    {
+        $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
+
+        $this->assertCount(1, $this->query($stage, '//span[contains(@class, "menu-builder-preview-stage-label") and contains(., "Illustrative website preview")]'));
+        $this->assertCount(1, $this->query($stage, '//section[contains(@class, "menu-builder-preview-hero")]'));
+        $this->assertCount(3, $this->query($stage, '//span[contains(@class, "menu-builder-preview-feature-card")]'));
+        $this->assertCount(1, $this->query($stage, '//footer[contains(@class, "menu-builder-preview-sitefooter")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//span[contains(concat(" ", normalize-space(@class), " "), " menu-builder-preview-footer-cta ")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//span[contains(concat(" ", normalize-space(@class), " "), " menu-builder-preview-footer-locale ")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//span[contains(concat(" ", normalize-space(@class), " "), " menu-builder-preview-footer-legal ")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//span[contains(concat(" ", normalize-space(@class), " "), " menu-builder-preview-footer-follow ")]'));
+        $this->assertCount(4, $this->query($stage, '//footer//span[contains(concat(" ", normalize-space(@class), " "), " menu-builder-preview-footer-socials ")]/span'));
+        $this->assertCount(0, $this->query($stage, '//footer//span[contains(@class, "menu-builder-preview-footer-bottom")]//span[contains(@class, "menu-builder-preview-footer-socials")]'));
+        $this->assertCount(0, $this->query($stage, '//*[contains(@class, "menu-builder-preview-chrome")]'));
+        $this->assertCount(0, $this->query($stage, '//*[contains(@class, "menu-builder-preview-skeleton")]'));
     }
 
     // ---------------------------------------------------------------------
-    // Placement: the menu is in the header, or it is in the footer
+    // Placement: header, footer, or both
     // ---------------------------------------------------------------------
 
     /** Header placement: the real navigation is in the masthead, the footer is shapes. */
     public function testAHeaderMenuRendersInTheMastheadAndLeavesTheFooterAsPlaceholders(): void
     {
-        $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
+        $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], placement: 'header');
 
         $this->assertCount(1, $this->query($stage, '//header//nav//a[@href="/"]'));
         $this->assertCount(0, $this->query($stage, '//footer//nav'));
-        $this->assertCount(1, $this->query($stage, '//footer//span[contains(@class, "menu-builder-preview-nav-placeholder")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//span[contains(@class, "menu-builder-preview-footer-placeholder")]'));
         $this->assertCount(1, $this->query($stage, '//div[contains(@class, "menu-builder-preview-stage--header")]'));
     }
 
     /** Footer placement: the same markup, in the footer, with the masthead as shapes. */
     public function testAFooterMenuRendersInTheFooterAndLeavesTheMastheadAsPlaceholders(): void
     {
-        $stage = $this->renderStage([$this->node(1, title: 'Privacy', url: '/privacy')], isFooter: true);
+        $stage = $this->renderStage([$this->node(1, title: 'Privacy', url: '/privacy')], placement: 'footer');
 
         $this->assertCount(1, $this->query($stage, '//footer//nav//a[@href="/privacy"]'));
         $this->assertCount(0, $this->query($stage, '//header//nav'));
@@ -588,38 +616,85 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(1, $this->query($stage, '//div[contains(@class, "menu-builder-preview-stage--footer")]'));
     }
 
-    /** One navigation on the page, wherever it sits — and the placeholders are never read out. */
+    /** Single-region views have one navigation and decorative placeholders. */
     public function testOnlyOneNavigationIsRenderedAndThePlaceholdersAreDecorative(): void
     {
-        foreach ([false, true] as $isFooter) {
-            $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], isFooter: $isFooter);
+        foreach (['header', 'footer'] as $placement) {
+            $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], placement: $placement);
 
             $this->assertCount(1, $this->query($stage, '//nav'), 'A page has one preview navigation.');
             $this->assertCount(1, $this->query($stage, '//a'), 'The placeholders are shapes, never links.');
 
-            foreach ($this->query($stage, '//span[contains(@class, "menu-builder-preview-nav-placeholder")]') as $placeholder) {
+            foreach ($this->query($stage, '//span[contains(@class, "menu-builder-preview-nav-placeholder") or contains(@class, "menu-builder-preview-footer-placeholder")]') as $placeholder) {
                 $this->assertSame('true', $placeholder->getAttribute('aria-hidden'));
                 $this->assertSame('', trim($placeholder->textContent));
             }
         }
     }
 
+    /** The default view demonstrates both treatments with unique landmarks and IDs. */
+    public function testBothPlacementRendersAccessibleHeaderAndFooterInstances(): void
+    {
+        $nodes = [
+            $this->node(9, title: 'Company', url: '/company', htmlId: 'company-links'),
+            $this->megaParent(),
+        ];
+        $stage = $this->renderStage($nodes);
+
+        $navs = $this->query($stage, '//nav');
+
+        $this->assertCount(2, $navs);
+        $this->assertSame('menu-builder-preview-nav-header', $navs[0]->getAttribute('id'));
+        $this->assertSame('menu-builder-preview-nav-footer', $navs[1]->getAttribute('id'));
+        $this->assertNotSame($navs[0]->getAttribute('aria-label'), $navs[1]->getAttribute('aria-label'));
+
+        $ids = array_map(
+            static fn($node): string => $node->getAttribute('id'),
+            $this->query($stage, '//*[@id]')
+        );
+
+        $this->assertSame($ids, array_values(array_unique($ids)), 'Rendering one menu twice must not duplicate an HTML id.');
+    }
+
+    /** Wide footer mega groups are stable columns; they never become hover flyouts. */
+    public function testDesktopFooterMegaMenusRenderAsFlatColumns(): void
+    {
+        $stage = $this->renderStage([$this->megaParent()]);
+
+        $this->assertCount(1, $this->query($stage, '//header//details[contains(@class, "menu-builder-megamenu")]'));
+        $this->assertCount(0, $this->query($stage, '//footer//details'));
+        $this->assertCount(1, $this->query($stage, '//footer//div[contains(@class, "menu-builder-megamenu-panel")]'));
+        $this->assertCount(1, $this->query($stage, '//footer//div[contains(@class, "menu-builder-megamenu-panel--static")]'));
+        $this->assertCount(2, $this->query($stage, '//footer//div[contains(@class, "menu-builder-megamenu-column")]'));
+    }
+
+    /** Compact footer mega groups remain visible columns, never interactive disclosures. */
+    public function testMobileFooterMegaMenusRemainStatic(): void
+    {
+        $stage = $this->renderStage([$this->megaParent()], isMobile: true);
+
+        $this->assertCount(1, $this->query($stage, '//header//details[contains(@class, "menu-builder-megamenu")]'));
+        $this->assertCount(0, $this->query($stage, '//footer//details'));
+        $this->assertCount(1, $this->query($stage, '//footer//div[contains(@class, "menu-builder-megamenu-panel--static")]'));
+        $this->assertCount(0, $this->query($stage, '//footer//summary'));
+    }
+
     /** A footer has no masthead disclosure to own, so the mobile toggle belongs to the header only. */
     public function testTheMobileToggleIsOnlyRenderedForAHeaderMenu(): void
     {
         $this->assertCount(1, $this->query($this->renderStage([$this->node(1, url: '/')], isMobile: true), '//button[@data-mb-preview-burger]'));
-        $this->assertCount(0, $this->query($this->renderStage([$this->node(1, url: '/')], isMobile: true, isFooter: true), '//button[@data-mb-preview-burger]'));
+        $this->assertCount(0, $this->query($this->renderStage([$this->node(1, url: '/')], isMobile: true, placement: 'footer'), '//button[@data-mb-preview-burger]'));
     }
 
-    /** Header furniture is a shape, not a word: a labelled button would read as a menu item. */
-    public function testTheHeaderPlaceholderIsHiddenAndCarriesNoText(): void
+    /** The representative header action is visual furniture, never part of the menu. */
+    public function testTheHeaderActionIsHiddenFromAssistiveTechnology(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
         $slot = $this->query($stage, '//span[contains(@class, "menu-builder-preview-header-slot")]');
 
         $this->assertCount(1, $slot);
         $this->assertSame('true', $slot[0]->getAttribute('aria-hidden'));
-        $this->assertSame('', trim($slot[0]->textContent));
+        $this->assertStringContainsString('Contact us', trim($slot[0]->textContent));
         $this->assertCount(0, $this->query($stage, '//nav//span[contains(@class, "menu-builder-preview-header-slot")]'), 'Chrome never sits inside the navigation.');
     }
 

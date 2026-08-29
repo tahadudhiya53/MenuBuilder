@@ -169,18 +169,46 @@
     }
 
     function initStage(stage) {
-        var nav = stage.querySelector('[data-mb-preview-nav]');
         var burger = stage.querySelector('[data-mb-preview-burger]');
+        var scrim = stage.querySelector('[data-mb-preview-scrim]');
+        var nav = burger
+            ? stage.querySelector('#' + burger.getAttribute('aria-controls'))
+            : stage.querySelector('[data-mb-preview-nav]');
+
+        function setMobileNavigation(open) {
+            if (!burger || !nav) {
+                return;
+            }
+
+            burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+            nav.hidden = !open;
+
+            if (scrim) {
+                scrim.hidden = !open;
+            }
+
+            stage.toggleAttribute('data-mb-mobile-nav-open', open);
+            setHint(
+                stage,
+                open
+                    ? Craft.t('menu-builder', 'Mobile navigation opened.')
+                    : Craft.t('menu-builder', 'Mobile navigation closed.')
+            );
+        }
 
         stage.addEventListener('click', function(event) {
             if (burger && event.target.closest('[data-mb-preview-burger]')) {
                 var navOpen = burger.getAttribute('aria-expanded') === 'true';
-                burger.setAttribute('aria-expanded', navOpen ? 'false' : 'true');
+                setMobileNavigation(!navOpen);
 
-                if (nav) {
-                    nav.hidden = navOpen;
-                }
+                event.preventDefault();
 
+                return;
+            }
+
+            if (scrim && event.target.closest('[data-mb-preview-scrim]')) {
+                setMobileNavigation(false);
+                burger.focus();
                 event.preventDefault();
 
                 return;
@@ -213,7 +241,11 @@
                 // trip to the front end (or to a mailto: client).
                 event.preventDefault();
                 setHint(stage, describeLink(link));
+
+                return;
             }
+
+            closeOthers(stage, null);
         });
 
         // Hover and keyboard focus open a desktop dropdown. For a plain
@@ -222,11 +254,17 @@
         // <details> for real: a CSS rule that revealed the panel while the
         // <details> was closed would show an editor something the browser and
         // a screen reader both consider hidden.
-        stage.querySelectorAll('li:has(> details)').forEach(function(item) {
+        // Only the masthead behaves like a dropdown navigation. Footer mega
+        // groups are permanently visible columns at every viewport, so hover
+        // must never manufacture a footer disclosure state.
+        stage.querySelectorAll('.menu-builder-preview-siteheader li:has(> details)').forEach(function(item) {
             var details = disclosure(item);
+            var closeTimer = null;
 
             ['mouseenter', 'focusin'].forEach(function(type) {
                 item.addEventListener(type, function() {
+                    window.clearTimeout(closeTimer);
+                    closeOthers(stage, item);
                     details.open = true;
                 });
             });
@@ -235,13 +273,41 @@
                 // Not while the keyboard is inside it — closing a panel that
                 // holds focus throws focus back to the top of the page.
                 if (!item.contains(document.activeElement)) {
-                    details.open = false;
+                    // A short grace period makes diagonal movement into the
+                    // wide panel forgiving without making it feel sticky.
+                    closeTimer = window.setTimeout(function() {
+                        if (!item.matches(':hover')) {
+                            details.open = false;
+                        }
+                    }, 140);
                 }
             });
 
             item.addEventListener('focusout', function(event) {
                 if (!item.contains(event.relatedTarget) && !item.matches(':hover')) {
                     details.open = false;
+                }
+            });
+        });
+
+        // A plain submenu has no separate disclosure control in the shipped
+        // markup. On desktop :focus-within reveals it; in the compact preview
+        // the same keyboard focus needs an explicit open styling hook because
+        // nested lists otherwise start collapsed. Non-clickable parents stay
+        // expanded through CSS, so their child links are never unreachable.
+        stage.querySelectorAll('.menu-builder-preview-siteheader li:has(> ul)').forEach(function(item) {
+            item.addEventListener('focusin', function(event) {
+                if (event.target.closest('li') !== item) {
+                    return;
+                }
+
+                closeOthers(stage, item);
+                setOpen(item, true);
+            });
+
+            item.addEventListener('focusout', function(event) {
+                if (!item.contains(event.relatedTarget) && !item.matches(':hover')) {
+                    setOpen(item, false);
                 }
             });
         });
@@ -259,6 +325,14 @@
 
         stage.addEventListener('keydown', function(event) {
             if (event.key !== 'Escape') {
+                return;
+            }
+
+            if (burger && burger.getAttribute('aria-expanded') === 'true') {
+                setMobileNavigation(false);
+                burger.focus();
+                event.preventDefault();
+
                 return;
             }
 

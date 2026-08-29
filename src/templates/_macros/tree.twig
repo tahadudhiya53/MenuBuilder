@@ -41,14 +41,14 @@
  # An empty or missing menu renders nothing at all — an empty landmark is
  # something a screen-reader user has to visit to discover it was empty.
  #}
-{% macro renderNav(menu, label = null, disclosure = 'details') %}
+{% macro renderNav(menu, label = null, disclosure = 'details', idPrefix = '') %}
     {% import _self as self %}
     {% if menu is not empty %}
         <nav class="{{ menu.group.cssClass }}"
              aria-label="{{ label ?: menu.group.name }}"
              data-menu-builder-nav
              {%- for key, value in menu.group.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>
-            {{ self.render(menu.items, disclosure) }}
+            {{ self.render(menu.items, disclosure, idPrefix) }}
         </nav>
     {% endif %}
 {% endmacro %}
@@ -97,17 +97,17 @@
  #   {{ menuMacros.renderMegaMenu(node) }}
  #   {{ menuMacros.renderMegaMenu(node, 'none') }}
  #}
-{% macro renderMegaMenu(node, disclosure = 'details') %}
+{% macro renderMegaMenu(node, disclosure = 'details', idPrefix = '') %}
     {% import _self as self %}
     {% if disclosure == 'none' %}
-        {{ self.megaMenuPanel(node, disclosure) }}
+        {{ self.megaMenuPanel(node, disclosure, idPrefix) }}
     {% else %}
         <details class="menu-builder-megamenu" data-mb-disclosure>
             <summary class="menu-builder-megamenu-trigger"
                      aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
                 <span class="menu-builder-megamenu-caret" aria-hidden="true">&#9662;</span>
             </summary>
-            {{ self.megaMenuPanel(node, disclosure) }}
+            {{ self.megaMenuPanel(node, disclosure, idPrefix) }}
         </details>
     {% endif %}
 {% endmacro %}
@@ -117,12 +117,15 @@
  # item. Split out so the two disclosure modes render the *same* panel and
  # cannot drift into two different groupings.
  #}
-{% macro megaMenuPanel(node, disclosure) %}
+{% macro megaMenuPanel(node, disclosure, idPrefix = '') %}
     {% import _self as self %}
-    <div id="menu-builder-megamenu-{{ node.id }}" class="menu-builder-megamenu-panel" role="group" aria-label="{{ node.ariaLabel ?: node.title }}">
+    <div id="menu-builder-megamenu-{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.id }}"
+         class="menu-builder-megamenu-panel{{ disclosure == 'none' ? ' menu-builder-megamenu-panel--static' : '' }}"
+         role="group"
+         aria-label="{{ node.ariaLabel ?: node.title }}">
         {% for column, columnNodes in node.megaMenuColumns() %}
             <div class="menu-builder-megamenu-column">
-                {{ self.render(columnNodes, disclosure) }}
+                {{ self.render(columnNodes, disclosure, idPrefix) }}
             </div>
         {% endfor %}
     </div>
@@ -193,7 +196,7 @@
     {%- if node.opensInNewTab() %} <span class="menu-builder-visually-hidden" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0">{{ "(opens in a new tab)"|t('menu-builder') }}</span>{% endif -%}
 {% endmacro %}
 
-{% macro render(nodes, disclosure = 'details') %}
+{% macro render(nodes, disclosure = 'details', idPrefix = '') %}
     {% import _self as self %}
     <ul>
         {% for node in nodes %}
@@ -202,10 +205,10 @@
                    `<li>` around it stays an ordinary list item: moving the
                    role up onto it would take a non-`listitem` child into a
                    list and state the same thing twice. #}
-                <li{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
+                <li{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}><hr></li>
             {% else %}
                 {% set liClasses = (node.cssClass ? node.cssClass ~ ' ' : '') ~ (node.isActiveOrAncestor() ? 'is-active' : '') %}
-                <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}>
+                <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}>
                     {% if node.isClickable %}
                         {# `aria-current="page"` is `isActive` only — the one
                            node whose URL *is* the page being served. An
@@ -235,7 +238,7 @@
                     {% endif %}
 
                     {% if node.megaMenu %}
-                        {{ self.renderMegaMenu(node, disclosure) }}
+                        {{ self.renderMegaMenu(node, disclosure, idPrefix) }}
                     {% elseif node.hasChildren() %}
                         {# A plain submenu is a nested list of ordinary links,
                            with nothing hiding them from the keyboard: every
@@ -246,7 +249,7 @@
                            disclosure the way renderMegaMenu() does, with a
                            <details> whose `open` the browser owns. See
                            ACCESSIBILITY.md. #}
-                        {{ self.render(node.children, disclosure) }}
+                        {{ self.render(node.children, disclosure, idPrefix) }}
                     {% endif %}
                 </li>
             {% endif %}

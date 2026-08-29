@@ -69,6 +69,8 @@ One rule, and it is the only way to break the guarantee: **never make a panel vi
 
 - ✅ `details[open] > .menu-builder-megamenu-panel { … }` — style the open state.
 - ✅ `.menu-builder-megamenu-panel { position: absolute; … }` — style the panel itself.
+- ✅ `.menu-builder-megamenu-panel--static { display: grid; }` — lay out the explicit
+  `disclosure: 'none'` variant, which has no closed state (used by the preview footer at every viewport).
 - ❌ `li:hover > details > .menu-builder-megamenu-panel { display: block }` — a lie: the browser
   and the accessibility tree both consider that panel closed.
 - ❌ `display: contents` / `flex` / `grid` on the `<details>` element itself — some browsers stop
@@ -204,5 +206,5 @@ same thing. Open the page, open DevTools on the mega-menu's `<details>` element,
 
 - [ ] Every item has a meaningful title, or an ARIA label where the visible label is an icon alone.
 - [ ] No item's label is "click here", "read more", or the same text as a different destination.
-- [ ] `aria-current` appears on exactly one link on each page you check — use the preview screen's
-      **Rendered markup** panel, with **Seen from** set to that page, to read it without leaving the CP.
+- [ ] `aria-current` appears on exactly one link on each real front-end page you check. The generic
+      control-panel presentation preview deliberately does not invent a current page.

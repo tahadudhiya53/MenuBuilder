@@ -92,7 +92,7 @@ A `dynamic` item synthesises its children at render time from a source instead o
 - Search/filter within a menu (keeps matching items' ancestors)
 - Bulk enable / disable / delete with a sticky selection toolbar and select-all
 - Child-count badges, disabled badges, mega-menu badges, and **link-health badges** — every item whose link doesn't work says which way it's broken (linked content missing, disabled, unpublished, not available on this site, no URL, invalid link, dead dynamic source), with a menu-wide summary at the top and, for content that's genuinely gone, a route into the editor to relink it, give it a fallback URL, or disable it. Internal links only — MenuBuilder never crawls external URLs, and never deletes an item because the thing it pointed at went away
-- Visual preview: see the menu rendered as a real navigation — horizontal bar with dropdowns and mega-menu panels on desktop, a stacked 390px viewport on mobile — as a logged-out visitor, a logged-in one, or a member of specific user groups, on any site you can access, seen from any page — see [Preview](#preview)
+- Visual preview: see the menu in polished header and footer treatments — horizontal dropdowns and mega-menu panels on desktop, a stacked 390px viewport on mobile — as a logged-out visitor, a logged-in one, or a member of specific user groups, on any site you can access — see [Preview](#preview)
 - Five granular permissions (below) — every control is hidden from anyone whose permissions wouldn't allow it
 
 ### Developer surface
@@ -184,7 +184,7 @@ point, not a requirement: copy them into your own templates and edit freely.
 
 Returns a `MenuBuilderTree`, or `null` when the menu doesn't exist, is disabled, or isn't
 available on the current site. Pass `currentUri` to override active-state matching (defaults to
-the current request URI) — useful for previews and for rendering a menu "as seen from" another page.
+the current request URI) when building a specialized front-end render for another page.
 
 The tree is directly iterable and countable over its **top-level** nodes:
 
@@ -447,24 +447,26 @@ Every menu has a **Preview** button on its tree screen (`menu-builder/<handle>/p
 |---|---|
 | **Site** | Which site's content the links resolve against — limited to the sites you can access |
 | **Audience** | Logged out, logged in, or logged in as a member of chosen user groups. This is what the per-item visibility rules are evaluated against |
-| **Shown in** | Header or footer. The menu is rendered in that region of a mock page and the other one is drawn as grey placeholder shapes, so it is obvious which part of the page you're looking at. A footer menu is shown fully expanded in columns. MenuBuilder doesn't record where your templates render a menu, so this is a preview control, defaulted from the menu's name |
+| **Shown in** | Header and footer by default, or either region on its own. The footer uses a polished column treatment. MenuBuilder doesn't record where your templates render a menu, so this is a presentation control rather than a saved setting |
 | **Device** | Desktop or mobile — a width for the preview surface, so wrapping and depth can be judged |
-| **Seen from** | The page the menu is rendered on, which decides which item is marked as the current page (`aria-current="page"`) |
 
-The preview renders on a **stage**: a mock browser window with a site header, so the navigation is
-seen the way a visitor meets it rather than as an indented list. Desktop lays the menu out as a
-horizontal bar with dropdown cards and mega-menu panels; mobile is a 390px device frame with the
-same menu stacked, railed and openable from its own toggle. Links are inert — clicking one reports
-where it points instead of navigating you away.
+The preview renders on a **stage**: a complete illustrative company website, so the navigation is
+seen the way a visitor meets it rather than as an indented list. Desktop lays the header menu out
+as a horizontal bar with viewport-safe, full-width mega panels and the footer as a stable column
+grid (including permanently visible mega-menu columns without hover or click flyouts). Mobile uses
+a clean 390px viewport with the header navigation closed behind its hamburger initially and footer
+mega groups kept visible in responsive columns. Links stay in the preview — clicking one reports where it points instead of
+navigating you away.
 
 ### What preview represents — exactly
 
-Preview runs the **same pipeline a front-end request runs**: the same link resolution, the same
-cached tree, the same visibility rules, the same active-state matching, and the same
+Preview runs the **same content pipeline a front-end request runs**: the same link resolution, the same
+cached tree, the same visibility rules, and the same
 `_macros/tree.twig` renderer this plugin ships. The navigation markup on the stage *is* that macro's
-output — the stage adds a page around it and styles it, and adds no class or attribute to a single
-navigation element. The "Rendered markup" panel at the bottom shows the same markup as text — re-indented one element
-per line and numbered, with a copy button — so `aria-current`, `aria-label`, the `<details>`
+output — the stage adds a page around it and styles it. The preview deliberately does not invent a
+current page, so active-state marking remains a front-end request concern. The "Rendered markup"
+panel at the bottom shows the same markup as text — re-indented one element per line and numbered,
+with a copy button — so `aria-label`, the `<details>`
 disclosure, `rel` and `target` can be checked without leaving the control panel. The
 re-indenting is for reading only: nothing is added, removed or reordered, and the preview above is
 rendered from the unformatted output.

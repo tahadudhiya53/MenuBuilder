@@ -423,6 +423,7 @@ class MenuBuilderAccessibilityTest extends TestCase
         $panel = $this->query($html, '//li/div[contains(@class, "menu-builder-megamenu-panel")]');
 
         $this->assertCount(1, $panel, 'The columns still render, in flow, as a named group.');
+        $this->assertStringContainsString('menu-builder-megamenu-panel--static', $panel[0]->getAttribute('class'));
         $this->assertSame('group', $panel[0]->getAttribute('role'));
         $this->assertCount(3, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]//a'), 'Every link is still reachable.');
     }
@@ -487,8 +488,9 @@ class MenuBuilderAccessibilityTest extends TestCase
      * so the plugin's own screen demonstrated a panel that was open to the
      * eye and closed to a screen reader. A DOM test can't catch that, because
      * the divergence lives in CSS; so the CSS is read the way a browser
-     * reads it, and every rule that gives the panel a box has to be scoped to
-     * `details[open]`.
+     * reads it, and every rule that gives a disclosure panel a box has to be
+     * scoped to `details[open]`. The explicitly disclosure-free `--static`
+     * variant may be laid out directly because it has no closed state.
      */
     public function testNoStylesheetRuleRevealsAPanelWhoseDisclosureIsClosed(): void
     {
@@ -515,10 +517,11 @@ class MenuBuilderAccessibilityTest extends TestCase
 
                 $checked++;
 
-                $this->assertStringContainsString(
-                    'details[open]',
-                    $selector,
-                    "\"$selector\" gives a mega-menu panel a box without requiring its <details> to be open."
+                $isStaticPanel = str_contains($subject, 'menu-builder-megamenu-panel--static');
+
+                $this->assertTrue(
+                    $isStaticPanel || str_contains($selector, 'details[open]'),
+                    "\"$selector\" gives a mega-menu panel a box without requiring its <details> to be open or declaring it static."
                 );
             }
         }

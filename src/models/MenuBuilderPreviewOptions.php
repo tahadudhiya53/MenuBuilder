@@ -9,7 +9,7 @@ use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
  * What one control-panel preview simulates: a device width, an audience, a
- * site, and the page the menu is being "seen from".
+ * site, and where the menu is presented.
  *
  * This is a *request-scoped* description of a simulation — it is never
  * persisted, never reaches a cache entry, and changes nothing about the
@@ -41,16 +41,10 @@ class MenuBuilderPreviewOptions
     /** Rendered in the page's footer — stacked into columns, fully expanded, the way footers are. */
     public const PLACEMENT_FOOTER = 'footer';
 
-    public const PLACEMENTS = [self::PLACEMENT_HEADER, self::PLACEMENT_FOOTER];
+    /** Rendered in both regions, so the default preview demonstrates both common treatments. */
+    public const PLACEMENT_BOTH = 'both';
 
-    /**
-     * Words in a menu's handle or name that make "this is a footer menu" the
-     * better *first guess* for the preview. It is only a default — the
-     * screen offers both placements, and nothing about a menu records where a
-     * template actually renders it, because MenuBuilder deliberately doesn't
-     * decide that: `craft.menuBuilder.get()` can be called anywhere.
-     */
-    private const FOOTER_HINTS = ['footer', 'legal', 'utility', 'bottom'];
+    public const PLACEMENTS = [self::PLACEMENT_BOTH, self::PLACEMENT_HEADER, self::PLACEMENT_FOOTER];
 
     /** An anonymous visitor: `loggedOut` passes, `loggedIn`/`userGroup` items are hidden. */
     public const AUDIENCE_LOGGED_OUT = 'loggedOut';
@@ -63,23 +57,14 @@ class MenuBuilderPreviewOptions
 
     public const AUDIENCES = [self::AUDIENCE_LOGGED_OUT, self::AUDIENCE_LOGGED_IN, self::AUDIENCE_USER_GROUP];
 
-    /**
-     * A generous ceiling on the simulated URI. It only ever feeds
-     * active-state matching (never an `href`), but an unbounded string
-     * would still be echoed back into the form field.
-     */
-    public const MAX_URI_LENGTH = 2048;
-
     public function __construct(
         public readonly string $device = self::DEVICE_DESKTOP,
         /** Where on the mock page the navigation is shown — presentation only, never stored. */
-        public readonly string $placement = self::PLACEMENT_HEADER,
+        public readonly string $placement = self::PLACEMENT_BOTH,
         public readonly string $audience = self::AUDIENCE_LOGGED_OUT,
         /** @var int[] Meaningful only when `audience` is `userGroup`. */
         public readonly array $userGroupIds = [],
         public readonly ?int $siteId = null,
-        /** The page the menu is rendered "as seen from" — a site-root-relative path. */
-        public readonly string $uri = '/',
     ) {
     }
 
@@ -97,15 +82,12 @@ class MenuBuilderPreviewOptions
      * @param array<mixed,mixed> $params
      * @param int[] $allowedSiteIds
      * @param int[] $allowedUserGroupIds
-     * @param string|null $defaultPlacement Where to show the menu when the request doesn't say —
-     *                                      normally {@see guessPlacement()}'s answer for this menu.
      */
     public static function normalize(
         array $params,
         array $allowedSiteIds = [],
         array $allowedUserGroupIds = [],
         ?int $defaultSiteId = null,
-        ?string $defaultPlacement = null,
     ): self {
         $audience = self::oneOf($params['audience'] ?? null, self::AUDIENCES, self::AUDIENCE_LOGGED_OUT);
         $groupIds = [];
@@ -143,12 +125,11 @@ class MenuBuilderPreviewOptions
             placement: self::oneOf(
                 $params['placement'] ?? null,
                 self::PLACEMENTS,
-                self::oneOf($defaultPlacement, self::PLACEMENTS, self::PLACEMENT_HEADER)
+                self::PLACEMENT_BOTH
             ),
             audience: $audience,
             userGroupIds: $groupIds,
             siteId: self::resolveSiteId($params['siteId'] ?? null, $allowedSiteIds, $defaultSiteId),
-            uri: self::normalizeUri($params['uri'] ?? null),
         );
     }
 
@@ -173,71 +154,6 @@ class MenuBuilderPreviewOptions
         }
 
         return $defaultSiteId ?? ($allowedSiteIds[0] ?? null);
-    }
-
-    /**
-     * Reduces the "seen from" field to a site-root-relative path, the only
-     * shape MenuBuilderActiveResolver compares against.
-     *
-     * Anything carrying a scheme (`javascript:`, `data:`, `https://…`) or a
-     * protocol-relative host (`//elsewhere.test/x`) is discarded rather than
-     * repaired — this value is echoed back into a form field and used to
-     * decide which item lights up as the current page, and a URL on another
-     * host is not a page of this site in the first place (the same rule
-     * MenuBuilderResolver::internalHosts() applies at render time). Query
-     * strings and fragments are dropped because active matching drops them
-     * too, so keeping them would only make the field disagree with the
-     * result.
-     */
-    public static function normalizeUri(mixed $value): string
-    {
-        if (!is_string($value)) {
-            return '/';
-        }
-
-        // Deliberately not plain trim(): its default charlist includes the NUL
-        // byte, so a `"/news\0"` would be *repaired* into a valid-looking path
-        // instead of being rejected by the control-character check below.
-        // Surrounding whitespace from a paste is forgiven; a control character
-        // in the value is not.
-        $uri = trim($value, " \t\n\r\x0B");
-
-        if ($uri === '' || strlen($uri) > self::MAX_URI_LENGTH) {
-            return '/';
-        }
-
-        // Control characters (including the NUL, tab and newline that are
-        // used to smuggle a scheme past a naive check) disqualify the value
-        // outright.
-        if (preg_match('/[\x00-\x1f\x7f]/', $uri) === 1) {
-            return '/';
-        }
-
-        // A scheme, a protocol-relative host, or a backslash (which some
-        // browsers normalize to `/`, so `\\evil.test` is a host).
-        if (preg_match('#^[a-zA-Z][a-zA-Z0-9+.\-]*:#', $uri) === 1
-            || str_starts_with($uri, '//')
-            || str_contains($uri, '\\')
-        ) {
-            return '/';
-        }
-
-        // Explicit truncation rather than strtok(), which skips *leading*
-        // delimiters: `?page=2` would come back as `page=2` and be turned
-        // into the path `/page=2`, a page nobody asked about.
-        foreach (['?', '#'] as $delimiter) {
-            $position = strpos($uri, $delimiter);
-
-            if ($position !== false) {
-                $uri = substr($uri, 0, $position);
-            }
-        }
-
-        if ($uri === '') {
-            return '/';
-        }
-
-        return str_starts_with($uri, '/') ? $uri : '/' . $uri;
     }
 
     /**
@@ -273,33 +189,17 @@ class MenuBuilderPreviewOptions
 
     public function isFooter(): bool
     {
-        return $this->placement === self::PLACEMENT_FOOTER;
+        return $this->placement !== self::PLACEMENT_HEADER;
     }
 
-    /**
-     * The placement to *offer first* for a menu, from its handle and name.
-     *
-     * Nothing in the data model says where a menu is rendered, and that is
-     * deliberate: a template can call `craft.menuBuilder.get('footer')` in a
-     * masthead if it likes, so recording a placement would be a second,
-     * unenforceable truth (see ARCHITECTURE.md, "Single path per behaviour").
-     * This is a *guess for a default*, nothing more — the screen shows both
-     * placements and says which one it chose, so a wrong guess costs one
-     * click rather than misrepresenting anything.
-     *
-     * Pure, so the guess is unit-tested rather than trusted.
-     */
-    public static function guessPlacement(string $handle, string $name = ''): string
+    public function isHeader(): bool
     {
-        $haystack = strtolower($handle . ' ' . $name);
+        return $this->placement !== self::PLACEMENT_FOOTER;
+    }
 
-        foreach (self::FOOTER_HINTS as $hint) {
-            if (str_contains($haystack, $hint)) {
-                return self::PLACEMENT_FOOTER;
-            }
-        }
-
-        return self::PLACEMENT_HEADER;
+    public function isBoth(): bool
+    {
+        return $this->placement === self::PLACEMENT_BOTH;
     }
 
     /**

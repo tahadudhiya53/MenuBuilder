@@ -52,7 +52,7 @@ trait NavMacroRendering
      * explicit because Craft's loader appends it and a bare Twig
      * FilesystemLoader does not.)
      */
-    private const HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.render(nodes, disclosure) }}';
+    private const HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.render(nodes, disclosure, idPrefix) }}';
 
     private const LANDMARK_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderNav(menu, label, disclosure) }}';
 
@@ -118,7 +118,7 @@ trait NavMacroRendering
      */
     protected function renderNav(array $nodes, string $disclosure = 'details'): string
     {
-        return $this->twig()->render('__nav', ['nodes' => $nodes, 'disclosure' => $disclosure]);
+        return $this->twig()->render('__nav', ['nodes' => $nodes, 'disclosure' => $disclosure, 'idPrefix' => '']);
     }
 
     /**
@@ -142,7 +142,7 @@ trait NavMacroRendering
     /**
      * @param MenuBuilderNode[] $nodes
      */
-    protected function renderStage(array $nodes, bool $isMobile = false, bool $isFooter = false): string
+    protected function renderStage(array $nodes, bool $isMobile = false, string $placement = 'both'): string
     {
         $twig = $this->twig();
 
@@ -151,11 +151,19 @@ trait NavMacroRendering
             // `{% set %}` capture, which Twig treats as already-escaped
             // output. Passing a plain string here would escape the navigation
             // into visible source and quietly test the wrong thing.
-            'previewMarkup' => new Markup($twig->render('__nav', ['nodes' => $nodes, 'disclosure' => 'details']), 'UTF-8'),
+            'headerPreviewMarkup' => new Markup($twig->render('__nav', [
+                'nodes' => $nodes,
+                'disclosure' => 'details',
+                'idPrefix' => 'preview-header',
+            ]), 'UTF-8'),
+            'footerPreviewMarkup' => new Markup($twig->render('__nav', [
+                'nodes' => $nodes,
+                'disclosure' => 'none',
+                'idPrefix' => 'preview-footer',
+            ]), 'UTF-8'),
             'isMobile' => $isMobile,
-            'isFooter' => $isFooter,
+            'placement' => $placement,
             'siteName' => 'Example Site',
-            'addressLabel' => 'example.test/news',
             'navLabel' => 'Preview of Main',
         ]);
     }

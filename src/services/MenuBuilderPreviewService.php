@@ -14,8 +14,8 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
- * Renders a saved menu the way a chosen audience, on a chosen site, viewing
- * a chosen page would receive it — without changing anything.
+ * Renders a saved menu for a chosen audience and site without changing
+ * anything.
  *
  * **This service performs no writes.** It has no `save`, no `delete`, no
  * transaction; it substitutes a simulated {@see VisibilityContext} and a
@@ -27,7 +27,9 @@ use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
  *
  * What a preview therefore *is*: the **saved** menu, resolved through the
  * production pipeline — same link resolution, same cache entry, same
- * visibility rules, same active-state matching, same MenuBuilderNode. There
+ * visibility rules, same MenuBuilderNode. The generic presentation preview
+ * deliberately does not mark a current page: it no longer asks editors to
+ * simulate a URI, so inventing an active item would be misleading. There
  * is no draft/unsaved state to preview: every control-panel mutation in this
  * plugin (drag, reorder, toggle, item save) writes immediately, so "saved"
  * and "what the editor is looking at" are the same thing, and the preview
@@ -48,7 +50,11 @@ class MenuBuilderPreviewService extends Component
 
         return $this->withSite(
             $options->siteId,
-            fn(): ?MenuBuilderTree => MenuBuilder::getInstance()->resolver->getTree($groupHandle, $options->uri, $context)
+            fn(): ?MenuBuilderTree => MenuBuilder::getInstance()->resolver->getTree(
+                $groupHandle,
+                context: $context,
+                markActive: false,
+            )
         );
     }
 
@@ -176,24 +182,6 @@ class MenuBuilderPreviewService extends Component
         } finally {
             $sites->setCurrentSite($original);
         }
-    }
-
-    /**
-     * What the preview's (decorative) browser bar shows: the simulated
-     * site's host followed by the previewed path.
-     *
-     * Pure and static so the one piece of string-building the stage needs is
-     * testable, and host-only by design — a site's base URL can carry a
-     * path, credentials or a port that nobody needs to read off a mock
-     * address bar, and the previewed path is the half that actually
-     * changes. Falls back to the path alone for a site with no base URL
-     * (one that can't produce an absolute URL in the first place).
-     */
-    public static function addressLabel(?string $baseUrl, string $uri): string
-    {
-        $host = $baseUrl !== null ? parse_url($baseUrl, PHP_URL_HOST) : null;
-
-        return is_string($host) && $host !== '' ? $host . $uri : $uri;
     }
 
     /** Elements that close themselves, so they must not open an indent level. */

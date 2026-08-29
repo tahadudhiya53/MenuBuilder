@@ -44,6 +44,29 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 - `rel` de-duplication is now case-insensitive: an editor-typed `NOOPENER` satisfies the
   `target="_blank"` requirement instead of producing `NOOPENER noopener`.
 
+### Added — custom fields
+
+- Per-menu, editor-defined custom fields on menu items, for whatever a site needs beyond the
+  built-in icon, badge, description, image and "featured" flag. Definitions are configured per menu
+  (**Menus → a menu → Custom fields**); every item in that menu is then offered them.
+- Seven types, and deliberately no more: `text`, `textarea`, `number`, `boolean`, `select`, `url`
+  and `asset`. There is no HTML/markup/template type, so nothing an editor stores can become
+  executable content — a `url` field is validated by the same reader as an item's own URL
+  (`javascript:`, `data:` and `vbscript:` rejected), and every other value is a scalar escaped by
+  Twig where it is printed.
+- Read in Twig as `node.custom('handle')`, `node.hasCustom('handle')` and `node.customFields`;
+  `craft.menuBuilder.customAsset(node, 'handle')` resolves an `asset` field's ID to the Asset,
+  memoized per request alongside icon assets.
+- No migration: definitions ride in the menu's existing `settings` bag and values in the item's
+  existing `metadata` bag, so they duplicate with an item or a menu, delete with the item row, and
+  export as ordinary JSON. There is no second metadata/settings system.
+- Values are validated on write (type, dropdown options, required, and size caps of 255/2000
+  characters that produce a field error rather than a database error) and re-checked on read: a
+  field since deleted or retyped, a dropdown option since removed, or a value written straight into
+  the database is dropped rather than rendered. Deleting a definition therefore takes effect
+  immediately with no item rows rewritten.
+- A menu can define at most 20 custom fields, and handles must be unique within a menu.
+
 ### Added — menu items
 
 - Eight item types: `entry`, `category`, `asset`, `url`, `anchor`, `nonclickable` (heading),
@@ -59,6 +82,36 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
   `nofollow`/`sponsored`/custom `rel` values (duplicates collapsed).
 - Appearance and accessibility fields: icon, badge, description, image, featured flag, CSS class,
   HTML id, ARIA label, `title` attribute, and an arbitrary HTML-attributes bag.
+- Menu item icons are a defined model rather than a free-text field. One stored column, three
+  forms: empty, `asset:<id>` for a Craft Asset (an uploaded SVG/PNG), or an icon handle / CSS
+  class list (`icon-cart`, `fa fa-cart`). The icon field in the CP is now a source selector plus
+  the matching input — a text field or an asset picker — and the icon is exposed to Twig through
+  `node.iconType()`, `node.iconClass()`, `node.iconAssetId()` and `node.hasIcon()`, with
+  `craft.menuBuilder.iconAsset(node)` resolving an asset icon per request (memoized, so repeated
+  icons cost one query). The bundled `_macros/tree` renderer draws icons for links, headings and
+  mega-menu triggers, decoratively (`aria-hidden` / `alt=""`).
+- Icons cannot carry markup. Class values are allowlisted to letters, digits, spaces and
+  `- _ . : /` — no angle brackets, quotes, `=` or `&` — so a stored icon can't inject HTML or
+  break out of an attribute even in a template that renders it with `|raw`, and pasted `<svg>`
+  is rejected with an error pointing at the asset picker. Reading fails closed the same way: a
+  value that wouldn't validate today reads back as "no icon", so a legacy or hand-written
+  database row can't reach a template either. SVG icons render through `<img src>`, never
+  inlined. Free-typed icons saved previously keep working unchanged.
+- Menu item badges — the short flag beside a label, "Products [NEW]". Badge text keeps its own
+  column; an optional style (`default`, `info`, `success`, `warning`, `critical`) rides in the
+  item's metadata, so there is no new column and no migration. Twig gets `node.badge`,
+  `node.badgeStyle`, `node.hasBadge()` and `node.badgeClass()`, and the bundled `_macros/tree`
+  renderer draws the badge inside the link, heading and mega-menu trigger — inside, so it is part
+  of the item's accessible name ("Products NEW"). The CP tree row previews the badge, and the
+  editor gets a badge-style select beside the text field.
+- Badge text is escaped, never sanitized: markup typed into the field is rendered as the text it
+  is (`<script>alert(1)</script>` shows as those characters), so legitimate badges like `<3` and
+  `Tea & Coffee` survive intact. The style is the half that reaches a `class` attribute, so it is
+  an allowlist that fails closed on both sides — an unknown style is rejected at validation and,
+  if one ever reached the database another way, reads back as "no style" rather than as a class
+  list. An empty or whitespace-only badge renders nothing at all, style or no style, and inner
+  whitespace is collapsed so one badge has one stored spelling.
+
 - Duplicate an item together with its entire subtree, in one transaction.
 - Deleting an item removes its subtree via a database-level cascade.
 - Orphaned-element badge in the tree when a linked element has been hard-deleted, found in at most
@@ -141,7 +194,173 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 - Bulk enable / disable / delete via row checkboxes and a selection toolbar, routed through the same
   per-item save/delete path (so hierarchy and permission checks are never bypassed) inside one
   transaction.
-- Child-count, disabled, mega-menu, and orphaned-element badges on tree rows.
+- Child-count, disabled, and mega-menu badges on tree rows.
+- **Link health.** Every item in a menu is classified on each dashboard load — healthy, linked
+  content missing, disabled, unpublished, not available on this site, no public URL, invalid
+  custom URL / anchor, or a dynamic source that no longer exists — and flagged on its row with the
+  reason plus what the front end is currently doing about it (hidden, plain text, or its fallback
+  URL), derived from the item's own `fallbackBehavior`. A summary line above the tree counts how
+  much of the menu is affected. Items whose linked element is gone get a "Fix this link…" route
+  into the editor, which spells out the four safe ways forward — relink, fallback URL, disable,
+  delete — and takes none of them by itself: **no menu item is ever removed or rewritten because
+  the content it pointed at disappeared.** The classification reuses `ElementLinkResolver`'s own
+  availability rule, so the CP can never flag a link the front end would render, or pass one it
+  would drop. Warnings name no content: they are built from a status and the item's fallback
+  setting, never from the linked element's title, URI or ID, so a warning about content the viewer
+  can't see discloses nothing about it. Internal links only — nothing here makes an HTTP request,
+  and an external URL is judged on its shape alone.
+- **Preview** (`menu-builder/<handle>/preview`, `menuBuilder:view`): render a saved menu as a
+  logged-out visitor, a logged-in one, or a member of chosen user groups — on any site you can
+  access, at desktop or mobile width, seen from any page. Preview runs the *same* pipeline a
+  front-end request runs (same link resolution, same cached tree, same visibility rules, same
+  active-state matching) and renders through the shipped `_macros/tree.twig`, with a "Rendered
+  markup" panel that shows the output as escaped text so accessibility and link attributes can be
+  checked without leaving the control panel.
+- The preview renders on a **stage** — a mock browser window with a site header — so a menu is seen
+  as navigation rather than as an indented list: a horizontal bar with dropdown cards and mega-menu
+  panels on desktop, and a 390px device frame with a stacked, railed, toggleable navigation on
+  mobile. Dropdowns open on hover *and* on keyboard focus; mega menus open from the disclosure
+  button the macro already emits, so the visible state and `aria-expanded` cannot disagree. Active
+  state is visually distinct from an active *ancestor*, and `aria-current="page"` still lands only
+  on the one link that is the page. Links are inert: clicking one reports its href, target and rel
+  instead of navigating away.
+- The "Rendered markup" panel is now readable: the macro's output is re-indented to one element per
+  line, numbered, and copyable. Twig emits readable templates rather than readable output, so the
+  raw markup arrived with an anchor's attributes spread down a dozen lines. The re-indenting is
+  display-only and purely textual — the stage renders the unformatted output, and nothing is added,
+  removed or reordered.
+- The screen states what it rendered as chips (site, audience, device and width, seen-from, item
+  counts) instead of a run-on sentence, and the stage gained a mock page — hero, cards, a phone
+  notch and home indicator on mobile — plus open/close animation on dropdowns and mega panels.
+- Preview gained a **Shown in** control: header or footer. The menu renders in that region of the
+  mock page — a footer menu fully expanded in columns, the way footers are — and the other region is
+  drawn as grey placeholder shapes, so which part of the page a menu stands in for is obvious at a
+  glance. It defaults to a guess from the menu's own handle and name and says which it picked.
+  Placement is presentation only: nothing in MenuBuilder records where a template renders a menu,
+  and inventing such a record would be a second, unenforceable truth.
+- Fixed a mega-menu panel opening as an empty rail on mobile: the rule that collapses submenus was
+  also hiding the panel's own column lists.
+- The **whole parent item** opens its children in the preview — hover it on desktop, tap it on
+  mobile, or reach it with the keyboard — rather than a small caret that had to be found and hit.
+  Open state is one attribute on the item, and a mega menu's `aria-expanded` is kept in step with
+  it, so the visible state and the accessible state cannot disagree. A parent that is also a link
+  therefore opens its submenu instead of following the link, which the screen says out loud.
+- On mobile, submenus now start closed and expand from the row, the way a phone menu does, and the
+  phone is a fixed 720px device: closing the menu no longer shrinks it, and a long menu scrolls
+  inside the frame.
+- Mobile preview fixes: a mega-menu parent's disclosure button now sits at the end of its row
+  instead of wrapping onto a line of its own, the current page (and its open branch) is marked with
+  an accent bar down the side rather than a full-width underline that read as a divider, separators
+  render as a rule rather than picking up item padding, and the phone is a fixed viewport that
+  scrolls a long menu inside itself.
+- The stage is presentation only. It adds no class or attribute to any navigation element — every
+  visual is keyed to what the production macro already emits — and it never loads the site's own CSS
+  or JavaScript, which would be an execution surface inside the control panel rather than a preview.
+  What it reproduces is structure, hierarchy, state and attributes; a theme's typography and colours
+  are explicitly not claimed, on the screen and in the docs.
+- Preview **writes nothing** and simulates only the visitor: the audience and the site. Time and
+  environment stay real, so a `dateRange` or `environment` rule answers what it answers for a
+  visitor at that moment. It shows saved data — MenuBuilder has no draft state, and the screen says
+  so rather than implying one — and it cannot expose unpublished content: links resolve through the
+  same publicly-available boundary the front end uses. Every option is validated fail-closed
+  (unknown audience → logged out, sites limited to the ones you can access, group IDs strictly
+  parsed, the "seen from" URI reduced to a site-relative path), and the simulated audience is
+  applied *after* the shared cache, exactly where a real visitor's is, so a preview can never leave
+  its audience in an entry other visitors read.
+
+### Added — control panel UX
+
+- **Keyboard reordering.** The tree's drag handle is now operable from the keyboard: arrow up/down
+  move a row within its level, left/right change how deeply it is nested, and each move announces
+  the row's new position through a live region. It had always carried `role="button"` and
+  `tabindex="0"` while responding to nothing but a mouse, so a keyboard or screen-reader user could
+  not reorder a menu at all. Both gestures ask one shared admissibility check and go through the
+  one `persistReorder()` path, so drag and keyboard can't disagree about where a subtree may land.
+- **Validation errors are shown against the field that caused them.** Both the slide-out editor and
+  the quick-add panel already received per-attribute messages from the save endpoint and discarded
+  them, leaving a generic "couldn't save" banner and a six-section form to search. Messages now
+  render as Craft's own `.field.has-errors` markup, wired to the input with `aria-describedby`;
+  anything validated as a whole bag (`metadata`, `visibility`) is summarized at the top rather than
+  dropped, and the first problem is scrolled into view.
+- **The quick-add panel no longer loses what you typed.** A failed plain-form post re-rendered the
+  dashboard, which knows nothing about the rejected item, so every field came back blank. It now
+  submits over AJAX and keeps its state; the plain `<form>` is untouched, so a no-JS post still
+  behaves exactly as before.
+- **Deleting a parent item is one dialog with three named outcomes** — cancel, delete everything, or
+  keep the children — instead of two stacked `confirm()`s where "Cancel" meant "continue" and
+  dismissing the second one silently did nothing.
+- **Reordering is switched off while a search is filtering the tree**, with the reason stated. The
+  rows on screen are a subset in an order that is not the menu's own, so a drag posted a sibling
+  list the editor had never seen.
+- **Dynamic-navigation items pick their source from a list.** The "Source ID" field asked editors to
+  go and look an internal section, category-group or volume ID up under Settings first; it is now a
+  picker per source type. The stored config is unchanged.
+- Success notices survive the reloads that follow adding, duplicating, saving and deleting an item —
+  several of them used to be raised and then wiped by the very reload they were announcing. Newly
+  added and duplicated items are scrolled to and highlighted, rather than appended out of sight at
+  the end of a long menu.
+- Row and menu-list actions guard against double submission: a second click on Duplicate while the
+  first request was in flight used to create two copies.
+- The bulk-selection toolbar sticks to the top of the viewport and gained a select-all checkbox
+  (with an indeterminate state) and a Clear selection button, so a selection made near the bottom of
+  a 100-item menu can be acted on without scrolling back.
+- A disabled menu now says so on its own tree screen — it renders nothing on the front end whatever
+  its items say, which previously looked like a template bug.
+- The slide-out editor is a properly labelled dialog: `aria-labelledby` on its heading, a focus trap,
+  focus returned to the row it was opened from, an announced loading state, and Ctrl/Cmd-S to save.
+- Both edit screens render read-only for a viewer who holds `menuBuilder:view` but not the
+  permission to save — the routes only ever needed `view`, so they were reachable while offering a
+  Save that answered 403.
+- Menus, menu items and their controls are named consistently across every screen and notification.
+  Saving a menu *item* used to report "Navigation menu saved", and creating a menu was offered as
+  "New group" on one screen and "New menu" on another.
+
+### Fixed — control panel
+
+- **The Delete button on both edit screens ran no confirmation.** It lived in a `<form>` nested
+  inside the page form Craft's `_layouts/cp` opens for `fullPageForm`, which is invalid HTML: the
+  parser drops the inner start tag, taking its `onsubmit` confirmation with it and leaving the
+  button submitting the page form. Both are now Craft `formActions` entries, which post the page
+  form to a different action *with* a confirmation and without nesting anything.
+- **Saving an item over AJAX raised two notifications, one of them wrong.** The controller queued a
+  session flash before returning its JSON response, so the toast the slide-out raised was followed,
+  on the next page load, by a second differently-worded notice about the same save. A failed save
+  likewise set an error flash that `asModelFailure()` was already setting.
+- Controls are no longer offered to users whose permissions would refuse them: Delete and Duplicate
+  on a tree row were gated on `menuBuilder:edit` (they need `delete` and `create`), the tree
+  sidebar's "New menu" button on `menuBuilder:create` (creating a menu needs `manageSettings`), and
+  the bulk toolbar's Delete on `edit`. Server-side authorization was never affected — see
+  `CpAffordanceTest`.
+- **The tree's hierarchy lines came apart.** Three separate faults: the vertical rail was drawn per
+  row at that row's own indent, so it could not span a sibling's subtree and visibly stopped and
+  restarted around every nested branch; the "last child" class meant *last in its sibling list* in
+  Twig and *the next row is shallower* in the JS that re-synced it after a drag, which disagree for
+  a last child that has children, so that row's corner turned into a line running down through its
+  own children the moment anything was dragged; and the parent accent was a 3px left **border**,
+  which is layout, so parent rows' contents sat 2px right of their own siblings'. The connector is
+  now drawn by every row for its *ancestors'* columns as well as its own, which is the only way a
+  flat list can paint a continuous rail across an intervening subtree, and
+  `MenuBuilderTree.syncRails()` is the single authority that recomputes all of it — on init as well
+  as after every move, so the server-rendered first paint can only ever be corrected, never fought.
+  The parent accent is an inset shadow that doesn't move anything, the drop slot keeps the columns
+  it sits inside running through it, and the floating drag helper no longer trails a connector
+  attached to nothing.
+- The child-count badge lost its accessible name after any drag, leaving a bare digit; the menus
+  list's Disabled status rendered as an empty circle Craft styles as "no status"; and the tree's
+  search field had a placeholder but no label.
+- **Dynamic navigation items could not be created.** The type was offered by the full item editor
+  but not by the quick-add panel — and quick-add is the only creation path, the separate
+  `items/new` route having been removed — so a dynamic item could be configured, duplicated and
+  rendered, but never made. Quick-add now offers every `MenuBuilderItem::TYPES` entry and asks for
+  the source type and source a dynamic item requires, using the same human-readable section /
+  category-group / volume pickers and the same posted field names as the full editor. Limit and
+  order-by stay in the editor, where the rest of the item is configured: both are optional to
+  `validateDynamicSource()` and defaulted by `MenuBuilderDynamicNavigationService`. No new route,
+  controller or second creation flow was added, and the dynamic-source rules are unchanged.
+- The editor's dynamic **Limit** field showed `10` for an item with no limit stored, which is not
+  what such an item renders — `normalizeConfig()` reads an absent limit as the maximum. It now
+  shows the stored value or blank, and says what blank means. Its cap comes from
+  `MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT` instead of the number being written out again.
 
 ### Added — developer API
 
@@ -155,10 +374,69 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 - Two extension events: `MenuBuilderLinkResolver::EVENT_REGISTER_LINK_TYPES` and
   `MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES`.
 
+### Added — accessibility
+
+- `renderNav(menu, label = null)` macro: the whole navigation including its `<nav>` landmark, named
+  after the menu (or with your own label) so a page with more than one navigation is navigable by
+  landmark, carrying the menu's CSS class and its safe HTML attributes. An empty menu renders
+  nothing rather than an empty landmark.
+- A `target="_blank"` link now says "(opens in a new tab)" in its accessible name (WCAG 3.2.5),
+  visually hidden by the macro itself so it stays invisible in a theme with no visually-hidden
+  helper. `MenuBuilderNode::opensInNewTab()` is the single answer both that hint and the `target`
+  attribute come from; `target` is no longer printed when it is the browser's own default
+  (`_self`).
+- Mega menus render as a **native `<details>` disclosure**: `open` is at once what renders the
+  panel, what a click or Enter/Space toggles, and what a screen reader announces, so the plugin's
+  markup is correct and operable with no JavaScript and no CSS from the site. A `disclosure: 'none'`
+  mode renders the columns in flow with no disclosure and no state claimed, for a theme that
+  provides its own; the mode is threaded through `renderNav()`/`render()`/`renderMegaMenu()`.
+- Optional front-end asset bundle `web\assets\nav\NavAsset` (`menu-builder-nav.js`, no
+  dependencies) as an **enhancement** over that native disclosure: Escape to close and return focus
+  to the summary, arrow keys and Home/End within an open panel (reaching its links *and* a nested
+  mega menu's own summary, skipping the links a nested disclosure is still hiding), closing one
+  panel when another opens, `Tab` left alone throughout. Keys resolve against the disclosure you
+  are actually in, so none of them go dead on a closed nested summary. It sets `details.open` and writes no attribute of its own, so
+  it cannot introduce a state that disagrees with the browser's.
+- `MenuBuilderNode::safeHtmlAttributes()` and `MenuBuilderGroup::safeHtmlAttributes()` — the bag
+  the macros render, re-checked at render time by `LinkAttributeHelper::filterHtmlAttributes()`
+  rather than trusted because it once passed validation. Event-handler names,
+  `javascript:`/`vbscript:` values, and everything in `LinkAttributeHelper::RESERVED_ATTRIBUTES`
+  are dropped, so a bag written by an import or a direct database edit can no longer emit a live
+  handler, forge `aria-current="page"` on the wrong item, hide a visible link with `aria-hidden`,
+  reorder the keyboard path with `tabindex`, or turn a heading into a link with `href`.
+- [ACCESSIBILITY.md](ACCESSIBILITY.md): what the bundled macros guarantee, the keyboard map, what
+  your CSS still owns, and a manual accessibility checklist to run before a release.
+- `MenuBuilderAccessibilityTest`, asserting all of the above against rendered DOM rather than
+  template source, on a Twig harness now shared with `MenuBuilderPreviewRenderTest`.
+
+### Changed — accessibility
+
+- The mega-menu trigger is a `<summary>`, not a `<button aria-expanded>`. A button's expanded state
+  and the panel's visibility had two different owners — a script that may never have been
+  registered, and the theme's CSS — so a `:hover`/`:focus-within` rule, or a page without the
+  bundle, left `aria-expanded="false"` on a panel that was on screen. The state is now the
+  browser's, and there is no ARIA copy of it to drift: no `aria-expanded`, no `aria-controls`, and
+  still no `aria-haspopup` (these are ordinary links, not a `role="menu"` widget). The plugin's own
+  control-panel preview had exactly this bug and no longer can: its stylesheet has no rule that
+  reveals a closed panel, and `preview.js` opens one by setting `open`.
+- The mega-menu trigger no longer repeats the item's title, icon and badge. The item's own label is
+  already rendered beside it, so the trigger was a second control with the same accessible name and
+  no way to tell which one opened the panel; it is now a decorative caret named for what it does
+  ("Explore submenu"). The control panel's preview already hid that duplicated text with CSS —
+  the markup now matches.
+- A separator renders as `<li><hr></li>` instead of `<li role="separator"><hr></li>`. The `<hr>`
+  already *is* a separator; the role on the `<li>` stated it twice and put a non-`listitem` child
+  into a list. CP preview styling keys off `li:has(> hr)` accordingly.
+
 ### Added — performance
 
 - Per-menu, per-site caching of the link-resolution pass only; visibility and active state always
-  run fresh, so nothing user- or time-specific is ever shared between visitors.
+  run fresh, so nothing user-, time- or page-specific is ever shared between visitors.
+- Cache keys carry the menu, the site, **and** a configuration/version digest: the plugin's schema
+  version, a reflection-derived digest of the cached classes' own shape, and the menu's id, handle
+  and `dateUpdated`. So an edited menu, a menu whose handle was freed and reused by a different
+  menu, and an upgrade that changed the cached payload each read a *different* key instead of an
+  entry built under the old one — no migration, and nothing to remember to bump by hand.
 - Targeted invalidation: a menu/item change invalidates that menu; an entry/category/asset
   save/delete/restore/URI-update invalidates only the menus that link to it (one indexed lookup)
   plus the menus whose dynamic items are sourced from that element's own section, category group,
@@ -167,6 +445,9 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 - A section, category group, or volume save invalidates only the menus referencing an element
   inside that container (one sub-query) — covering URI-format and asset base-URL changes, which
   fire no element event when `autoResaveEntries` is off (and never do for volumes).
+- Invalidation is one tag invalidation per affected menu (tagged by menu **ID**), which reaches that
+  menu's entry on every site and under every config version it was ever cached under. No site-ID
+  enumeration, no handle lookup, and a menu rename can't orphan an entry.
 - Cached trees are written with Craft's `cacheDuration` as a ceiling, so a clock-driven entry status
   change (`postDate` arriving, `expiryDate` passing) — the one change with no event to listen for —
   can't leave a menu stale indefinitely.
@@ -195,17 +476,79 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 
 ### Added — tests
 
-- 516 PHPUnit unit tests covering link resolvers, visibility rules and context, mega-menu grouping,
-  dynamic-source and mega-menu validation, item/group model validation, cache-key construction,
+- 627 PHPUnit unit tests covering link resolvers, visibility rules and context, mega-menu grouping,
+  dynamic-source and mega-menu validation, item/group model validation, cache keying and versioning,
   link-attribute helpers, controller permission mappings, executing-scheme URL rejection,
   cached-node immutability, and the shared helpers — all without booting Craft.
+- Full active-state coverage: the item / parent / grandparent / sibling hierarchy, every URI shape
+  (homepage, missing or extra trailing slash, query string, fragment, absolute vs relative), every
+  link type (custom URL, entry, category, asset, anchor, unavailable), external hosts and
+  non-navigable schemes, the `currentUri` override recomputing a previously marked tree, the
+  guarantee that exactly one node is `isActive` (and that `aria-current="page"` is emitted only
+  under that flag), and that marking never writes back onto the cached nodes.
 - Structural coverage of the menu (group) lifecycle: every CRUD action delegating to the service,
   handle uniqueness short-circuiting before the write, duplicate/reorder transactionality, cache
   invalidation on every frontend-affecting write, POST-only mutations, a fail-closed permission
   mapping, the unique handle index and `groupId` CASCADE in the migration, and the guarantee that
   group persistence never reaches for project config.
+- Multi-site coverage across three sites (English, German, French): per-(menu, site) cache keying
+  and the guarantee that one site's cached tree is never readable on another, the group-level site
+  gate returning no tree at all and running before anything is loaded or cached, site-specific
+  entry/category/asset availability and fallback, per-site titles and URIs, per-item site
+  visibility, one cached tree filtering to a different menu on each site without being mutated,
+  active state scoped to the site being served, dynamic navigation's reliance on the site-keyed
+  cache, and the four lifecycle cases — site disabled, removed, renamed, and project-config
+  deployment.
+- Cache integration coverage against a real Yii cache backend (`MenuBuilderCacheIntegrationTest`),
+  driving the production key/tag/queue code with only Craft's cache component, current site,
+  `cacheDuration` and transaction state stubbed: a miss builds once and stores, a hit serves without
+  rebuilding and hands back its own object graph, invalidating one menu leaves every other menu
+  cached, one invalidation clears a menu on every site (a disabled one included) and under every past
+  config version, site A never reads site B's tree, an edited menu / reused handle / upgraded plugin
+  / foreign value at the key all rebuild rather than serve stale data, an invalidation inside a
+  transaction lands only after it ends (commit and rollback), and one entry safely serves two users
+  with different permissions, two different days across a date-range rule, and two different pages'
+  active state.
 - `ecs.php` and `phpstan.neon`, so the long-declared `composer check-cs` and `composer phpstan`
   scripts actually run. Both are clean over `src` and `tests` (PHPStan level 5).
+
+### Fixed — multi-site
+
+- **A site save or delete now invalidates cached menus.** Cached trees hold URLs and titles resolved
+  against the site being rendered, and a site's base URL, language or existence can change without
+  any element being touched — Craft resaves nothing for it, so no element event fires. Changing a
+  site's base URL left every menu on that site serving the old domain until something unrelated
+  happened to invalidate it. `Sites::EVENT_AFTER_SAVE_SITE` and `EVENT_AFTER_DELETE_SITE` are now
+  listened for; both also fire during `project-config/apply`, so a deployment that changes sites
+  invalidates too.
+- **Invalidation no longer depends on a site list at all.** `getAllSiteIds()` answers differently
+  depending on where it is called from: a front-end request — a web-triggered queue job running a
+  structure move's URI updates, for instance — sees only enabled sites. A tree cached while a site
+  was enabled outlives that site being disabled, and its key was then never cleared, so the stale
+  tree was served the moment the site was switched back on. Entries are now invalidated by a
+  per-menu tag, which reaches every site's entry in one call — a disabled site, a site added after
+  the entry was written, or a site the caller never knew about included.
+- **A menu save/duplicate/delete no longer flushes every cached menu on the install.** The cache key
+  was built from the handle a save could change, so a targeted invalidation would have orphaned the
+  old key's entry and the code flushed everything instead — one editor saving a menu's CSS class
+  discarded every other menu's cache. Tags are keyed by menu ID, which a rename can't move, so the
+  invalidation is now targeted; `MenuBuilderGroupTest` scans `src/` to assert that the whole-cache
+  flush has exactly one caller left (a site save or delete).
+- **A bulk item action can no longer leave stale data in the cache.** Bulk enable/disable and bulk
+  delete wrap many per-item writes — each of which invalidates — in one transaction that commits
+  after all of them, so the invalidations ran *before* the commit. A front-end request landing in
+  that window rebuilt the tree from pre-commit data and re-cached it, and nothing invalidated it
+  again afterwards: the bulk change stayed invisible on the front end until something unrelated
+  flushed the menu. Invalidation raised inside a transaction is now queued and flushed when the
+  outermost transaction ends — on rollback as well as commit, since the concurrent re-cache happens
+  either way.
+- **A link to a sibling site is no longer marked as the current page.** Absolute URLs were compared
+  against every site's base-URL host, but sibling sites routinely share a path structure — with
+  `/contact` on English, German and French, serving the English page marked all three active, so
+  `aria-current="page"` landed on more than one link and the wrong branch styled open. The
+  internal-host list is now the request host plus the *current* site's base URL. A cross-site link
+  still resolves active state normally on the site it points at, and the `www.` vs bare spelling
+  mismatch the site base URL was there for is still covered.
 
 ### Fixed — element synchronization
 
@@ -291,6 +634,22 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
   absolute element URL) against Craft's `Request::getFullUri()`, which does not, so `/news` was
   never equal to `news`. Both sides are now normalized to a leading-slash path, and the suite
   covers the no-leading-slash shape every real request actually takes.
+- **A menu item linking to another site was marked active whenever the local path matched.**
+  Active-state matching compared paths only, so a custom URL to
+  `https://shop.elsewhere.test/products/shoes` (or a protocol-relative
+  `//elsewhere.test/products/shoes`) was reported as the current page — and rendered with
+  `aria-current="page"` — while serving `/products/shoes`. Absolute URLs are now compared host-first
+  against the request host plus every site's base-URL host, so other sites of the same install (and
+  a `www.` vs bare mismatch between a site's base URL and the request) still match, and genuinely
+  external hosts never do.
+- `mailto:`/`tel:` items could be marked active. `parse_url()` reports a path for them
+  (`a@b.com` for `mailto:a@b.com`), which was comparable to a request URI; only `http`/`https`
+  URLs can now be the current page.
+- An item whose link is unavailable (`isLinkAvailable === false` — a deleted or disabled element
+  on "disable link", a rejected custom URL) or blank is now explicitly excluded from active-state
+  matching rather than relying on those paths also happening to produce a `null` URL.
+- A fragment-only anchor item (`#top`) could collapse to `/` and light up the homepage item. A
+  bare fragment is a position on a page, not a page, and is never active.
 
 ### Changed — architecture
 
@@ -305,11 +664,10 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
   `DateValidationHelper::hasValidCalendarDate()` (was in `MenuBuilderItem` and `DateRangeRule`,
   each carrying a comment saying it mirrored the other). All four are now directly unit-tested,
   which none of them were as private copies.
-- Cache invalidation no longer queries per item or per group. `MenuBuilderItemService` and
-  `MenuBuilderElementService` resolve a group handle via the new
-  `MenuBuilderGroupService::getHandleById()`, which reads the existing request-level cache — a bulk
-  enable/disable of N items used to issue N extra group queries, and every entry/category/asset
-  save issued one per referencing group.
+- Cache invalidation issues no group lookup at all. It is keyed by menu ID — which every caller
+  already has — so a bulk enable/disable of N items no longer costs N group queries, and an
+  entry/category/asset save no longer costs one per referencing menu. `invalidateGroup(handle)` and
+  `invalidateGroups(handles)` remain for third-party callers, who know a handle rather than an ID.
 - Removed dead code: the three unused ActiveRecord relations (`getItems()`, `getGroup()`,
   `getParent()`) — nothing referenced them and they were the only lazy-load N+1 path in the record
   layer — and an unreachable `match` arm and null guard in
@@ -341,7 +699,9 @@ Each of these was a *second* UI or code path to a behaviour that already had one
 "Single path per behaviour" in ARCHITECTURE.md.
 
 - Row-menu **Move up / Move down / Indent / Outdent** commands. Drag-and-drop already reparents and
-  reorders through the same persistence call.
+  reorders through the same persistence call. (The drag handle's own arrow-key operation, added
+  later for accessibility, is that same gesture made keyboard-operable — it shares the handle, the
+  admissibility check and the persistence call, and is not a second command set.)
 - Row-menu **Add child / Add sibling** commands. The quick-add panel's "Nest under" picker places a
   new item, and drag adjusts it.
 - The **new-item route** (`menu-builder/<groupHandle>/items/new`) and `ItemsController::actionEdit`'s

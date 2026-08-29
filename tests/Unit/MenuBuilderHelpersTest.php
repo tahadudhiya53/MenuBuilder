@@ -120,6 +120,67 @@ class MenuBuilderHelpersTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // filterHtmlAttributes: the render-time half of the same rule
+    // ---------------------------------------------------------------------
+
+    /**
+     * Validation on save rejects with a message an editor can act on;
+     * filtering at render drops silently, because a page is being served and
+     * the useful answer there is a menu missing one attribute rather than an
+     * exception. Everything the validator refuses, the filter drops.
+     */
+    public function testFilterDropsEverythingValidationWouldHaveRefused(): void
+    {
+        $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes([
+            'onclick' => 'alert(1)',
+            'ONERROR' => 'alert(1)',
+            '1invalid' => 'x',
+            'has space' => 'x',
+            'x" onclick="alert(1)' => 'x',
+            'data-href' => 'javascript:alert(1)',
+            'data-other' => "java\tscript:alert(1)",
+            'data-vb' => 'VBScript:alert(1)',
+        ]));
+    }
+
+    public function testFilterKeepsOrdinaryAttributesAndStringifiesTheirValues(): void
+    {
+        $this->assertSame(
+            ['data-analytics' => 'nav-home', 'aria-describedby' => 'help', 'data-index' => '3'],
+            LinkAttributeHelper::filterHtmlAttributes([
+                'data-analytics' => 'nav-home',
+                'aria-describedby' => 'help',
+                'data-index' => 3,
+            ])
+        );
+    }
+
+    /**
+     * The attributes the bundled macros emit themselves, plus the ARIA
+     * states and `tabindex` that describe behaviour a rendered menu doesn't
+     * implement. A typed `aria-current="page"` would announce the wrong page;
+     * an `href` on a heading would turn a label into a link.
+     */
+    public function testFilterDropsEveryAttributeTheMacrosOwn(): void
+    {
+        $bag = array_fill_keys(LinkAttributeHelper::RESERVED_ATTRIBUTES, 'x');
+
+        $this->assertNotEmpty(LinkAttributeHelper::RESERVED_ATTRIBUTES);
+        $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes($bag));
+        $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes(['ARIA-Current' => 'page', ' href ' => '/x']), 'Attribute names are case-insensitive, and a padded one is the same name.');
+    }
+
+    /** A bag from an import or a hand-written database row isn't necessarily strings. */
+    public function testFilterDropsNonStringKeysAndNonScalarValues(): void
+    {
+        $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes([
+            0 => 'data-x',
+            'data-list' => ['a', 'b'],
+            'data-object' => new \stdClass(),
+        ]));
+    }
+
+    // ---------------------------------------------------------------------
     // Attribute lines, JSON bags, ID lists, calendar dates
     // ---------------------------------------------------------------------
 

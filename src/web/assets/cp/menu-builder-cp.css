@@ -1,7 +1,68 @@
+/* One spacing scale for everything this plugin stacks vertically, so the
+   header, notices, toolbars and tree don't each pick their own rhythm. */
 #menu-builder-toolbar {
     gap: 8px;
     margin-bottom: 14px;
     align-items: center;
+}
+
+.menu-builder-search {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+}
+
+.menu-builder-search .text {
+    flex: 1 1 auto;
+}
+
+.menu-builder-search .btn {
+    flex: 0 0 auto;
+}
+
+/* Inline notices (disabled menu, active search) — Craft has no reusable
+   non-flash notice, and an unstyled <p> read as body copy. */
+.menu-builder-notice {
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 4px;
+    background: var(--gray-050, #f9fafb);
+}
+
+.menu-builder-notice p {
+    margin: 0;
+}
+
+.menu-builder-notice.warning {
+    border-color: var(--warning-color, #cf1124);
+    background: color-mix(in srgb, var(--warning-color, #cf1124) 6%, var(--white));
+}
+
+.menu-builder-select-all {
+    margin-bottom: 8px;
+}
+
+.menu-builder-select-all label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--gray-600, #596673);
+}
+
+/* A disabled fieldset is the read-only mechanism (see items/_fields.twig);
+   it must not bring the browser's default border and inset padding with it. */
+.menu-builder-fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-inline-size: 0;
+}
+
+.menu-builder-fieldset[disabled] {
+    opacity: 0.75;
 }
 
 /* The bulk toolbar only exists while rows are selected. Its own `display` is
@@ -12,10 +73,21 @@
  * regardless of source order. */
 #menu-builder-bulk-toolbar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-bottom: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 4px;
+    background: var(--white);
+    /* In a 100-item menu the rows being acted on are usually far below the
+       point where the toolbar was rendered, which meant selecting rows near
+       the bottom and then scrolling back to the top to act on them. */
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 #menu-builder-bulk-toolbar[hidden] {
@@ -124,41 +196,95 @@ li.menu-builder-item {
     transition: margin-inline-start 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
-/* Vertical trunk: runs the full row height (plus margins) so it connects
- * seamlessly into the next sibling's own rail. Only the last child's trunk
- * stops at the row's midpoint, since there's no further sibling to reach. */
+/* Hierarchy connector.
+ *
+ * The rows are a FLAT list (one <li> per node, indentation is margin), so a
+ * row can only paint over its own box. A continuous rail down a sibling
+ * column therefore cannot be drawn by the siblings alone: siblings at level N
+ * are not adjacent rows whenever one of them has children, and the deeper
+ * rows in between draw at a deeper indent. The span between them has to be
+ * painted by those deeper rows — each row draws its ANCESTORS' columns as
+ * well as its own.
+ *
+ * So every row carries:
+ *   - `.menu-builder-item-rails > i`, one per ancestor column that still has
+ *     a sibling further down to reach (`--mb-rail` is the column number), and
+ *   - `::before` for its own column: an elbow when it is the last sibling,
+ *     otherwise a rail running straight through with a tick into the row.
+ *
+ * Which ancestor columns are open is the one thing this needs that a row
+ * can't see for itself. `MenuBuilderTree.syncRails()` is the authority: it
+ * recomputes both the rails and `-item-last` in one pass on init and after
+ * every move. Twig renders the same thing up front so there is no unrailed
+ * first paint, and because the JS pass also runs on init, a disagreement
+ * corrects itself in the same tick instead of alternating — which is exactly
+ * what the previous version got wrong (Twig set `-item-last` from
+ * `loop.last`, the JS re-synced it from "is the next row shallower", and
+ * those two are different predicates for a last child that has children).
+ *
+ * Column k sits at x = k*24 - 13 from the list's edge; a row at level L owns
+ * column L-1, which is why the offset below is relative to both. */
+.menu-builder-item-rails {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.menu-builder-item-rails > i {
+    position: absolute;
+    inset-inline-start: calc((var(--mb-rail) - var(--mb-level, 1) + 1) * 24px - 13px);
+    /* Overshoots the 4px gap at both ends so consecutive segments overlap
+       rather than meet exactly — no hairline seams at fractional zoom. */
+    top: -6px;
+    height: calc(100% + 12px);
+    border-inline-start: 1px solid var(--gray-350, #b6c0cb);
+}
+
+/* A row's own column. Last sibling: the rail stops at the row's middle and
+   turns in, closing the branch. */
 li.menu-builder-item[data-level]:not([data-level="1"])::before {
     content: "";
     position: absolute;
-    inset-inline-start: -14px;
-    top: -5px;
-    width: 11px;
-    height: calc(100% + 10px);
-    border-inline-start: 1px solid var(--gray-300, #c8d0d8);
+    inset-inline-start: -13px;
+    top: -6px;
+    width: 12px;
+    height: calc(50% + 6px);
+    border-inline-start: 1px solid var(--gray-350, #b6c0cb);
+    border-block-end: 1px solid var(--gray-350, #b6c0cb);
+    border-end-start-radius: 6px;
     pointer-events: none;
 }
 
-li.menu-builder-item[data-level]:not([data-level="1"]).menu-builder-item-last::before {
-    height: calc(50% + 5px);
-    border-bottom: 1px solid var(--gray-300, #c8d0d8);
-    border-end-start-radius: 4px;
+/* Not the last sibling: the rail carries on down to the next one, and the
+   connection into this row is a plain tick off it. */
+li.menu-builder-item[data-level]:not([data-level="1"]):not(.menu-builder-item-last)::before {
+    height: calc(100% + 12px);
+    border-block-end: 0;
+    border-end-start-radius: 0;
 }
 
-/* Every non-last child also gets its own horizontal branch off the trunk,
- * so middle children look connected to the parent, not just the last one. */
 li.menu-builder-item[data-level]:not([data-level="1"]):not(.menu-builder-item-last)::after {
     content: "";
     position: absolute;
-    inset-inline-start: -14px;
+    inset-inline-start: -13px;
     top: 50%;
-    width: 11px;
+    width: 12px;
     height: 0;
-    border-bottom: 1px solid var(--gray-300, #c8d0d8);
+    border-block-end: 1px solid var(--gray-350, #b6c0cb);
     pointer-events: none;
 }
 
+/* An inset shadow rather than a wider border: border width is layout, so the
+   3px version pushed a parent row's contents 2px right of its own siblings'
+   and rows at one level stopped lining up. */
 li.menu-builder-item.menu-builder-item-has-children {
-    border-inline-start: 3px solid var(--gray-500, #7b8794);
+    box-shadow: inset 3px 0 0 0 var(--gray-400, #9aa5b1);
+}
+
+/* box-shadow has no logical-property form, so the one physical offset in this
+   sheet needs mirroring by hand — everything else here is already logical. */
+[dir="rtl"] li.menu-builder-item.menu-builder-item-has-children {
+    box-shadow: inset -3px 0 0 0 var(--gray-400, #9aa5b1);
 }
 
 li.menu-builder-item.menu-builder-item-disabled {
@@ -179,10 +305,17 @@ li.menu-builder-drop-position {
     transition: margin-inline-start 120ms ease;
 }
 
+/* The slot's ancestor rails match the rows' — dashed and blue would read as
+   part of the drop target rather than as the tree carrying on behind it. */
+li.menu-builder-drop-position .menu-builder-item-rails > i {
+    inset-inline-start: calc((var(--mb-rail) - var(--mb-level, 1) + 1) * 24px - 13px);
+    border-inline-start-color: var(--gray-350, #b6c0cb);
+}
+
 li.menu-builder-drop-position[data-level]:not([data-level="1"])::before {
     content: "";
     position: absolute;
-    inset-inline-start: -14px;
+    inset-inline-start: -12px;
     top: -6px;
     width: 11px;
     height: calc(50% + 6px);
@@ -266,6 +399,40 @@ li.menu-builder-item.menu-builder-just-dropped {
     background: var(--gray-100, #f2f4f7);
 }
 
+/* The editor's own badge, previewed on the tree row. Capped and ellipsized:
+   a badge is meant to be short, but nothing stops an editor typing 255
+   characters into it, and an uncapped one pushed the type/status badges and
+   the row actions off the end of the row. */
+.menu-builder-item-badge {
+    flex: 0 1 auto;
+    max-width: 14em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--gray-700, #40474e);
+    background: var(--gray-100, #f2f4f7);
+}
+
+.menu-builder-item-badge--info {
+    color: var(--blue-800, #1f5f9e);
+    background: var(--blue-100, #e5effb);
+}
+
+.menu-builder-item-badge--success {
+    color: var(--green-800, #1f7a4d);
+    background: var(--green-100, #e3f5eb);
+}
+
+.menu-builder-item-badge--warning {
+    color: var(--yellow-800, #8a6116);
+    background: var(--yellow-100, #fdf3dd);
+}
+
+.menu-builder-item-badge--critical {
+    color: var(--red-800, #9c3232);
+    background: var(--red-100, #fbe6e6);
+}
+
 .disabled-badge {
     flex: 0 0 auto;
     color: var(--gray-700, #40474e);
@@ -303,6 +470,15 @@ ul.menu-builder-draghelper > li.menu-builder-item {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
     background: var(--white);
     cursor: move;
+}
+
+/* The helper floats with the cursor, so its connector would be an elbow
+   joined to nothing, drifting across the page. The destination slot is what
+   says which level the row would land at. */
+ul.menu-builder-draghelper > li.menu-builder-item::before,
+ul.menu-builder-draghelper > li.menu-builder-item::after,
+ul.menu-builder-draghelper .menu-builder-item-rails {
+    display: none;
 }
 
 /* Keyboard focus must remain visible on interactive tree elements. */
@@ -424,4 +600,1276 @@ ul.menu-builder-draghelper > li.menu-builder-item {
 
 body.menu-builder-slideout-open {
     overflow: hidden;
+}
+
+/* Row states */
+
+/* A row with a request in flight: dimmed and inert, so a second click on
+   Duplicate can't queue a second copy while the first is still running. */
+li.menu-builder-item.menu-builder-item-busy,
+tr.menu-builder-row-busy {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+/* Just created, duplicated or saved — the tree scrolls here and flags the row
+   so the editor can see which one the notification was about. */
+li.menu-builder-item.menu-builder-item-added {
+    border-color: var(--focus-color, #0d78f2);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-color, #0d78f2) 25%, transparent);
+}
+
+/* Reordering is off while a search filters the tree. The column is kept so
+   rows don't shift sideways when the search is cleared. */
+.menu-builder-drag-handle.is-disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* Link health (see MenuBuilderLinkHealthService). One warning treatment for
+   every state: the badge's text is what distinguishes them, not its colour —
+   "unpublished" and "missing" being different shades of red would be a
+   distinction only a sighted reader could act on. The per-status modifier
+   class is still emitted so a project CSS can tell them apart if it wants. */
+.menu-builder-item-health-flag {
+    color: var(--warning-color, #cf1124);
+    border-color: currentColor;
+}
+
+.menu-builder-health-notice .menu-builder-health-actions {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    list-style: disc;
+    font-size: 12px;
+    color: var(--gray-600, #596673);
+}
+
+.menu-builder-bulk-checkbox {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+/* Slide-out loading state */
+
+.menu-builder-slideout-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 0;
+}
+
+.menu-builder-slideout-loading p {
+    margin: 0;
+}
+
+/* Inline validation errors rendered by menu-builder.js. Craft styles
+   `ul.errors` already; the summary needs its own top margin since it sits
+   above the first field rather than inside one. */
+.menu-builder-error-summary {
+    margin: 0 0 14px;
+}
+
+.menu-builder-delete-modal .body {
+    padding: 24px 24px 0;
+}
+
+.menu-builder-delete-modal .body h2 {
+    margin: 0 0 8px;
+}
+
+.menu-builder-delete-modal .body p {
+    margin: 0;
+    max-width: 42em;
+}
+
+.menu-builder-delete-modal .footer {
+    padding: 24px;
+}
+
+.menu-builder-quick-add-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ===========================================================================
+   Preview screen
+
+   Two layers, kept apart on purpose:
+
+   1. CP chrome (controls, explainer, markup panel) — styled like the rest of
+      the control panel, using Craft's own variables.
+   2. The preview stage — a deliberately *site-like* surface: a light page,
+      a brand, a navigation bar. It uses its own fixed palette rather than
+      Craft's CP variables, because it is standing in for a website, and a
+      navigation that inherits the CP's colours reads as another CP widget.
+
+   The stage styles nothing but the markup `_macros/tree.twig` already emits
+   (`li.is-active`, `a[aria-current]`, `details.menu-builder-megamenu`,
+   `summary.menu-builder-megamenu-trigger`,
+   `.menu-builder-megamenu-panel`, `.menu-builder-megamenu-column`,
+   `.menu-builder-icon`, `.menu-builder-badge`, a separator's `<hr>`) — no
+   preview-only classes are added to a single navigation element, so the
+   thing being judged is the thing that ships.
+
+   The site's own CSS and JS are deliberately not loaded (arbitrary front-end
+   JS inside the CP is not a preview, it's an execution surface), so this is
+   an honest representation of structure, hierarchy and state — not of a
+   theme's typography.
+   =========================================================================== */
+
+.menu-builder-preview-controls {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+}
+
+.menu-builder-preview-controls-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    align-items: flex-start;
+}
+
+.menu-builder-preview-controls-fields .field {
+    margin: 0;
+    min-width: 170px;
+}
+
+.menu-builder-preview-controls-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* The rendered configuration, as chips: what a preview is *of* has to be
+   readable at a glance, or the screen looks like it might be showing
+   something else. */
+.menu-builder-preview-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.menu-builder-preview-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 999px;
+    background: var(--gray-050, #f9fafb);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.menu-builder-preview-chip-key {
+    color: var(--light-text-color, #6b7280);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.menu-builder-preview-chip--count {
+    color: var(--light-text-color, #6b7280);
+}
+
+.menu-builder-preview-explainer,
+.menu-builder-preview-source {
+    margin-top: 18px;
+    padding: 10px 14px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+    background: var(--gray-050, #f9fafb);
+}
+
+.menu-builder-preview-explainer summary,
+.menu-builder-preview-source summary {
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.menu-builder-preview-explainer-body {
+    padding-top: 8px;
+    max-width: 62em;
+}
+
+.menu-builder-preview-explainer-body ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    list-style: disc;
+}
+
+.menu-builder-preview-explainer-body li {
+    margin-bottom: 5px;
+}
+
+.menu-builder-preview-code-wrap {
+    position: relative;
+    margin-top: 8px;
+}
+
+.menu-builder-preview-copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+}
+
+.menu-builder-preview-code {
+    margin: 0;
+    padding: 12px 12px 12px 0;
+    overflow: auto;
+    max-height: 460px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 6px;
+    background: var(--gray-050, #f9fafb);
+    font-size: 12px;
+    line-height: 1.6;
+    tab-size: 4;
+}
+
+/* One element per line, numbered — the panel is for reading attributes off,
+   so a line has to be findable. The numbers are generated, never selectable
+   content, so copying still yields the markup alone. */
+.menu-builder-preview-code code {
+    display: block;
+    counter-reset: menu-builder-code-line;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+}
+
+.menu-builder-preview-code-line {
+    display: block;
+    padding-right: 12px;
+    counter-increment: menu-builder-code-line;
+}
+
+.menu-builder-preview-code-line::before {
+    content: counter(menu-builder-code-line);
+    display: inline-block;
+    width: 3ch;
+    margin-right: 14px;
+    padding-right: 8px;
+    border-right: 1px solid var(--hairline-color);
+    color: var(--light-text-color, #9ca3af);
+    text-align: right;
+    user-select: none;
+}
+
+.menu-builder-preview-code-line:hover {
+    background: rgba(37, 99, 235, 0.06);
+}
+
+/* ---------------------------------------------------------------------------
+   The stage
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-stage {
+    /* One palette for the whole mock page. Fixed rather than themed: the
+       stage represents a website, so it must not change with the CP theme. */
+    min-height: 520px;
+    --mb-preview-page: #ffffff;
+    --mb-preview-ink: #1f2937;
+    --mb-preview-muted: #6b7280;
+    --mb-preview-line: #e5e7eb;
+    --mb-preview-accent: #2563eb;
+    --mb-preview-accent-soft: #e8effd;
+    --mb-preview-surface: #f8fafc;
+
+    margin-bottom: 6px;
+    padding: 22px;
+    border-radius: 10px;
+    background-color: rgba(148, 163, 184, 0.09);
+    background-image: radial-gradient(rgba(100, 116, 139, 0.16) 1px, transparent 1px);
+    background-size: 16px 16px;
+}
+
+.menu-builder-preview-device {
+    margin: 0 auto;
+    background: var(--mb-preview-page);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    color: var(--mb-preview-ink);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+/* Browser furniture, so the navigation reads as part of a page. */
+.menu-builder-preview-chrome {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    background: var(--mb-preview-surface);
+    border-bottom: 1px solid var(--mb-preview-line);
+}
+
+.menu-builder-preview-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #d1d5db;
+    flex: 0 0 auto;
+}
+
+.menu-builder-preview-address {
+    margin-left: 10px;
+    padding: 3px 12px;
+    flex: 1 1 auto;
+    border-radius: 999px;
+    background: var(--mb-preview-page);
+    border: 1px solid var(--mb-preview-line);
+    color: var(--mb-preview-muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.menu-builder-preview-siteheader {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--mb-preview-line);
+    background: var(--mb-preview-page);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* The placeholder at the far end of a header — search, account, a call to
+   action. A shape, never a label: see the stage template. */
+.menu-builder-preview-header-slot {
+    order: 3;
+    flex: 0 0 auto;
+    width: 86px;
+    height: 30px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.16);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav {
+    order: 2;
+    margin-left: 12px;
+}
+
+.menu-builder-preview-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.menu-builder-preview-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: var(--mb-preview-accent);
+    color: #fff;
+    font-size: 13px;
+}
+
+.menu-builder-preview-brand-name {
+    max-width: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The decorative page below the navigation — enough of a page for the nav to
+   sit on, and nothing that competes with it. */
+.menu-builder-preview-canvas {
+    /* Tall enough that an open dropdown or mega panel has somewhere to fall:
+       the device clips its own rounded box, so a short page would cut a panel
+       off at the ankles. */
+    min-height: 260px;
+    padding: 26px 20px 34px;
+    background: linear-gradient(180deg, var(--mb-preview-page), var(--mb-preview-surface));
+}
+
+.menu-builder-preview-skeleton {
+    height: 10px;
+    margin-bottom: 10px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.28);
+}
+
+.menu-builder-preview-skeleton--heading {
+    height: 20px;
+    width: 45%;
+    margin-bottom: 18px;
+    background: rgba(148, 163, 184, 0.42);
+}
+
+.menu-builder-preview-skeleton--short {
+    width: 60%;
+}
+
+.menu-builder-preview-skeleton--button {
+    width: 118px;
+    height: 30px;
+    margin-top: 16px;
+    border-radius: 7px;
+    background: rgba(37, 99, 235, 0.28);
+}
+
+.menu-builder-preview-hero {
+    max-width: 60%;
+}
+
+.menu-builder-preview-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 26px;
+}
+
+.menu-builder-preview-card {
+    height: 74px;
+    border: 1px solid rgba(148, 163, 184, 0.34);
+    border-radius: 9px;
+    background: var(--mb-preview-page);
+}
+
+.menu-builder-preview-hint {
+    margin: 10px 0 0;
+    text-align: center;
+    color: var(--light-text-color, #6b7280);
+    font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   The navigation itself — production markup, presentation only
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-nav[hidden] {
+    display: none;
+}
+
+.menu-builder-preview-nav ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The item label: `> a` when the editor made it clickable, `> span` when it
+   is a heading. Both come straight from the macro. */
+.menu-builder-preview-nav li > a,
+.menu-builder-preview-nav li > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 6px;
+    color: var(--mb-preview-ink);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-decoration: none;
+}
+
+.menu-builder-preview-nav li > a {
+    transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.menu-builder-preview-nav li > a:hover {
+    background: var(--mb-preview-surface);
+    color: #0f172a;
+}
+
+.menu-builder-preview-nav li > a:focus-visible,
+.menu-builder-preview-nav button:focus-visible {
+    outline: 2px solid var(--mb-preview-accent);
+    outline-offset: 2px;
+}
+
+/* A heading is a label, not a link — it must never look clickable. */
+.menu-builder-preview-nav li > span {
+    color: var(--mb-preview-muted);
+    cursor: default;
+}
+
+/* Active state, and the deliberate difference between the two flags:
+   `aria-current="page"` is the one link that *is* this page; `li.is-active`
+   also covers its ancestors, which get the quieter treatment. */
+.menu-builder-preview-nav a[aria-current="page"] {
+    background: var(--mb-preview-accent-soft);
+    color: #1d4ed8;
+    font-weight: 650;
+    box-shadow: inset 0 -2px 0 var(--mb-preview-accent);
+}
+
+.menu-builder-preview-nav li.is-active > a:not([aria-current="page"]),
+.menu-builder-preview-nav li.is-active > span {
+    color: #1d4ed8;
+    box-shadow: inset 0 -2px 0 rgba(37, 99, 235, 0.3);
+}
+
+/* Icons. An asset icon is a real image; an icon-font class has no font
+   loaded in the CP, so an empty span gets a neutral placeholder rather than
+   rendering as nothing and reading as "my icon didn't save". */
+.menu-builder-preview-nav .menu-builder-icon {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+.menu-builder-preview-nav img.menu-builder-icon {
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+.menu-builder-preview-nav span.menu-builder-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--mb-preview-accent);
+    font-size: 10px;
+}
+
+.menu-builder-preview-nav span.menu-builder-icon::before {
+    content: "\25C6";
+}
+
+/* Badges. The class list comes from BadgeHelper's allowlist, never from
+   editor input, so styling per style is safe. */
+.menu-builder-preview-nav .menu-builder-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(100, 116, 139, 0.16);
+    color: #334155;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.menu-builder-preview-nav .menu-builder-badge--info {
+    background: rgba(37, 99, 235, 0.14);
+    color: #1d4ed8;
+}
+
+.menu-builder-preview-nav .menu-builder-badge--success {
+    background: rgba(22, 163, 74, 0.16);
+    color: #15803d;
+}
+
+.menu-builder-preview-nav .menu-builder-badge--warning {
+    background: rgba(217, 119, 6, 0.18);
+    color: #b45309;
+}
+
+.menu-builder-preview-nav .menu-builder-badge--critical {
+    background: rgba(220, 38, 38, 0.14);
+    color: #b91c1c;
+}
+
+/* The mega-menu disclosure the macro emits. Its label is kept for assistive
+   technology (it is the button's accessible name) but not repeated on screen
+   next to the link it sits beside — the caret is the visible affordance, the
+   usual "link plus disclosure" pattern. */
+/* A mega menu is a native <details>: `open` is the state, the visibility and
+   the accessible state all at once, so nothing here may show a panel whose
+   <details> is closed (see the ARIA-truth rule in ACCESSIBILITY.md). The
+   summary is the control; its native marker is replaced by the macro's own
+   caret. */
+.menu-builder-preview-nav .menu-builder-megamenu {
+    /* Left as a plain block on purpose: `display: contents`/`flex`/`grid` on
+       a <details> is known to stop some browsers hiding its closed content,
+       which is the one thing this element is here to guarantee. The row it
+       sits in is laid out with flex instead (below), and the panel is
+       positioned against the <li>, not against this element. */
+    position: static;
+}
+
+/* A mega-menu row is "label + disclosure": the item's own link, then the
+   summary that opens the panel. */
+.menu-builder-preview-nav li:has(> details.menu-builder-megamenu) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.menu-builder-preview-nav .menu-builder-megamenu-trigger {
+    /* A 24x24 CSS-px target (WCAG 2.2 AA 2.5.8): the caret glyph is small, so
+       the control around it carries the size. */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    list-style: none;
+    margin: 0;
+    padding: 8px 6px;
+    border: 0;
+    background: none;
+    color: inherit;
+    /* The macro's own caret glyph is suppressed in favour of the styled one
+       below, which can rotate on open. The control's accessible name is an
+       attribute, not text, so nothing is lost by zeroing the type size. */
+    font-size: 0;
+    line-height: 0;
+    cursor: pointer;
+}
+
+.menu-builder-preview-nav .menu-builder-megamenu-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.menu-builder-preview-nav .menu-builder-megamenu-trigger::after,
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:has(> ul) > a::after,
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:has(> ul) > span::after,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > a::after,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > span::after {
+    content: "\25BE";
+    display: inline-block;
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.55;
+}
+
+/* Open state, however it was reached. For a mega menu that is `details[open]`
+   — the browser's own state, which is also what a screen reader announces, so
+   the caret and the announcement cannot disagree. For a plain submenu there is
+   no disclosure state to be wrong about: `[data-mb-open]` is a preview-only
+   styling hook preview.js puts on the <li> when the row is used as the
+   control. */
+.menu-builder-preview-nav details[open] > .menu-builder-megamenu-trigger::after,
+.menu-builder-preview-nav li[data-mb-open] > a::after,
+.menu-builder-preview-nav li[data-mb-open] > span::after {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+/* Closed content is hidden by the browser; this only says what the panel
+   looks like once <details> has opened it. There is deliberately no rule
+   anywhere that shows a panel whose <details> is closed. */
+.menu-builder-preview-nav details[open] > .menu-builder-megamenu-panel {
+    display: grid;
+}
+
+.menu-builder-preview-nav .menu-builder-megamenu-column > ul > li:first-child > span {
+    /* A heading opening a mega-menu column reads as the column's title. */
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 0 0 6px 4px;
+    border-bottom: 1px solid var(--mb-preview-line);
+    color: var(--mb-preview-accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav .menu-builder-megamenu-column > ul > li > a {
+    width: 100%;
+    padding: 6px 9px;
+}
+
+/* Separators. Vertical between top-level items, horizontal inside a panel. */
+.menu-builder-preview-nav li:has(> hr) hr {
+    margin: 6px 4px;
+    border: 0;
+    border-top: 1px solid var(--mb-preview-line);
+}
+
+/* ---------------------------------------------------------------------------
+   Desktop: a horizontal bar with dropdown cards
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li {
+    position: relative;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:has(> hr) {
+    width: 1px;
+    height: 20px;
+    margin: 0 8px;
+    background: var(--mb-preview-line);
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:has(> hr) hr {
+    display: none;
+}
+
+/* The dropdown card. Opened by hover *and* by keyboard focus, so tabbing
+   through the navigation demonstrates the same states a pointer does. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li > ul {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 5;
+    display: none;
+    min-width: 232px;
+    padding: 6px;
+    border: 1px solid var(--mb-preview-line);
+    border-radius: 10px;
+    background: var(--mb-preview-page);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+}
+
+/* The whole parent is the control, not the caret: hovering it, tabbing into
+   it, or clicking it (preview.js sets `[data-mb-open]`) opens the submenu. A
+   caret you have to hit is a control an editor has to discover; a real
+   navigation opens from the item. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:hover > ul,
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li:focus-within > ul,
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul > li[data-mb-open] > ul {
+    display: block;
+    animation: menu-builder-preview-open 0.14s ease-out;
+}
+
+/* Deliberately *not* a `:hover`/`:focus-within` rule for the mega-menu panel.
+   A plain submenu is an ordinary list — showing it on hover claims nothing —
+   but a mega menu's panel belongs to a <details>, and revealing it with CSS
+   while that <details> is closed would put the screen and the accessibility
+   tree into different states. Hover and focus open it by setting `open`
+   instead (preview.js), which is the same state the pointer, Enter and Space
+   toggle natively. */
+
+.menu-builder-preview-nav .menu-builder-megamenu-panel {
+    animation: menu-builder-preview-open 0.14s ease-out;
+}
+
+@keyframes menu-builder-preview-open {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul ul li > a,
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav > ul ul li > span {
+    display: flex;
+    width: 100%;
+    padding: 7px 9px;
+}
+
+/* Third level and deeper stay inside the card as an indented group rather
+   than flying out again — the hierarchy is the thing being judged. */
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav ul ul ul {
+    position: static;
+    display: block;
+    min-width: 0;
+    margin: 2px 0 4px 12px;
+    padding: 0 0 0 10px;
+    border: 0;
+    border-left: 1px solid var(--mb-preview-line);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.menu-builder-preview-stage--desktop .menu-builder-preview-nav .menu-builder-megamenu-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 5;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px 24px;
+    min-width: 520px;
+    max-width: min(760px, 70vw);
+    padding: 18px;
+    border: 1px solid var(--mb-preview-line);
+    border-radius: 12px;
+    background: var(--mb-preview-page);
+    box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile: a 390px viewport with a stacked, disclosable navigation
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-stage--mobile .menu-builder-preview-device {
+    /* A fixed device, so closing the menu doesn't shrink the phone: a real
+       one keeps its size and the page inside it keeps scrolling. */
+    display: flex;
+    flex-direction: column;
+    width: 390px;
+    max-width: 100%;
+    height: 720px;
+    border: 9px solid #111827;
+    border-radius: 34px;
+    box-shadow: 0 24px 50px rgba(15, 23, 42, 0.3);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-chrome {
+    /* The phone's status strip, not a browser bar — with the notch that says
+       "this is a device" faster than any label would. */
+    position: relative;
+    justify-content: center;
+    padding: 10px 12px 8px;
+    background: #111827;
+    border-bottom: 0;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-chrome::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 108px;
+    height: 15px;
+    transform: translateX(-50%);
+    border-radius: 0 0 12px 12px;
+    background: #000;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-device {
+    position: relative;
+    padding-bottom: 18px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-device::after {
+    /* Home indicator — on the shell rather than the page, since the page
+       scrolls inside the phone the way a real one does. */
+    content: "";
+    position: absolute;
+    bottom: 7px;
+    left: 50%;
+    width: 116px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: rgba(17, 24, 39, 0.35);
+}
+
+/* A phone is a fixed viewport, not an endless column: a long menu scrolls
+   inside the device, which is also what tells an editor their navigation is
+   longer than one screen. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-page {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-chrome {
+    flex: 0 0 auto;
+}
+
+/* Three placeholder cards are a desktop grid; on a phone two is plenty and
+   keeps the fold where a visitor would meet it. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-card:nth-child(3) {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-cards {
+    grid-template-columns: 1fr;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-hero {
+    max-width: 100%;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-dot {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-address {
+    margin: 0;
+    text-align: center;
+}
+
+.menu-builder-preview-stage--mobile {
+    padding: 20px 12px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-siteheader {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-header-slot {
+    display: none;
+}
+
+.menu-builder-preview-burger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 34px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--mb-preview-line);
+    border-radius: 8px;
+    background: var(--mb-preview-page);
+    cursor: pointer;
+}
+
+.menu-builder-preview-burger-bars,
+.menu-builder-preview-burger-bars::before,
+.menu-builder-preview-burger-bars::after {
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--mb-preview-ink);
+}
+
+.menu-builder-preview-burger-bars {
+    position: relative;
+}
+
+.menu-builder-preview-burger-bars::before,
+.menu-builder-preview-burger-bars::after {
+    position: absolute;
+    content: "";
+}
+
+.menu-builder-preview-burger-bars::before {
+    top: -5px;
+}
+
+.menu-builder-preview-burger-bars::after {
+    top: 5px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav {
+    flex: 1 0 100%;
+    padding-top: 6px;
+    border-top: 1px solid var(--mb-preview-line);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > span {
+    display: flex;
+    width: 100%;
+    padding: 10px;
+    overflow-wrap: anywhere;
+}
+
+/* A bottom edge on a full-width row reads as a divider between items, so the
+   stacked layout marks the current page (and its open branch) down the side
+   instead. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav a[aria-current="page"] {
+    box-shadow: inset 3px 0 0 var(--mb-preview-accent);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li.is-active > a:not([aria-current="page"]),
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li.is-active > span {
+    box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.32);
+}
+
+/* A separator is a rule across the menu, not an item — it must not pick up
+   the row padding that would make it look like one. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> hr) {
+    padding: 0;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> hr) hr {
+    margin: 8px 10px;
+}
+
+/* Nested levels are shown in place — a phone has no room for a flyout, and a
+   rail is the clearest way to say "these belong to the item above" — but
+   they start **closed**, the way a phone menu does. Tapping the row (not a
+   caret) opens it: preview.js sets `[data-mb-open]` on the <li>. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav ul ul {
+    display: none;
+    margin: 0 0 4px 10px;
+    padding-left: 10px;
+    border-left: 2px solid var(--mb-preview-line);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li[data-mb-open] > ul {
+    display: block;
+    animation: menu-builder-preview-open 0.16s ease-out;
+}
+
+/* A mega-menu panel's columns are lists too, and the collapse rule above
+   would hide them — leaving an opened panel as an empty rail. The panel's own
+   disclosure decides whether they are seen; the lists inside it are always
+   part of it. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav .menu-builder-megamenu-panel ul {
+    display: block;
+}
+
+/* The caret sits at the end of the row, so the whole row reads as one
+   control rather than a label with a button stuck to it. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > span {
+    justify-content: space-between;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > a::after,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> ul) > span::after {
+    margin-left: auto;
+    font-size: 13px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > a:active,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li > span:active {
+    background: var(--mb-preview-surface);
+}
+
+/* Row rules between top-level items: a phone menu is a list of rows, and the
+   divider is what makes it read as one rather than as floating text. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav > ul > li:not(:last-child) {
+    border-bottom: 1px solid var(--mb-preview-line);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav > ul > li > span {
+    padding: 13px 12px;
+    font-size: 15px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav ul ul {
+    padding-bottom: 4px;
+    background: rgba(148, 163, 184, 0.07);
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav .menu-builder-megamenu-panel {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    margin: 0 0 6px 10px;
+    padding: 8px 0 8px 10px;
+    border-left: 2px solid var(--mb-preview-accent-soft);
+}
+
+/* Stacked items are full-width, so a mega-menu parent's link and its
+   disclosure would otherwise be two rows — the caret landing on a line of its
+   own under the label. The <details> stays an ordinary block in flow (so the
+   panel opens *below* the row, and so nothing interferes with the browser
+   hiding it while closed) and only the summary is lifted to the end of the
+   label row. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) {
+    position: relative;
+    display: block;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) > a,
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) > span {
+    width: 100%;
+    padding-right: 58px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav .menu-builder-megamenu-trigger {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--mb-preview-line);
+    border-radius: 8px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav .menu-builder-megamenu-trigger::after {
+    font-size: 13px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-canvas {
+    /* Nothing overlays on mobile — the panels are stacked in flow — so the
+       page only needs to look like a page. */
+    min-height: 180px;
+    padding: 20px 14px 28px;
+}
+
+/* ---------------------------------------------------------------------------
+   Placement: header vs footer
+
+   The same navigation markup, in the region an editor says their templates
+   render it. Whichever region the menu is *not* in is drawn as grey pills, so
+   a footer menu is unmistakably a footer menu at a glance — MenuBuilder does
+   not record placement, so this is a preview control with a first guess from
+   the menu's name.
+   --------------------------------------------------------------------------- */
+.menu-builder-preview-nav-placeholder {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    order: 2;
+    margin-left: auto;
+}
+
+.menu-builder-preview-pill {
+    display: block;
+    width: 58px;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.42);
+}
+
+.menu-builder-preview-sitefooter .menu-builder-preview-pill {
+    background: rgba(226, 232, 240, 0.22);
+}
+
+/* The footer region. The palette variables are redefined here rather than
+   restyling every rule again, so the navigation styling above simply follows
+   onto a dark surface. */
+.menu-builder-preview-sitefooter {
+    --mb-preview-page: #0f172a;
+    --mb-preview-ink: #e2e8f0;
+    --mb-preview-muted: #94a3b8;
+    --mb-preview-line: rgba(226, 232, 240, 0.16);
+    --mb-preview-accent: #93c5fd;
+    --mb-preview-accent-soft: rgba(147, 197, 253, 0.18);
+    --mb-preview-surface: rgba(255, 255, 255, 0.06);
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 32px;
+    align-items: flex-start;
+    margin-top: auto;
+    padding: 26px 20px 30px;
+    background: #0f172a;
+    color: var(--mb-preview-ink);
+}
+
+.menu-builder-preview-brand--footer {
+    color: var(--mb-preview-ink);
+}
+
+.menu-builder-preview-brand--footer .menu-builder-preview-brand-mark {
+    background: rgba(226, 232, 240, 0.16);
+}
+
+/* A footer navigation is not a bar with dropdowns: every level is on show, in
+   columns. That is what a footer *is*, and it is also the fastest way to
+   check a whole menu's structure in one look. */
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav {
+    flex: 1 1 auto;
+    margin: 0;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 36px;
+    align-items: flex-start;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li {
+    min-width: 130px;
+}
+
+/* A footer menu shows its levels flat, in columns, rather than as flyouts.
+   A plain nested list can simply be shown — it claims no state. A mega-menu
+   panel is only laid out flat *once its <details> is open*: showing it while
+   the disclosure is closed would put this screen back where the front-end
+   macro started, with a panel visible to the eye and closed to a screen
+   reader. The editor opens it here the same way a visitor would. */
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul,
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav details[open] > .menu-builder-megamenu-panel {
+    position: static;
+    display: block;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > a,
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul > li > span {
+    padding: 4px 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a,
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > span {
+    padding: 4px 6px;
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--mb-preview-muted);
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav ul ul li > a:hover {
+    color: var(--mb-preview-ink);
+    background: var(--mb-preview-surface);
+}
+
+/* A footer column is a heading with its links under it, so a mega-menu row
+   stacks here rather than sitting on one line: the item's label, its
+   disclosure, then the panel once that is open. */
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li:has(> details.menu-builder-megamenu) {
+    display: block;
+}
+
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav .menu-builder-megamenu-trigger {
+    justify-content: flex-start;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 4px 0;
+}
+
+/* A plain submenu is shown in full in a footer, so nothing advertises that it
+   collapses. A mega menu is different and keeps its control: its panel is a
+   <details>, and hiding the summary would leave the one thing that can open it
+   unreachable — an editor could no longer see the panel at all, and neither
+   could anyone using the keyboard. The flat footer layout applies once it is
+   open. */
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li > a::after,
+.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav li > span::after {
+    display: none;
+}
+
+/* On a phone a footer is one stacked column, not a row of them. */
+.menu-builder-preview-stage--mobile .menu-builder-preview-sitefooter {
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px 14px 26px;
+}
+
+.menu-builder-preview-stage--mobile.menu-builder-preview-stage--footer .menu-builder-preview-sitefooter .menu-builder-preview-nav > ul {
+    display: block;
+}
+
+.menu-builder-preview-stage--mobile.menu-builder-preview-stage--footer .menu-builder-preview-nav > ul > li:not(:last-child) {
+    border-bottom: 0;
+}
+
+/* When the menu is in the footer, the masthead is just placeholder shapes —
+   and the header's own end-slot would be one shape too many. */
+.menu-builder-preview-stage--footer .menu-builder-preview-header-slot {
+    display: none;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-nav-placeholder {
+    gap: 8px;
+}
+
+.menu-builder-preview-stage--mobile .menu-builder-preview-pill {
+    width: 34px;
 }

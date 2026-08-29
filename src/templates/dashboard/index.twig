@@ -3,29 +3,35 @@
 
 {% set title = group.name %}
 {% set selectedSubnavItem = 'dashboard' %}
-{% set crumbs = [{ label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') }] %}
+{% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
 
-{% set canEdit = currentUser.admin or currentUser.can('menuBuilder:edit') %}
-{% set canCreate = currentUser.admin or currentUser.can('menuBuilder:create') %}
+{# Every affordance flag comes from BaseMenuBuilderController::cpAffordances(),
+   so a button is rendered only when the action behind it would actually be
+   allowed — a Delete that answers 403 is worse than no Delete at all. #}
+{% set isFiltered = search|trim != '' %}
+{% set canSelect = canEdit or canDelete %}
 
 {% block sidebar %}
-    <nav>
+    <nav aria-label="{{ 'Menus'|t('menu-builder') }}">
         <ul>
             {% for g in groups %}
                 <li>
-                    <a href="{{ url('menu-builder/' ~ g.handle) }}" class="{{ group and g.id == group.id ? 'sel' }}">
+                    <a href="{{ url('menu-builder/' ~ g.handle) }}"
+                       class="{{ group and g.id == group.id ? 'sel' }}"
+                       {{ group and g.id == group.id ? 'aria-current="page"' : '' }}>
                         <span class="label">{{ g.name }}</span>
                         {% if not g.enabled %}
                             <span class="status disabled" title="{{ 'Disabled'|t('menu-builder') }}"></span>
+                            <span class="visually-hidden">{{ "Disabled"|t('menu-builder') }}</span>
                         {% endif %}
                     </a>
                 </li>
             {% endfor %}
         </ul>
     </nav>
-    {% if canCreate %}
+    {% if canManageSettings %}
         <div class="menu-builder-sidebar-footer">
-            <a href="{{ url('menu-builder/groups/new') }}" class="btn dashed icon add fullwidth">{{ "New group"|t('menu-builder') }}</a>
+            <a href="{{ url('menu-builder/groups/new') }}" class="btn dashed icon add fullwidth">{{ "New menu"|t('menu-builder') }}</a>
         </div>
     {% endif %}
 {% endblock %}
@@ -46,23 +52,109 @@
         {% endif %}
     </header>
 
+    {# A disabled menu resolves to nothing on the front end, whatever is in it.
+       Without saying so, editing a menu that renders nowhere looks like a bug
+       in the templates rather than a switch someone turned off. #}
+    {% if not group.enabled %}
+        <div class="menu-builder-notice warning" role="status">
+            <p>
+                {{ "This menu is disabled, so it renders nothing on the front end no matter what its items say."|t('menu-builder') }}
+                {% if canManageSettings %}
+                    <a href="{{ url('menu-builder/groups/' ~ group.id) }}">{{ "Enable it in menu settings"|t('menu-builder') }}</a>
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    {# Link health, summarised. The per-row badges say what is wrong with a
+       given item; this says how much of the menu is affected at all, which is
+       the thing an editor can't see when the broken rows are three levels
+       down and collapsed out of sight. Counted over the whole menu, never the
+       search-filtered subset.
+
+       It names no content: the counts come from
+       MenuBuilderLinkHealth::summarize(), which sees statuses and nothing
+       else. See MenuBuilderLinkHealthService. #}
+    {% if healthSummary.total %}
+        <div class="menu-builder-notice warning" role="status">
+            <p>
+                <strong>{{ "{count} menu items link to content that isn’t available."|t('menu-builder', { count: healthSummary.total }) }}</strong>
+                {{ "Each one is flagged in the tree below; open it to relink it, give it a fallback URL, or disable it."|t('menu-builder') }}
+            </p>
+        </div>
+    {% endif %}
+
     <div id="menu-builder-toolbar" class="flex flex-nowrap">
         <div class="flex-grow">
-            <form method="get">
-                <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search menu items…'|t('menu-builder') }}" class="text fullwidth">
+            <form method="get" role="search" class="menu-builder-search">
+                <label class="visually-hidden" for="menu-builder-search-input">{{ "Search menu items"|t('menu-builder') }}</label>
+                <input type="text"
+                       id="menu-builder-search-input"
+                       name="search"
+                       value="{{ search }}"
+                       placeholder="{{ 'Search menu items…'|t('menu-builder') }}"
+                       class="text fullwidth"
+                       autocomplete="off">
+                <button type="submit" class="btn">{{ "Search"|t('menu-builder') }}</button>
+                {% if isFiltered %}
+                    <a href="{{ url('menu-builder/' ~ group.handle) }}" class="btn">{{ "Clear"|t('menu-builder') }}</a>
+                {% endif %}
             </form>
         </div>
+        {# Preview is read-only and needs nothing beyond the `view` permission
+           this screen already required, so it is deliberately not gated on a
+           further affordance flag. #}
         <div>
-            <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Menu settings"|t('menu-builder') }}</a>
+            <a href="{{ url('menu-builder/' ~ group.handle ~ '/preview') }}" class="btn">{{ "Preview"|t('menu-builder') }}</a>
         </div>
+        {% if canManageSettings %}
+            <div>
+                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Menu settings"|t('menu-builder') }}</a>
+            </div>
+        {% endif %}
     </div>
 
-    {% if canEdit %}
+    {# Search filters the tree, so what is on screen is a subset in an order
+       that isn't the menu's real one. Reordering against it would post a
+       sibling list the editor never actually saw, so drag is switched off
+       while a search is active and the reason is said out loud rather than
+       leaving the handles looking broken. #}
+    {% if isFiltered %}
+        <div class="menu-builder-notice" role="status">
+            <p>
+                {{ "{visible} of {total} items match “{search}”."|t('menu-builder', {
+                    visible: visibleItemCount,
+                    total: itemCount,
+                    search: search,
+                }) }}
+                {% if canEdit and visibleItemCount %}
+                    {{ "Clear the search to reorder items."|t('menu-builder') }}
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+
+    {% if canSelect %}
         <div id="menu-builder-bulk-toolbar" hidden>
-            <span class="light" id="menu-builder-bulk-count"></span>
-            <button type="button" class="btn small" data-mb-bulk-op="enable">{{ "Enable"|t('menu-builder') }}</button>
-            <button type="button" class="btn small" data-mb-bulk-op="disable">{{ "Disable"|t('menu-builder') }}</button>
-            <button type="button" class="btn small error" data-mb-bulk-op="delete">{{ "Delete"|t('app') }}</button>
+            <span class="light" id="menu-builder-bulk-count" role="status" aria-live="polite"></span>
+            {% if canEdit %}
+                <button type="button" class="btn small" data-mb-bulk-op="enable">{{ "Enable"|t('menu-builder') }}</button>
+                <button type="button" class="btn small" data-mb-bulk-op="disable">{{ "Disable"|t('menu-builder') }}</button>
+            {% endif %}
+            {% if canDelete %}
+                <button type="button" class="btn small error" data-mb-bulk-op="delete">{{ "Delete"|t('app') }}</button>
+            {% endif %}
+            <button type="button" class="btn small" id="menu-builder-bulk-clear">{{ "Clear selection"|t('menu-builder') }}</button>
+            <div class="spinner hidden" id="menu-builder-bulk-spinner"></div>
+        </div>
+    {% endif %}
+
+    {% if canSelect and items is not empty %}
+        <div class="menu-builder-select-all">
+            <label>
+                <input type="checkbox" id="menu-builder-select-all">
+                {{ "Select all {count} items shown"|t('menu-builder', { count: visibleItemCount }) }}
+            </label>
         </div>
     {% endif %}
 
@@ -70,21 +162,36 @@
          data-group-id="{{ group.id }}"
          data-group-handle="{{ group.handle }}"
          data-max-depth="{{ group.maxDepth ?? '' }}"
-         data-can-edit="{{ canEdit ? '1' : '0' }}">
-        {% include "menu-builder/dashboard/_branch" with { items: items, level: 1, parentId: null, group: group, canEdit: canEdit, orphanedItemIds: orphanedItemIds } %}
+         data-filtered="{{ isFiltered ? '1' : '0' }}"
+         data-can-edit="{{ canEdit ? '1' : '0' }}"
+         data-can-create="{{ canCreate ? '1' : '0' }}"
+         data-can-delete="{{ canDelete ? '1' : '0' }}">
+        {% include "menu-builder/dashboard/_branch" with {
+            items: items,
+            level: 1,
+            parentId: null,
+            group: group,
+            canEdit: canEdit,
+            canCreate: canCreate,
+            canDelete: canDelete,
+            isFiltered: isFiltered,
+            itemHealth: itemHealth,
+        } %}
     </div>
 
     {% if items is empty %}
         <div class="zilch">
-            <p>
-                {% if search %}
-                    {{ "No menu items match your search."|t('menu-builder') }}
+            {% if isFiltered %}
+                <p>{{ "No menu items match “{search}”."|t('menu-builder', { search: search }) }}</p>
+                <p><a href="{{ url('menu-builder/' ~ group.handle) }}" class="btn">{{ "Clear search"|t('menu-builder') }}</a></p>
+            {% else %}
+                <p>{{ "This menu has no items yet."|t('menu-builder') }}</p>
+                {% if canCreate %}
+                    <p class="light">{{ "Add your first item using the panel on the right."|t('menu-builder') }}</p>
+                    <p><a href="#" class="btn submit add icon" data-mb-action="focus-quick-add">{{ "Add menu item"|t('menu-builder') }}</a></p>
                 {% else %}
-                    {{ "This menu has no items yet."|t('menu-builder') }}
+                    <p class="light">{{ "You don’t have permission to add menu items."|t('menu-builder') }}</p>
                 {% endif %}
-            </p>
-            {% if canCreate and not search %}
-                <p><a href="#" class="btn submit" data-mb-action="focus-quick-add">{{ "+ Add Menu Item"|t('menu-builder') }}</a></p>
             {% endif %}
         </div>
     {% endif %}
@@ -93,8 +200,8 @@
 {% block details %}
     {% if group and canCreate %}
         <div id="menu-builder-quick-add">
-            <h2>{{ "Add Menu Item"|t('menu-builder') }}</h2>
-            <form method="post" action="">
+            <h2>{{ "Add menu item"|t('menu-builder') }}</h2>
+            <form method="post" action="" id="menu-builder-quick-add-form">
                 {{ csrfInput() }}
                 <input type="hidden" name="action" value="menu-builder/items/save">
                 <input type="hidden" name="groupId" value="{{ group.id }}">
@@ -124,6 +231,7 @@
                             { label: "Anchor"|t('menu-builder'), value: 'anchor' },
                             { label: "Heading (non-clickable)"|t('menu-builder'), value: 'nonclickable' },
                             { label: "Separator"|t('menu-builder'), value: 'separator' },
+                            { label: "Dynamic navigation"|t('menu-builder'), value: 'dynamic' },
                         ],
                     }) }}
 
@@ -182,26 +290,114 @@
                     <div data-quick-add-section="anchor" class="menu-builder-link-section hidden">
                         {{ forms.textField({
                             label: "Anchor handle"|t('menu-builder'),
+                            instructions: "Rendered as a link to #handle on the current page."|t('menu-builder'),
                             id: 'quick-add-anchor',
                             name: 'customUrl',
                         }) }}
                     </div>
+
+                    {# Dynamic navigation is a supported item type, so it has to
+                       be creatable here: quick-add is the only creation path
+                       (see ARCHITECTURE.md, "Single path per behaviour"), and
+                       without this entry a dynamic item could be edited but
+                       never made.
+
+                       Only the two fields the model actually *requires* of a
+                       dynamic item are asked for — a source type and a source.
+                       Limit and order are optional in
+                       MenuBuilderItem::validateDynamicSource() and defaulted by
+                       MenuBuilderDynamicNavigationService::normalizeConfig(),
+                       so they stay in the full editor, where the rest of the
+                       item is configured after it exists. The field names are
+                       the ones ItemsController::buildMetadata() already reads;
+                       nothing about a dynamic source is represented a second
+                       way here. #}
+                    <div data-quick-add-section="dynamic" class="menu-builder-link-section hidden">
+                        {{ forms.selectField({
+                            label: "Source"|t('menu-builder'),
+                            id: 'quick-add-dynamic-source-type',
+                            name: 'dynamicSourceType',
+                            value: 'entries',
+                            options: [
+                                { label: "Entries (by section)"|t('menu-builder'), value: 'entries' },
+                                { label: "Categories (by group)"|t('menu-builder'), value: 'categories' },
+                                { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
+                            ],
+                        }) }}
+
+                        {# One picker per source type, all posting the same
+                           `dynamicSourceId`, exactly as the full editor renders
+                           them — MenuBuilder.syncDynamicSourcePickers() (shared
+                           with items/_fields.twig) keeps one enabled.
+
+                           The two that don't match the default source type
+                           above are rendered `disabled` so that state is right
+                           before any script runs: without JS all three would
+                           otherwise post `dynamicSourceId` and the last one
+                           would win, sending a blank over the editor's real
+                           choice. JS recomputes all three on init, so this
+                           changes nothing once it runs. #}
+                        <div data-dynamic-source="entries">
+                            {{ forms.selectField({
+                                label: "Section"|t('menu-builder'),
+                                id: 'quick-add-dynamic-source-entries',
+                                name: 'dynamicSourceId',
+                                value: '',
+                                options: [{ label: "Select a section…"|t('menu-builder'), value: '' }]
+                                    |merge(craft.app.entries.getAllSections()|map(section => { label: section.name, value: section.id })|values),
+                            }) }}
+                        </div>
+
+                        <div data-dynamic-source="categories">
+                            {{ forms.selectField({
+                                label: "Category group"|t('menu-builder'),
+                                id: 'quick-add-dynamic-source-categories',
+                                name: 'dynamicSourceId',
+                                value: '',
+                                disabled: true,
+                                options: [{ label: "Select a category group…"|t('menu-builder'), value: '' }]
+                                    |merge(craft.app.categories.getAllGroups()|map(categoryGroup => { label: categoryGroup.name, value: categoryGroup.id })|values),
+                            }) }}
+                        </div>
+
+                        <div data-dynamic-source="assets">
+                            {{ forms.selectField({
+                                label: "Volume"|t('menu-builder'),
+                                id: 'quick-add-dynamic-source-assets',
+                                name: 'dynamicSourceId',
+                                value: '',
+                                disabled: true,
+                                options: [{ label: "Select a volume…"|t('menu-builder'), value: '' }]
+                                    |merge(craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values),
+                            }) }}
+                        </div>
+
+                        <p class="light">{{ "How many children to pull in, and in what order, are set in the full editor once this item exists."|t('menu-builder') }}</p>
+                    </div>
                 </div>
 
-                <div class="btngroup">
-                    <button type="submit" class="btn submit fullwidth">{{ "Create"|t('menu-builder') }}</button>
+                <div class="btngroup menu-builder-quick-add-actions">
+                    <button type="submit" class="btn submit fullwidth" id="menu-builder-quick-add-submit">{{ "Add menu item"|t('menu-builder') }}</button>
+                    <div class="spinner hidden" id="menu-builder-quick-add-spinner"></div>
                 </div>
             </form>
         </div>
     {% endif %}
 {% endblock %}
 
-{% if canEdit %}
+{% if canSelect %}
     {% js %}
     (function() {
         var toolbar = document.getElementById('menu-builder-bulk-toolbar');
         var countLabel = document.getElementById('menu-builder-bulk-count');
+        var spinner = document.getElementById('menu-builder-bulk-spinner');
+        var clearBtn = document.getElementById('menu-builder-bulk-clear');
+        var selectAll = document.getElementById('menu-builder-select-all');
         var tree = document.getElementById('menu-builder-tree');
+
+        function checkboxes() {
+            return Array.prototype.slice.call(tree.querySelectorAll('[data-mb-bulk-select]'));
+        }
 
         function selectedIds() {
             return Array.prototype.map.call(
@@ -211,15 +407,26 @@
         }
 
         function setBusy(busy) {
-            toolbar.querySelectorAll('[data-mb-bulk-op]').forEach(function(el) {
+            toolbar.querySelectorAll('button').forEach(function(el) {
                 el.disabled = busy;
             });
+            toolbar.setAttribute('aria-busy', busy ? 'true' : 'false');
+            spinner.classList.toggle('hidden', !busy);
         }
 
         function updateToolbar() {
             var ids = selectedIds();
+            var all = checkboxes();
+
             toolbar.hidden = ids.length === 0;
             countLabel.textContent = Craft.t('menu-builder', '{count} selected', { count: ids.length });
+
+            if (selectAll) {
+                selectAll.checked = all.length > 0 && ids.length === all.length;
+                // Some-but-not-all reads as "nothing selected" without this,
+                // which is exactly wrong when a bulk delete is one click away.
+                selectAll.indeterminate = ids.length > 0 && ids.length < all.length;
+            }
         }
 
         tree.addEventListener('change', function(event) {
@@ -227,6 +434,25 @@
                 updateToolbar();
             }
         });
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                var checked = selectAll.checked;
+                checkboxes().forEach(function(box) {
+                    box.checked = checked;
+                });
+                updateToolbar();
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function() {
+                checkboxes().forEach(function(box) {
+                    box.checked = false;
+                });
+                updateToolbar();
+            });
+        }
 
         // Browsers restore checkbox state on reload and on back/forward, which
         // would otherwise leave checked rows with no toolbar. Sync once now,
@@ -268,16 +494,18 @@
 
                             setBusy(false);
                             updateToolbar();
-                            Craft.cp.displayNotice(Craft.t('menu-builder', '{count} menu item(s) updated.', { count: ids.length }));
+                            Craft.cp.displayNotice(op === 'enable'
+                                ? Craft.t('menu-builder', '{count} menu item(s) enabled.', { count: ids.length })
+                                : Craft.t('menu-builder', '{count} menu item(s) disabled.', { count: ids.length }));
 
                             return;
                         }
 
-                        window.location.reload();
+                        window.MenuBuilder.tree.reloadWith('deleted', null, ids.length);
                     })
-                    .catch(function() {
+                    .catch(function(error) {
                         setBusy(false);
-                        Craft.cp.displayError(Craft.t('menu-builder', 'That bulk action couldn’t be completed.'));
+                        window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'That bulk action couldn’t be completed.'));
                     });
             });
         });
@@ -289,8 +517,12 @@
     {% js %}
     (function() {
         var panel = document.getElementById('menu-builder-quick-add');
+        var form = document.getElementById('menu-builder-quick-add-form');
+        var submitBtn = document.getElementById('menu-builder-quick-add-submit');
+        var spinner = document.getElementById('menu-builder-quick-add-spinner');
         var typeField = document.getElementById('quick-add-type');
         var clickableField = document.getElementById('quick-add-clickable');
+        var dynamicSourceTypeField = document.getElementById('quick-add-dynamic-source-type');
         var sections = panel.querySelectorAll('[data-quick-add-section]');
         var titleHint = panel.querySelector('[data-quick-add-title-hint]');
         var elementTypes = ['entry', 'category', 'asset'];
@@ -304,20 +536,42 @@
                 // (only one applies per type) — disabling the inactive one
                 // keeps its blank value out of the submitted form entirely,
                 // rather than letting it silently overwrite the real value.
-                section.querySelectorAll('input, select, textarea').forEach(function(field) {
-                    field.disabled = !visible;
-                });
+                window.MenuBuilder.setFieldsDisabled(section, !visible);
             });
             clickableField.value = (type === 'nonclickable' || type === 'separator') ? '' : '1';
             // Entry/category/asset titles fall back to the linked element's
             // own title when left blank (see MenuBuilderResolver) — this hint
             // is UX-only, the PHP model remains the authoritative validator.
+            // A dynamic item has no linked element and its title IS required,
+            // so the hint stays off for it.
             if (titleHint) {
                 titleHint.hidden = elementTypes.indexOf(type) === -1;
             }
+
+            // Must run after the loop: re-enabling the dynamic section above
+            // switches all three source pickers back on, and they all post
+            // `dynamicSourceId`.
+            updateDynamicSource();
+        }
+
+        /** Shared with the full item editor — see item-fields.js. */
+        function updateDynamicSource() {
+            if (!dynamicSourceTypeField) {
+                return;
+            }
+
+            window.MenuBuilder.syncDynamicSourcePickers(
+                panel,
+                typeField.value === 'dynamic' ? dynamicSourceTypeField.value : null
+            );
         }
 
         typeField.addEventListener('change', updateSections);
+
+        if (dynamicSourceTypeField) {
+            dynamicSourceTypeField.addEventListener('change', updateDynamicSource);
+        }
+
         updateSections();
 
         document.querySelectorAll('[data-mb-action="focus-quick-add"]').forEach(function(link) {
@@ -326,6 +580,45 @@
                 panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 document.getElementById('quick-add-title').focus();
             });
+        });
+
+        // A plain form post that fails validation re-renders the dashboard,
+        // which knows nothing about the rejected item: every field the editor
+        // filled in came back blank, with a flash that named no field.
+        // Submitting the same form over AJAX instead keeps the panel's state
+        // and puts each message under the field it belongs to. The <form> is
+        // left intact so a no-JS post still works exactly as before.
+        function setBusy(busy) {
+            submitBtn.disabled = busy;
+            submitBtn.classList.toggle('disabled', busy);
+            spinner.classList.toggle('hidden', !busy);
+            form.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            window.MenuBuilder.clearFieldErrors(form);
+            setBusy(true);
+
+            Craft.sendActionRequest('POST', 'menu-builder/items/save', { data: new FormData(form) })
+                .then(function(response) {
+                    // A toast raised here would be wiped by the reload. The
+                    // new row is appended at the end of its level instead —
+                    // well below the fold in a long menu — so the reload
+                    // carries its id and the tree scrolls to it, flags it, and
+                    // announces the save once it is actually on screen.
+                    window.MenuBuilder.tree.reloadWith('added', response.data && response.data.id);
+                })
+                .catch(function(error) {
+                    setBusy(false);
+                    var shown = window.MenuBuilder.applyFieldErrors(form, window.MenuBuilder.errorsFor(error));
+
+                    // Only raise the banner when nothing landed on a field —
+                    // otherwise it just repeats what is now visible in place.
+                    if (!shown) {
+                        window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t add that menu item.'));
+                    }
+                });
         });
     })();
     {% endjs %}

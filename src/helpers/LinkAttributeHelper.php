@@ -133,6 +133,82 @@ class LinkAttributeHelper
         return $attributes;
     }
 
+
+    /**
+     * Attribute names the bundled macros own, or that decide how assistive
+     * technology and the keyboard treat an item. A custom-attributes bag may
+     * not set any of them.
+     *
+     * Two different reasons, one list:
+     *
+     * - `href`, `target`, `rel`, `id`, `class`, `role` are emitted by the
+     *   macros from the item's own fields. A second copy is a duplicate
+     *   attribute — the browser keeps the first and drops the rest, so the
+     *   editor's value silently does nothing on one item and everything on
+     *   another (a heading renders a `<span>`, which has no `href` to lose
+     *   to).
+     * - The `aria-*` states and `tabindex` describe behaviour nothing in a
+     *   rendered menu implements. `aria-current="page"` is the plugin's
+     *   answer about the current request ({@see \Tahadudhiya\MenuBuilder\services\MenuBuilderActiveResolver}),
+     *   and a typed one would announce the wrong page; `aria-expanded` on a
+     *   link that expands nothing, or `aria-hidden` on a visible link,
+     *   describes a widget that isn't there; a `tabindex` reorders or
+     *   removes the item from the keyboard path.
+     *
+     * Compared case-insensitively — HTML attribute names are.
+     */
+    public const RESERVED_ATTRIBUTES = [
+        'href', 'target', 'rel', 'id', 'class', 'role', 'tabindex',
+        'aria-current', 'aria-expanded', 'aria-controls', 'aria-haspopup', 'aria-hidden',
+    ];
+
+    /**
+     * The render-time half of {@see validateHtmlAttributes()}: the bag an
+     * item or a menu actually renders with, with everything unsafe or
+     * reserved dropped.
+     *
+     * Validation on save is not enough on its own. A bag can reach the
+     * database without passing through it — an import, a direct database
+     * write, a row saved before this rule existed — and unlike every other
+     * rendered value, an attributes bag's *keys* are not made safe by Twig's
+     * escaping: a key is printed where an attribute name goes, so
+     * `on click` or `x onclick=alert(1)` would emit a second, live
+     * attribute rather than an escaped string. This is the same
+     * fail-closed re-check `UrlLinkResolver` applies to a stored
+     * `customUrl`, applied to the other editor-authored thing that reaches
+     * markup.
+     *
+     * Filtering rather than erroring is deliberate: this runs while a page
+     * is being rendered, where the useful answer is a menu that is missing
+     * one attribute, not an exception. The save path still refuses the same
+     * values with a message the editor can act on.
+     *
+     * @param array<mixed,mixed> $attributes
+     * @return array<string,string>
+     */
+    public static function filterHtmlAttributes(array $attributes): array
+    {
+        $safe = [];
+
+        foreach ($attributes as $key => $value) {
+            if (!is_string($key) || is_array($value) || is_object($value)) {
+                continue;
+            }
+
+            if (in_array(strtolower(trim($key)), self::RESERVED_ATTRIBUTES, true)) {
+                continue;
+            }
+
+            if (self::validateHtmlAttributes([$key => $value]) !== []) {
+                continue;
+            }
+
+            $safe[$key] = (string)$value;
+        }
+
+        return $safe;
+    }
+
     /**
      * Schemes that execute rather than navigate, matched anywhere in an
      * attribute value because the bag's keys are open-ended: any of them

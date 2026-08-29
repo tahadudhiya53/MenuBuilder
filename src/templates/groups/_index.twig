@@ -1,6 +1,6 @@
 {% extends "_layouts/cp" %}
 
-{% set title = "MenuBuilder"|t('menu-builder') %}
+{% set title = "Menus"|t('menu-builder') %}
 {% set selectedSubnavItem = 'dashboard' %}
 
 {% block actionButton %}
@@ -20,19 +20,22 @@
                         <th scope="col">{{ "Status"|t('menu-builder') }}</th>
                         <th scope="col">{{ "Items"|t('menu-builder') }}</th>
                         <th scope="col">{{ "Last updated"|t('menu-builder') }}</th>
-                        <td class="thin"></td>
+                        <td class="thin"><span class="visually-hidden">{{ "Actions"|t('menu-builder') }}</span></td>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in rows %}
                         {% set group = row.group %}
-                        <tr data-id="{{ group.id }}" data-handle="{{ group.handle }}">
+                        <tr data-id="{{ group.id }}" data-handle="{{ group.handle }}" data-name="{{ group.name }}">
                             <th scope="row">
                                 <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ group.name }}</a>
                             </th>
                             <td><code>{{ group.handle }}</code></td>
                             <td>
-                                <span class="status {{ group.enabled ? 'green' : '' }}"></span>{{ group.enabled ? "Enabled"|t('menu-builder') : "Disabled"|t('menu-builder') }}
+                                {# Craft's `.status` needs a modifier to render
+                                   anything; `.status ''` was an empty circle
+                                   that read as "no status" rather than "off". #}
+                                <span class="status {{ group.enabled ? 'green' : 'disabled' }}"></span><span class="menu-builder-status-label">{{ group.enabled ? "Enabled"|t('menu-builder') : "Disabled"|t('menu-builder') }}</span>
                             </td>
                             <td>{{ row.itemCount }}</td>
                             <td>{{ group.dateUpdated ? group.dateUpdated|datetime('short') : '' }}</td>
@@ -41,20 +44,19 @@
                                     <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {name}'|t('menu-builder', { name: group.name }) }}"></button>
                                     <div class="menu">
                                         <ul>
-                                            <li><a href="{{ url('menu-builder/' ~ group.handle) }}" role="button">{{ "Edit"|t('app') }}</a></li>
-                                            {% if canManageSettings %}
-                                                <li><a href="{{ url('menu-builder/groups/' ~ group.id) }}" role="button">{{ "Menu settings"|t('menu-builder') }}</a></li>
-                                            {% endif %}
+                                            <li><a href="{{ url('menu-builder/' ~ group.handle) }}" role="button">{{ "Edit menu items"|t('menu-builder') }}</a></li>
+                                            <li><a href="{{ url('menu-builder/groups/' ~ group.id) }}" role="button">{{ canManageSettings ? "Menu settings"|t('menu-builder') : "View menu settings"|t('menu-builder') }}</a></li>
                                             {% if canManageSettings %}
                                                 <li><a data-mb-action="toggle-group" data-id="{{ group.id }}" role="button">{{ group.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}</a></li>
-                                            {% endif %}
-                                            {% if canManageSettings %}
                                                 <li><a data-mb-action="duplicate-group" data-id="{{ group.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a></li>
                                             {% endif %}
-                                            {% if canDelete %}
-                                                <li><a data-mb-action="delete-group" data-id="{{ group.id }}" data-name="{{ group.name }}" class="error" role="button">{{ "Delete"|t('app') }}</a></li>
-                                            {% endif %}
                                         </ul>
+                                        {% if canDelete %}
+                                            <hr>
+                                            <ul>
+                                                <li><a data-mb-action="delete-group" data-id="{{ group.id }}" data-name="{{ group.name }}" data-item-count="{{ row.itemCount }}" class="error" role="button">{{ "Delete"|t('app') }}</a></li>
+                                            </ul>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </td>
@@ -66,9 +68,11 @@
     {% else %}
         <div class="zilch">
             <p>{{ "No menus yet"|t('menu-builder') }}</p>
-            <p class="light">{{ "Create your first navigation menu to get started."|t('menu-builder') }}</p>
+            <p class="light">{{ "A menu holds the items your templates render as navigation."|t('menu-builder') }}</p>
             {% if canManageSettings %}
-                <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "Create Menu"|t('menu-builder') }}</a></p>
+                <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a></p>
+            {% else %}
+                <p class="light">{{ "You don’t have permission to create menus."|t('menu-builder') }}</p>
             {% endif %}
         </div>
     {% endif %}
@@ -76,17 +80,50 @@
 
 {% js %}
 (function() {
+    // One in-flight request per row. None of these was guarded before, so a
+    // second click while the first was still running duplicated a menu twice
+    // or raced two toggles against each other.
+    var busy = {};
+
+    function run(link, action, data, failureMessage, onDone) {
+        var id = link.getAttribute('data-id');
+
+        if (busy[id]) {
+            return;
+        }
+
+        busy[id] = true;
+        var row = link.closest('tr') || document.querySelector('tr[data-id="' + id + '"]');
+
+        if (row) {
+            row.setAttribute('aria-busy', 'true');
+            row.classList.add('menu-builder-row-busy');
+        }
+
+        Craft.sendActionRequest('POST', action, { data: data })
+            .then(onDone)
+            .catch(function(error) {
+                delete busy[id];
+
+                if (row) {
+                    row.removeAttribute('aria-busy');
+                    row.classList.remove('menu-builder-row-busy');
+                }
+
+                window.MenuBuilder.displayError(error, failureMessage);
+            });
+    }
+
     document.querySelectorAll('[data-mb-action="duplicate-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            var id = link.getAttribute('data-id');
-            Craft.sendActionRequest('POST', 'menu-builder/groups/duplicate', { data: { id: id } })
-                .then(function(response) {
-                    Craft.cp.displaySuccess(Craft.t('menu-builder', 'Navigation menu duplicated.'));
-                    window.location.reload();
-                })
-                .catch(function() {
-                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t duplicate that navigation menu.'));
+            run(link, 'menu-builder/groups/duplicate', { id: link.getAttribute('data-id') },
+                Craft.t('menu-builder', 'Couldn’t duplicate that menu.'),
+                function(response) {
+                    // Straight to the copy, which is what the editor wants to
+                    // rename — the list reload used to leave them hunting for
+                    // a row named "… 1" somewhere in the table.
+                    window.location.href = response.data.url;
                 });
         });
     });
@@ -94,13 +131,51 @@
     document.querySelectorAll('[data-mb-action="toggle-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
+
             var id = link.getAttribute('data-id');
-            Craft.sendActionRequest('POST', 'menu-builder/groups/toggle', { data: { id: id } })
-                .then(function() {
-                    window.location.reload();
-                })
-                .catch(function() {
-                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t update that navigation menu.'));
+
+            run(link, 'menu-builder/groups/toggle', { id: id },
+                Craft.t('menu-builder', 'Couldn’t update that menu.'),
+                function(response) {
+                    // Patched in place rather than reloaded: a full reload for
+                    // a status flip threw away scroll position and wiped the
+                    // confirmation it had just raised.
+                    var enabled = !!(response.data && response.data.enabled);
+                    var row = document.querySelector('tr[data-id="' + id + '"]');
+
+                    if (row) {
+                        var status = row.querySelector('.status');
+                        var statusLabel = row.querySelector('.menu-builder-status-label');
+
+                        if (status) {
+                            status.className = 'status ' + (enabled ? 'green' : 'disabled');
+                        }
+
+                        if (statusLabel) {
+                            statusLabel.textContent = enabled
+                                ? Craft.t('menu-builder', 'Enabled')
+                                : Craft.t('menu-builder', 'Disabled');
+                        }
+
+                        row.removeAttribute('aria-busy');
+                        row.classList.remove('menu-builder-row-busy');
+                    }
+
+                    // The row menu may have been relocated near <body> by
+                    // Craft's disclosure JS, so reach it by id, not through
+                    // the row (same reason tree.js looks rows up by id).
+                    var toggle = document.querySelector('[data-mb-action="toggle-group"][data-id="' + id + '"]');
+                    if (toggle) {
+                        toggle.textContent = enabled
+                            ? Craft.t('menu-builder', 'Disable')
+                            : Craft.t('menu-builder', 'Enable');
+                    }
+
+                    delete busy[id];
+
+                    window.MenuBuilder.success(enabled
+                        ? Craft.t('menu-builder', 'Menu enabled.')
+                        : Craft.t('menu-builder', 'Menu disabled.'));
                 });
         });
     });
@@ -108,20 +183,39 @@
     document.querySelectorAll('[data-mb-action="delete-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            var id = link.getAttribute('data-id');
-            var name = link.getAttribute('data-name');
 
-            if (!confirm(Craft.t('menu-builder', 'Delete “{name}” and all of its menu items? This cannot be undone.', { name: name }))) {
+            var name = link.getAttribute('data-name');
+            var itemCount = parseInt(link.getAttribute('data-item-count'), 10) || 0;
+
+            // Say how much is about to go: "and all of its menu items" gave no
+            // sense of whether that was two items or two hundred.
+            var message = itemCount
+                ? Craft.t('menu-builder', 'Delete “{name}” and its {count} menu item(s)? This cannot be undone.', { name: name, count: itemCount })
+                : Craft.t('menu-builder', 'Delete “{name}”? This cannot be undone.', { name: name });
+
+            if (!confirm(message)) {
                 return;
             }
 
-            Craft.sendActionRequest('POST', 'menu-builder/groups/delete', { data: { id: id } })
-                .then(function() {
-                    Craft.cp.displaySuccess(Craft.t('menu-builder', 'Navigation menu deleted.'));
-                    window.location.reload();
-                })
-                .catch(function() {
-                    Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t delete that navigation menu.'));
+            var id = link.getAttribute('data-id');
+
+            run(link, 'menu-builder/groups/delete', { id: id },
+                Craft.t('menu-builder', 'Couldn’t delete that menu.'),
+                function() {
+                    var row = document.querySelector('tr[data-id="' + id + '"]');
+                    var table = row && row.closest('table');
+
+                    if (row) {
+                        row.remove();
+                    }
+
+                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menu deleted.'));
+
+                    // Nothing left to list — reload so the empty state (and
+                    // its "New menu" call to action) replaces the bare table.
+                    if (table && !table.querySelectorAll('tbody tr').length) {
+                        window.location.reload();
+                    }
                 });
         });
     });

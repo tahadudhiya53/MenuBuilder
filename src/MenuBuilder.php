@@ -17,6 +17,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkHealthService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderResolver;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderVisibilityService;
@@ -27,6 +28,7 @@ use yii\base\Event;
  * @property-read MenuBuilderGroupService $groups
  * @property-read MenuBuilderItemService $items
  * @property-read MenuBuilderLinkResolver $linkResolver
+ * @property-read MenuBuilderLinkHealthService $linkHealth
  * @property-read MenuBuilderVisibilityService $visibility
  * @property-read MenuBuilderCacheService $cache
  * @property-read MenuBuilderActiveResolver $activeResolver
@@ -47,6 +49,7 @@ class MenuBuilder extends Plugin
                 'groups' => MenuBuilderGroupService::class,
                 'items' => MenuBuilderItemService::class,
                 'linkResolver' => MenuBuilderLinkResolver::class,
+                'linkHealth' => MenuBuilderLinkHealthService::class,
                 'visibility' => MenuBuilderVisibilityService::class,
                 'cache' => MenuBuilderCacheService::class,
                 'activeResolver' => MenuBuilderActiveResolver::class,

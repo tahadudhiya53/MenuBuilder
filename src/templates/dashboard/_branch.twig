@@ -1,3 +1,19 @@
+{% if canEdit and not isFiltered %}
+    <p id="menu-builder-reorder-help" class="visually-hidden">
+        {{ "Up and down arrows move this item within the menu. Left and right arrows change how deeply it is nested. Changes save as you go."|t('menu-builder') }}
+    </p>
+{% endif %}
 <ul class="menu-builder-tree-list" data-parent-id="">
-    {% include "menu-builder/dashboard/_items" with { items: items, level: level, parentId: parentId, group: group, canEdit: canEdit, orphanedItemIds: orphanedItemIds } %}
+    {% include "menu-builder/dashboard/_items" with {
+        items: items,
+        level: level,
+        openColumns: [],
+        parentId: parentId,
+        group: group,
+        canEdit: canEdit,
+        canCreate: canCreate,
+        canDelete: canDelete,
+        isFiltered: isFiltered,
+        itemHealth: itemHealth,
+    } %}
 </ul>

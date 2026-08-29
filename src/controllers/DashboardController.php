@@ -7,6 +7,7 @@ use craft\helpers\UrlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderLinkHealth;
 use yii\base\Action;
 use yii\web\Response;
 
@@ -44,9 +45,10 @@ class DashboardController extends BaseMenuBuilderController
             return $this->redirect(UrlHelper::cpUrl('menu-builder'));
         }
 
-        $search = Craft::$app->getRequest()->getQueryParam('search', '');
+        $itemHealth = MenuBuilder::getInstance()->linkHealth->getForGroup($group->id);
+        $search = trim((string)Craft::$app->getRequest()->getQueryParam('search', ''));
         $tree = MenuBuilder::getInstance()->items->getTree($group->id);
-        $items = $search ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
+        $items = $search !== '' ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
 
         // Built from the unfiltered tree so a search never narrows the parents
         // the quick-add form can target.
@@ -60,10 +62,37 @@ class DashboardController extends BaseMenuBuilderController
             'group' => $group,
             'items' => $items,
             'search' => $search,
+            // The number of rows actually on screen, so an active search can
+            // say "N of M" instead of leaving the header's total looking wrong.
+            'visibleItemCount' => self::countTree($items),
             'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
-            'orphanedItemIds' => MenuBuilder::getInstance()->items->getOrphanedItemIds($group->id),
+            // Link health for every item in the menu, healthy ones included
+            // (see MenuBuilderLinkHealthService) — the tree rows read it by
+            // item id, and the summary counts only what needs attention. Built
+            // from the *unfiltered* menu on purpose: a search must not make
+            // the "3 items need attention" line quietly drop to one.
+            'itemHealth' => $itemHealth,
+            'healthSummary' => MenuBuilderLinkHealth::summarize($itemHealth),
             'parentOptions' => $parentOptions,
-        ]);
+        ] + $this->currentUserAffordances());
+    }
+
+    /**
+     * Total rows in a (possibly filtered) tree, descendants included. Pure and
+     * static so the count the search summary shows is testable without a
+     * booted app.
+     *
+     * @param MenuBuilderItem[] $items
+     */
+    public static function countTree(array $items): int
+    {
+        $count = 0;
+
+        foreach ($items as $item) {
+            $count += 1 + self::countTree($item->children);
+        }
+
+        return $count;
     }
 
     /**

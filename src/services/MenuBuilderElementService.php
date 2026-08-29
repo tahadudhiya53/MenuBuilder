@@ -16,6 +16,7 @@ use craft\events\VolumeEvent;
 use craft\services\Categories;
 use craft\services\Elements;
 use craft\services\Entries;
+use craft\services\Sites;
 use craft\services\Volumes;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -41,11 +42,18 @@ use yii\base\Event;
  *    inside it. Craft only resaves entries for this when `autoResaveEntries`
  *    is on, and never resaves assets for a volume change, so the element
  *    events above can't be relied on.
+ * 3. **Site config** — a site save or delete is the same kind of change one
+ *    level further out: it can move every URL on that site to a different
+ *    base URL or language, disable the site, or (on delete) transfer its
+ *    content to another site. See {@see handleSiteChange()}.
  *
- * Both paths invalidate only the navigation groups that actually reference
- * the affected element(s) — via indexed lookups on `menubuilder_items` —
- * plus the groups whose enabled `dynamic` items point at the *same*
- * section/group/volume. Never a blanket flush.
+ * The first two paths invalidate only the navigation groups that actually
+ * reference the affected element(s) — via indexed lookups on
+ * `menubuilder_items` — plus the groups whose enabled `dynamic` items point
+ * at the *same* section/group/volume, by menu ID. Never a blanket flush. The
+ * third is the one genuinely global case, and the only caller of
+ * MenuBuilderCacheService::invalidateAll() anywhere in the plugin
+ * (MenuBuilderGroupTest pins that).
  */
 class MenuBuilderElementService extends Component
 {
@@ -102,6 +110,40 @@ class MenuBuilderElementService extends Component
                 $this->handleContainerChange('assets', (int)$event->volume->id);
             }
         );
+
+        $siteHandler = function() {
+            $this->handleSiteChange();
+        };
+
+        Event::on(Sites::class, Sites::EVENT_AFTER_SAVE_SITE, $siteHandler);
+        Event::on(Sites::class, Sites::EVENT_AFTER_DELETE_SITE, $siteHandler);
+    }
+
+    /**
+     * A site save or delete invalidates *every* cached tree, on every site —
+     * the one case where the blanket flush this service otherwise avoids is
+     * the correct scope.
+     *
+     * Cached trees are keyed by (site, menu, config version) and hold
+     * resolved element URLs and titles, both of which come from the site
+     * being rendered. A site save can change the base URL every one of those URLs
+     * was built from, change the language the titles were read in, or
+     * disable the site outright; a site delete can transfer that site's
+     * content to another site, changing URLs on a site that was never itself
+     * edited. None of that fires an element event — Craft resaves nothing
+     * for it — so without this a navigation menu would keep serving the old
+     * site's URLs until something unrelated happened to invalidate it.
+     *
+     * This is also the path a deployment takes: sites live in project
+     * config, and `project-config/apply` reaches them through
+     * `Sites::handleChangedSite()`/`handleDeletedSite()`, which fire exactly
+     * these two events. Navigation groups and items are database-only (see
+     * MenuBuilderGroupService), so a deploy never rewrites them — but it can
+     * rewrite the sites their cached trees were resolved against.
+     */
+    public function handleSiteChange(): void
+    {
+        MenuBuilder::getInstance()->cache->invalidateAll();
     }
 
     /**
@@ -309,28 +351,17 @@ class MenuBuilderElementService extends Component
     }
 
     /**
+     * Invalidation is keyed by menu **ID** (MenuBuilderCacheService::groupTag()),
+     * which is exactly what the lookups above already return — so an
+     * entry/category/asset save costs no group lookup at all, however many
+     * menus reference the element, and a menu handle rename can never leave
+     * an entry uninvalidated. Deduplication and the empty case are the cache
+     * service's ({@see MenuBuilderCacheService::invalidateGroupIds()}).
+     *
      * @param int[] $groupIds
      */
     private function invalidateGroupIds(array $groupIds): void
     {
-        $groupIds = array_unique($groupIds);
-
-        if (empty($groupIds)) {
-            return;
-        }
-
-        // getHandleById() reads the group service's request-level cache, so
-        // this stays one query's worth of work no matter how many groups
-        // reference the element, on every entry/category/asset save.
-        $handles = [];
-        foreach ($groupIds as $groupId) {
-            $handle = MenuBuilder::getInstance()->groups->getHandleById($groupId);
-
-            if ($handle !== null) {
-                $handles[] = $handle;
-            }
-        }
-
-        MenuBuilder::getInstance()->cache->invalidateGroups($handles);
+        MenuBuilder::getInstance()->cache->invalidateGroupIds($groupIds);
     }
 }

@@ -8,45 +8,75 @@ use craft\elements\Entry;
 use craft\elements\GlobalSet;
 use craft\elements\User;
 use PHPUnit\Framework\TestCase;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderCacheService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
 
 /**
- * Cache keying and the element-save invalidation that keeps those keys fresh.
+ * Cache keying, the config/version half of the key, and the element-save
+ * invalidation that keeps those keys fresh.
  *
- * getOrSet()/invalidateGroup() need a booted Craft::$app and are covered by
- * manual testing; the pure key-building and the decision of *which* groups an
- * element change invalidates are covered here.
+ * The parts that read and write an actual cache backend are exercised
+ * end to end in MenuBuilderCacheIntegrationTest; the pure key-building and
+ * the decision of *which* menus an element change invalidates are covered
+ * here.
  */
 class MenuBuilderCacheTest extends TestCase
 {
     // ---------------------------------------------------------------------
-    // Cache keys: one entry per (handle, site)
+    // Cache keys: one entry per (menu, site, configuration/version)
     // ---------------------------------------------------------------------
+
+    private const VERSION = 'abc123';
+
+    private function group(int $id = 1, string $handle = 'main', ?string $dateUpdated = '2026-08-01 09:00:00'): MenuBuilderGroup
+    {
+        $group = new MenuBuilderGroup();
+        $group->id = $id;
+        $group->handle = $handle;
+        $group->name = ucfirst($handle);
+        $group->dateUpdated = $dateUpdated;
+
+        return $group;
+    }
 
     public function testSameHandleOnDifferentSitesProducesDifferentKeys(): void
     {
-        $siteAKey = MenuBuilderCacheService::cacheKey('main', 1);
-        $siteBKey = MenuBuilderCacheService::cacheKey('main', 2);
+        $siteAKey = MenuBuilderCacheService::cacheKey('main', 1, self::VERSION);
+        $siteBKey = MenuBuilderCacheService::cacheKey('main', 2, self::VERSION);
 
         $this->assertNotSame($siteAKey, $siteBKey);
     }
 
-    public function testSameHandleAndSiteProducesTheSameKey(): void
+    public function testSameHandleSiteAndVersionProducesTheSameKey(): void
     {
         $this->assertSame(
-            MenuBuilderCacheService::cacheKey('main', 1),
-            MenuBuilderCacheService::cacheKey('main', 1)
+            MenuBuilderCacheService::cacheKey('main', 1, self::VERSION),
+            MenuBuilderCacheService::cacheKey('main', 1, self::VERSION)
         );
     }
 
     public function testDifferentHandlesOnTheSameSiteProduceDifferentKeys(): void
     {
-        $mainKey = MenuBuilderCacheService::cacheKey('main', 1);
-        $footerKey = MenuBuilderCacheService::cacheKey('footer', 1);
+        $mainKey = MenuBuilderCacheService::cacheKey('main', 1, self::VERSION);
+        $footerKey = MenuBuilderCacheService::cacheKey('footer', 1, self::VERSION);
 
         $this->assertNotSame($mainKey, $footerKey);
+    }
+
+    /**
+     * The third dimension of the key: two payloads built under different
+     * configuration/plugin versions are different payloads and must never
+     * share an entry.
+     */
+    public function testTheSameMenuOnTheSameSiteUnderADifferentVersionIsADifferentKey(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::cacheKey('main', 1, 'v1'),
+            MenuBuilderCacheService::cacheKey('main', 1, 'v2')
+        );
     }
 
     /**
@@ -57,9 +87,122 @@ class MenuBuilderCacheTest extends TestCase
     public function testKeysDoNotCollideAcrossSiteAndHandleBoundary(): void
     {
         $this->assertNotSame(
-            MenuBuilderCacheService::cacheKey('2main', 1),
-            MenuBuilderCacheService::cacheKey('main', 12)
+            MenuBuilderCacheService::cacheKey('2main', 1, self::VERSION),
+            MenuBuilderCacheService::cacheKey('main', 12, self::VERSION)
         );
+    }
+
+    // ---------------------------------------------------------------------
+    // The configuration/version half of the key
+    // ---------------------------------------------------------------------
+
+    public function testAnUnchangedMenuKeepsItsConfigVersion(): void
+    {
+        $this->assertSame(
+            MenuBuilderCacheService::configVersion($this->group(), '1.0.0'),
+            MenuBuilderCacheService::configVersion($this->group(), '1.0.0')
+        );
+    }
+
+    /**
+     * `dateUpdated` moves on every menu save, so editing a menu reads a
+     * fresh key by construction — independently of the invalidation that
+     * also runs for it.
+     */
+    public function testEditingAMenuChangesItsConfigVersion(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::configVersion($this->group(dateUpdated: '2026-08-01 09:00:00'), '1.0.0'),
+            MenuBuilderCacheService::configVersion($this->group(dateUpdated: '2026-08-01 09:05:00'), '1.0.0')
+        );
+    }
+
+    public function testRenamingAMenusHandleChangesItsConfigVersion(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::configVersion($this->group(handle: 'main'), '1.0.0'),
+            MenuBuilderCacheService::configVersion($this->group(handle: 'primary'), '1.0.0')
+        );
+    }
+
+    /**
+     * A handle can be freed by a delete and reused by a *different* menu.
+     * The new menu must not read what the old one cached, even if its
+     * `dateUpdated` happened to match.
+     */
+    public function testAReusedHandleOnANewMenuIsADifferentConfigVersion(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::configVersion($this->group(id: 1), '1.0.0'),
+            MenuBuilderCacheService::configVersion($this->group(id: 2), '1.0.0')
+        );
+    }
+
+    /**
+     * A plugin upgrade must not read entries written by the previous
+     * version's code.
+     */
+    public function testAPluginSchemaVersionBumpChangesEveryConfigVersion(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::configVersion($this->group(), '1.0.0'),
+            MenuBuilderCacheService::configVersion($this->group(), '1.1.0')
+        );
+    }
+
+    /**
+     * A cache entry *is* a serialized MenuBuilderNode graph, so the payload
+     * classes' own shape is part of the version: adding or renaming a
+     * property on one of them would otherwise unserialize an old entry into
+     * an object with uninitialized readonly properties, and hand Twig a
+     * half-built node.
+     */
+    public function testThePayloadVersionIsTheShapeOfTheCachedClasses(): void
+    {
+        $this->assertSame(
+            MenuBuilderCacheService::shapeDigest(MenuBuilderCacheService::PAYLOAD_CLASSES),
+            MenuBuilderCacheService::payloadVersion()
+        );
+        $this->assertContains(MenuBuilderNode::class, MenuBuilderCacheService::PAYLOAD_CLASSES);
+    }
+
+    public function testAddingAPropertyToACachedClassChangesTheDigest(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV1::class]),
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV2::class])
+        );
+    }
+
+    public function testTheDigestCoversEveryCachedClassNotJustTheFirst(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV1::class]),
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV1::class, CachedPayloadShapeV2::class])
+        );
+    }
+
+    public function testTheSameShapeAlwaysDigestsTheSameWay(): void
+    {
+        $this->assertSame(
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV1::class]),
+            MenuBuilderCacheService::shapeDigest([CachedPayloadShapeV1::class])
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // Invalidation tags: per menu, plus one global
+    // ---------------------------------------------------------------------
+
+    public function testEachMenuHasItsOwnInvalidationTag(): void
+    {
+        $this->assertNotSame(MenuBuilderCacheService::groupTag(1), MenuBuilderCacheService::groupTag(2));
+    }
+
+    public function testAMenusTagIsKeyedByIdNotHandleSoARenameCannotOrphanIt(): void
+    {
+        $this->assertSame(MenuBuilderCacheService::groupTag(1), MenuBuilderCacheService::groupTag(1));
+        $this->assertStringContainsString('1', MenuBuilderCacheService::groupTag(1));
     }
 
     public static function watchedElementClasses(): array
@@ -233,4 +376,21 @@ class MenuBuilderCacheTest extends TestCase
  */
 class SubclassedEntry extends Entry
 {
+}
+
+/**
+ * Stand-ins for a cached payload class before and after a property is added
+ * to it — declared rather than mutated, since a class's shape can't change at
+ * runtime. See MenuBuilderCacheService::shapeDigest().
+ */
+class CachedPayloadShapeV1
+{
+    public ?string $title = null;
+}
+
+class CachedPayloadShapeV2
+{
+    public ?string $title = null;
+
+    public ?string $badge = null;
 }

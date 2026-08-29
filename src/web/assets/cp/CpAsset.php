@@ -18,6 +18,7 @@ class CpAsset extends AssetBundle
             'js/item-fields.js',
             'js/slideout.js',
             'js/tree.js',
+            'js/preview.js',
         ];
 
         parent::init();

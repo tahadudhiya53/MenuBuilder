@@ -7,6 +7,7 @@ use Tahadudhiya\MenuBuilder\controllers\BaseMenuBuilderController;
 use Tahadudhiya\MenuBuilder\controllers\DashboardController;
 use Tahadudhiya\MenuBuilder\controllers\GroupsController;
 use Tahadudhiya\MenuBuilder\controllers\ItemsController;
+use Tahadudhiya\MenuBuilder\controllers\PreviewController;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 
 /**
@@ -32,6 +33,7 @@ class ControllerPermissionTest extends TestCase
             'groups' => [GroupsController::class],
             'items' => [ItemsController::class],
             'dashboard' => [DashboardController::class],
+            'preview' => [PreviewController::class],
         ];
     }
 
@@ -77,6 +79,16 @@ class ControllerPermissionTest extends TestCase
     public function testDashboardActionsRequireView(): void
     {
         $this->assertSame('menuBuilder:view', DashboardController::requiredPermissionForAction('index'));
+    }
+
+    /**
+     * Preview renders a simulated tree and writes nothing at all (see
+     * MenuBuilderPreviewTest), so it asks for no more than the dashboard
+     * the editor reached it from.
+     */
+    public function testPreviewActionsRequireView(): void
+    {
+        $this->assertSame('menuBuilder:view', PreviewController::requiredPermissionForAction('index'));
     }
 
     // ---------------------------------------------------------------------

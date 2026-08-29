@@ -1,0 +1,143 @@
+{#
+ # The preview stage: a realistic page surface built *around* navigation
+ # markup this template never produces.
+ #
+ # `previewMarkup` is the output of `menu-builder/_macros/tree`'s `render()`,
+ # captured once by preview/index.twig and passed in. Everything here is
+ # chrome — a browser bar, a brand, a skeleton page, a footer — so that the
+ # one thing an editor is judging is the real thing: the same nodes, the same
+ # macro, the same attributes a front-end template gets. Nothing in this file
+ # inspects a node, decides visibility, groups a mega-menu column or resolves
+ # a link.
+ #
+ # The menu sits in the masthead or in the footer, and whichever region it is
+ # *not* in is drawn as plain grey shapes — so it is obvious at a glance which
+ # part of the page this menu is standing in for. Placement is a preview
+ # control, never stored: nothing in MenuBuilder records where a template
+ # renders a menu (`craft.menuBuilder.get()` can be called anywhere), and
+ # inventing such a record would be a second, unenforceable truth.
+ #
+ # Rendered as a partial rather than inline so it can be rendered on its own
+ # in a test (MenuBuilderPreviewRenderTest) against real MenuBuilderNode data,
+ # rather than only asserted against as source text.
+ #
+ # Expected variables:
+ #   previewMarkup  the captured macro output
+ #   isMobile       whether the mobile viewport is selected
+ #   isFooter       whether the menu is shown as a footer navigation
+ #   siteName       the simulated site's name (brand placeholder)
+ #   addressLabel   what the browser bar shows (host + "seen from" path)
+ #   navLabel       accessible name for the <nav> landmark
+ #}
+{% import _self as stage %}
+
+{# The one place the navigation is emitted, used by whichever region holds it,
+   so the two placements cannot drift into two different renderings. #}
+{% macro nav(previewMarkup, navLabel) %}
+    <nav id="menu-builder-preview-nav"
+         class="menu-builder-preview-nav"
+         aria-label="{{ navLabel }}"
+         data-mb-preview-nav>
+        {{ previewMarkup }}
+    </nav>
+{% endmacro %}
+
+{# Grey shapes standing in for the navigation this menu is not. Decorative,
+   and wordless on purpose: a labelled link here would read as a menu item. #}
+{% macro navPlaceholder(count) %}
+    <span class="menu-builder-preview-nav-placeholder" aria-hidden="true">
+        {% for i in 1..count %}<span class="menu-builder-preview-pill"></span>{% endfor %}
+    </span>
+{% endmacro %}
+
+<div class="menu-builder-preview-stage menu-builder-preview-stage--{{ isMobile ? 'mobile' : 'desktop' }} menu-builder-preview-stage--{{ isFooter ? 'footer' : 'header' }}" data-mb-preview>
+    <div class="menu-builder-preview-device">
+        {# Decorative browser furniture: it exists to say "this is a page",
+           and repeating the address to a screen reader would only add noise
+           to the chips above, which already state the previewed URI. #}
+        <div class="menu-builder-preview-chrome" aria-hidden="true">
+            <span class="menu-builder-preview-dot"></span>
+            <span class="menu-builder-preview-dot"></span>
+            <span class="menu-builder-preview-dot"></span>
+            <span class="menu-builder-preview-address">{{ addressLabel }}</span>
+        </div>
+
+        <div class="menu-builder-preview-page">
+            <header class="menu-builder-preview-siteheader">
+                <span class="menu-builder-preview-brand">
+                    <span class="menu-builder-preview-brand-mark" aria-hidden="true">{{ siteName|slice(0, 1)|upper }}</span>
+                    <span class="menu-builder-preview-brand-name">{{ siteName }}</span>
+                </span>
+
+                {# The mobile toggle is preview chrome, not menu data: a real
+                   site owns its own disclosure. It is a real button with real
+                   aria-expanded so the stacked navigation can be opened and
+                   closed the way a visitor would. A footer menu has no
+                   masthead disclosure to own. #}
+                {% if isMobile and not isFooter %}
+                    <button type="button"
+                            class="menu-builder-preview-burger"
+                            data-mb-preview-burger
+                            aria-expanded="true"
+                            aria-controls="menu-builder-preview-nav">
+                        <span class="menu-builder-preview-burger-bars" aria-hidden="true"></span>
+                        <span class="visually-hidden">{{ "Show or hide the navigation"|t('menu-builder') }}</span>
+                    </button>
+                {% endif %}
+
+                {# A placeholder for whatever a real header keeps at its far
+                   end — a search, an account link, a call to action. Left
+                   deliberately wordless: a labelled button here would read as
+                   something MenuBuilder had added to the menu. #}
+                <span class="menu-builder-preview-header-slot" aria-hidden="true"></span>
+
+                {% if isFooter %}
+                    {{ stage.navPlaceholder(4) }}
+                {% else %}
+                    {{ stage.nav(previewMarkup, navLabel) }}
+                {% endif %}
+            </header>
+
+            {# A page has to look like a page for a navigation to look like a
+               navigation. Purely decorative, and hidden from assistive tech
+               so it adds nothing to read. #}
+            <div class="menu-builder-preview-canvas" aria-hidden="true">
+                <div class="menu-builder-preview-hero">
+                    <div class="menu-builder-preview-skeleton menu-builder-preview-skeleton--heading"></div>
+                    <div class="menu-builder-preview-skeleton"></div>
+                    <div class="menu-builder-preview-skeleton menu-builder-preview-skeleton--short"></div>
+                    <div class="menu-builder-preview-skeleton menu-builder-preview-skeleton--button"></div>
+                </div>
+                <div class="menu-builder-preview-cards">
+                    <div class="menu-builder-preview-card"></div>
+                    <div class="menu-builder-preview-card"></div>
+                    <div class="menu-builder-preview-card"></div>
+                </div>
+            </div>
+
+            <footer class="menu-builder-preview-sitefooter">
+                <span class="menu-builder-preview-brand menu-builder-preview-brand--footer">
+                    <span class="menu-builder-preview-brand-mark" aria-hidden="true">{{ siteName|slice(0, 1)|upper }}</span>
+                    <span class="menu-builder-preview-brand-name">{{ siteName }}</span>
+                </span>
+
+                {% if isFooter %}
+                    {{ stage.nav(previewMarkup, navLabel) }}
+                {% else %}
+                    {{ stage.navPlaceholder(3) }}
+                {% endif %}
+            </footer>
+        </div>
+    </div>
+
+    {# Updated by preview.js with the href of whichever link was clicked. It
+       starts with the standing explanation so the message is true before any
+       JS runs — and if JS never runs, clicks still do nothing dangerous:
+       preventDefault is the only thing stopping navigation, and without it the
+       editor merely follows a link they can see. #}
+    <p class="menu-builder-preview-hint" data-mb-preview-hint role="status">
+        {{ isFooter
+            ? "Shown in the footer. Links are inert here — click one to see where it points."|t('menu-builder')
+            : "Shown in the header. Links are inert here — click one to see where it points."|t('menu-builder') }}
+    </p>
+</div>

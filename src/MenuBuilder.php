@@ -19,6 +19,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkHealthService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderPreviewService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderResolver;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderVisibilityService;
 use Tahadudhiya\MenuBuilder\variables\MenuBuilderVariable;
@@ -35,6 +36,7 @@ use yii\base\Event;
  * @property-read MenuBuilderResolver $resolver
  * @property-read MenuBuilderElementService $elements
  * @property-read MenuBuilderDynamicNavigationService $dynamicNavigation
+ * @property-read MenuBuilderPreviewService $preview
  */
 class MenuBuilder extends Plugin
 {
@@ -56,6 +58,7 @@ class MenuBuilder extends Plugin
                 'resolver' => MenuBuilderResolver::class,
                 'elements' => MenuBuilderElementService::class,
                 'dynamicNavigation' => MenuBuilderDynamicNavigationService::class,
+                'preview' => MenuBuilderPreviewService::class,
             ],
         ];
     }
@@ -94,6 +97,7 @@ class MenuBuilder extends Plugin
                 $event->rules['menu-builder/groups/new'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/groups/<groupId:\d+>'] = 'menu-builder/groups/edit';
                 $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>'] = 'menu-builder/dashboard/index';
+                $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/preview'] = 'menu-builder/preview/index';
                 $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/items/<itemId:\d+>'] = 'menu-builder/items/edit';
             }
         );

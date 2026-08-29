@@ -2,6 +2,10 @@
 
 namespace Tahadudhiya\MenuBuilder\models;
 
+use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
+use Tahadudhiya\MenuBuilder\helpers\IconHelper;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+
 /**
  * The Twig-facing representation of a resolved navigation item — hides the
  * database entirely (no IDs to join, no parentId, no sort columns). Built by
@@ -45,6 +49,32 @@ class MenuBuilderNode
         public readonly ?int $megaMenuColumn = null,
         /** True when this node was synthesized from a dynamic navigation source rather than a persisted item — see MenuBuilderDynamicNavigationService. */
         public readonly bool $isDynamic = false,
+        /**
+         * The badge's style — one of BadgeHelper::STYLES or null for the
+         * default. Declared last, after the pre-existing defaulted
+         * parameters, so every existing positional construction of a node
+         * keeps working unchanged.
+         */
+        public readonly ?string $badgeStyle = null,
+        /**
+         * The item's editor-defined custom field values, keyed by handle —
+         * already checked against the menu's definitions by
+         * CustomFieldHelper::valuesForOutput(), so a handle the menu no
+         * longer defines, or a value that no longer fits its field's type,
+         * never gets this far.
+         *
+         * Values are plain scalars (text, number, boolean, an option
+         * string, a URL, or an asset **ID**) and are emitted through Twig's
+         * autoescaping like any other string. An asset field stores the ID,
+         * never the URL — see `craft.menuBuilder.customAsset()`, and
+         * {@see iconType()} for the same reasoning applied to icons.
+         *
+         * Declared last, after the existing defaulted parameters, so every
+         * positional construction of a node keeps working unchanged.
+         *
+         * @var array<string,mixed>
+         */
+        public readonly array $customFields = [],
     ) {
     }
 
@@ -77,6 +107,115 @@ class MenuBuilderNode
         }
 
         return $copy;
+    }
+
+    /**
+     * The icon, as three read-only derived accessors over the single
+     * stored `icon` string — see {@see IconHelper} for the grammar.
+     *
+     * Derived rather than resolved into extra constructor state on
+     * purpose: the node is what gets cached, and an icon's *rendering*
+     * (an asset's URL, above all) can change without the item changing,
+     * so the tree caches the reference and templates resolve it per
+     * request through `craft.menuBuilder.iconAsset(node)`.
+     *
+     * `iconClass()` fails closed: a value that wouldn't validate today
+     * — a legacy row, a direct database write — reads back as null rather
+     * than reaching a template.
+     */
+    public function iconType(): ?string
+    {
+        return IconHelper::type($this->icon);
+    }
+
+    public function iconClass(): ?string
+    {
+        return IconHelper::classValue($this->icon);
+    }
+
+    public function iconAssetId(): ?int
+    {
+        return IconHelper::assetId($this->icon);
+    }
+
+    public function hasIcon(): bool
+    {
+        return $this->iconType() !== null;
+    }
+
+    /**
+     * The badge, as derived accessors over the two stored values
+     * (`badge` text + `metadata['badgeStyle']`) — see {@see BadgeHelper}.
+     *
+     * Text is deliberately *not* sanitized here: it is plain text and is
+     * escaped where it is rendered. The style is the half that reaches a
+     * `class` attribute, and {@see badgeClass()} fails closed on it, so an
+     * unknown style can never leave this object as markup.
+     *
+     * A style with no text is not a badge: {@see hasBadge()} is keyed off
+     * the text alone, and the bundled macro renders nothing without it.
+     */
+    public function hasBadge(): bool
+    {
+        return BadgeHelper::hasBadge($this->badge);
+    }
+
+    /** The badge's class list: the base class plus a `--<style>` modifier for a known style. */
+    public function badgeClass(): string
+    {
+        return BadgeHelper::cssClass($this->badgeStyle);
+    }
+
+    /**
+     * One custom field value by handle, or `$default` when this item has
+     * none. The documented Twig entry point:
+     *
+     *     {{ node.custom('subtitle') }}
+     *     {% if node.custom('featured', false) %}…{% endif %}
+     */
+    public function custom(string $handle, mixed $default = null): mixed
+    {
+        return $this->customFields[$handle] ?? $default;
+    }
+
+    /** Whether this item has a value for the given custom field. */
+    public function hasCustom(string $handle): bool
+    {
+        return array_key_exists($handle, $this->customFields);
+    }
+
+    /**
+     * The item's custom HTML attributes, re-checked at render time and
+     * stripped of anything unsafe or reserved — see
+     * {@see LinkAttributeHelper::filterHtmlAttributes()}. This is what the
+     * bundled macros render; `$htmlAttributes` remains the stored bag, for
+     * a template that wants to make its own decision about it.
+     *
+     * Derived rather than filtered into the constructor because the node is
+     * what gets cached: a rule tightened in a later release must apply to
+     * trees cached before it, the same way `iconClass()` fails closed on a
+     * legacy icon value.
+     *
+     * @return array<string,string>
+     */
+    public function safeHtmlAttributes(): array
+    {
+        return LinkAttributeHelper::filterHtmlAttributes($this->htmlAttributes);
+    }
+
+    /**
+     * Whether following this link leaves the current tab. The bundled macro
+     * emits `target` only when this is true, and adds a visually hidden
+     * "opens in a new tab" to the link's accessible name — a change of
+     * context a sighted user reads from the browser and a screen-reader
+     * user otherwise doesn't get told about at all (WCAG 3.2.5).
+     *
+     * Keyed off the resolved node, so a `target` on a heading — which
+     * renders no link — is not announced as opening anything.
+     */
+    public function opensInNewTab(): bool
+    {
+        return $this->isClickable && $this->target === '_blank';
     }
 
     public function hasChildren(): bool

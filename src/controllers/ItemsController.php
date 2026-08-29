@@ -4,6 +4,9 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
+use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
+use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -50,7 +53,7 @@ class ItemsController extends BaseMenuBuilderController
         $group = MenuBuilder::getInstance()->groups->getByHandle($groupHandle);
 
         if (!$group) {
-            throw new NotFoundHttpException('Navigation group not found.');
+            throw new NotFoundHttpException('Menu not found.');
         }
 
         // Edit-only: creating an item happens in exactly one place, the
@@ -59,36 +62,70 @@ class ItemsController extends BaseMenuBuilderController
         // ARCHITECTURE.md, "Single path per behaviour".
         if ($item === null) {
             if ($itemId === null) {
-                throw new NotFoundHttpException('Navigation menu not found.');
+                throw new NotFoundHttpException('Menu item not found.');
             }
 
             $item = MenuBuilder::getInstance()->items->getById($itemId);
 
             if (!$item || $item->groupId !== $group->id) {
-                throw new NotFoundHttpException('Navigation menu not found.');
+                throw new NotFoundHttpException('Menu item not found.');
             }
         }
+
+        // `edit` only needs `view` (this action renders a form, it doesn't
+        // save one), so both wrappers around items/_fields have to be able to
+        // render read-only rather than offer a Save the save action refuses.
+        $affordances = $this->currentUserAffordances();
 
         $variables = [
             'group' => $group,
             'item' => $item,
             'isNew' => $item->id === null,
             'siblingCandidates' => MenuBuilder::getInstance()->items->getFlatForGroup($group->id),
-        ];
+            // Why this item's link would or wouldn't work, shown at the top of
+            // the editor. Computed here rather than in Twig so the template
+            // reads no elements of its own, and so the slide-out and the
+            // full-page form show the same warning. Null for an unsaved item:
+            // a link that hasn't been filled in yet isn't broken, and an
+            // element type with no element picked yet would classify as
+            // "missing" and open the editor with a warning about nothing.
+            'health' => $item->id !== null
+                ? MenuBuilder::getInstance()->linkHealth->getForItem($item)
+                : null,
+            // The dynamic-source cap belongs to the model; the editor's field
+            // shows and bounds it rather than writing the number out again.
+            'dynamicSourceMaxLimit' => MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT,
+        ] + $affordances;
 
         if (Craft::$app->getRequest()->getIsAjax() && Craft::$app->getRequest()->getAcceptsJson()) {
             $view = $this->getView();
             $html = $view->renderTemplate('menu-builder/items/_fields', $variables);
 
             return $this->asJson([
-                'title' => $variables['isNew'] ? Craft::t('menu-builder', 'New menu item') : $item->title,
+                'title' => $variables['isNew'] ? Craft::t('menu-builder', 'New menu item') : $this->itemLabel($item),
                 'html' => $html,
                 'headHtml' => $view->getHeadHtml(),
                 'footHtml' => $view->getBodyHtml(),
+                // The slide-out's Save button is the one control it renders
+                // itself, so it can't be hidden by the template above.
+                'canSave' => $affordances['canEdit'],
             ]);
         }
 
         return $this->renderTemplate('menu-builder/items/_edit', $variables);
+    }
+
+    /**
+     * What to call an item on screen. A title is optional (element-linked
+     * items inherit one, separators never have one), and an empty slide-out
+     * heading or browser tab reads as a broken screen rather than an
+     * untitled item.
+     */
+    private function itemLabel(MenuBuilderItem $item): string
+    {
+        $title = trim((string)$item->title);
+
+        return $title !== '' ? $title : Craft::t('menu-builder', '(untitled)');
     }
 
     public function actionSave(): ?Response
@@ -100,7 +137,7 @@ class ItemsController extends BaseMenuBuilderController
         $item = $itemId ? MenuBuilder::getInstance()->items->getById($itemId) : new MenuBuilderItem();
 
         if (!$item) {
-            throw new NotFoundHttpException('Navigation menu not found.');
+            throw new NotFoundHttpException('Menu item not found.');
         }
 
         // An existing item's groupId is fixed at creation (see
@@ -134,8 +171,17 @@ class ItemsController extends BaseMenuBuilderController
         $item->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $item->ariaLabel = $this->bodyString('ariaLabel') ?: null;
         $item->titleAttribute = $this->bodyString('titleAttribute') ?: null;
-        $item->icon = $this->bodyString('icon') ?: null;
-        $item->badge = $this->bodyString('badge') ?: null;
+        // Three inputs, one column: the icon source select decides which of
+        // the two fields is read (see IconHelper::composeFromForm()), so a
+        // stale value left in the hidden one can't win.
+        $item->icon = IconHelper::composeFromForm(
+            $this->bodyString('iconSource'),
+            $this->bodyString('icon'),
+            $request->getBodyParam('iconAsset'),
+        );
+        // Text only — the badge's style is a closed enum and rides in
+        // metadata with the other presentation config (see buildMetadata()).
+        $item->badge = BadgeHelper::normalizeText($this->bodyString('badge'));
         $item->description = $this->bodyString('description') ?: null;
 
         $image = $request->getBodyParam('image');
@@ -146,21 +192,33 @@ class ItemsController extends BaseMenuBuilderController
         $item->fallbackUrl = $this->bodyString('fallbackUrl') ?: null;
 
         $item->visibility = $this->buildVisibilityRules($this->bodyArray('visibility'));
-        $item->metadata = $this->buildMetadata($request, $item->type);
+        // The menu's custom field definitions are read once and used twice:
+        // to decide which posted `customFields[...]` keys may be stored at
+        // all, and (on the item) to validate the values against their
+        // types. Passing them along means the save doesn't look them up a
+        // second time — see MenuBuilderItemService::save().
+        $item->customFieldDefinitions = MenuBuilder::getInstance()->groups->getById((int)$item->groupId)?->customFields ?? [];
+        $item->metadata = $this->buildMetadata($request, $item->type, $item->customFieldDefinitions);
 
         if (!MenuBuilder::getInstance()->items->save($item)) {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation menu.'));
-
-            return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save navigation menu.'), 'item');
+            // asModelFailure() sets the error flash itself (and returns the
+            // field errors to the slide-out) — setting one here as well
+            // surfaced the same message twice, once as a flash and once as
+            // the notification the JS raises from the response.
+            return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save that menu item.'), 'item');
         }
-
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation menu saved.'));
 
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
 
+        // A flash set before this branch would sit in the session unread and
+        // then surface on the *next* full page load — the reload the
+        // slide-out triggers after saving — as a second, differently-worded
+        // notice about a save the editor had already been told about.
         if ($request->getIsAjax() && $request->getAcceptsJson()) {
             return $this->asSuccess(data: ['id' => $item->id, 'title' => $item->title]);
         }
+
+        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu item saved.'));
 
         return $this->redirectToPostedUrl($item, UrlHelper::cpUrl('menu-builder/' . $group?->handle));
     }
@@ -184,7 +242,7 @@ class ItemsController extends BaseMenuBuilderController
 
         $success = $itemsService->deleteById($id, (bool)$keepChildrenParam);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that menu.'));
+        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that menu item.'));
     }
 
     public function actionDuplicate(): Response
@@ -195,7 +253,7 @@ class ItemsController extends BaseMenuBuilderController
         $clone = MenuBuilder::getInstance()->items->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu.'));
+            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu item.'));
         }
 
         return $this->asSuccess(data: ['id' => $clone->id]);
@@ -209,13 +267,13 @@ class ItemsController extends BaseMenuBuilderController
         $item = MenuBuilder::getInstance()->items->getById($id);
 
         if (!$item) {
-            return $this->asFailure(Craft::t('menu-builder', 'Navigation menu not found.'));
+            return $this->asFailure(Craft::t('menu-builder', 'That menu item no longer exists.'));
         }
 
         $item->enabled = !$item->enabled;
         $success = MenuBuilder::getInstance()->items->save($item, runValidation: false);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t update that menu.'), ['enabled' => $item->enabled]);
+        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t update that menu item.'), ['enabled' => $item->enabled]);
     }
 
     /**
@@ -247,7 +305,7 @@ class ItemsController extends BaseMenuBuilderController
         $item = $itemsService->getById($itemId);
 
         if ($item === null) {
-            throw new NotFoundHttpException('Navigation menu not found.');
+            throw new NotFoundHttpException('Menu item not found.');
         }
 
         // An item's group is fixed at creation. A posted groupId that
@@ -308,7 +366,7 @@ class ItemsController extends BaseMenuBuilderController
         }
 
         if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Saved.'));
+            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Changes saved.'));
         } else {
             Craft::$app->getSession()->setError($failureMessage);
         }
@@ -403,13 +461,32 @@ class ItemsController extends BaseMenuBuilderController
      * rendered/read by Twig. `MenuBuilderItem::validate*()` re-validates all
      * of this server-side regardless.
      */
-    private function buildMetadata(\craft\web\Request $request, string $itemType): array
+    private function buildMetadata(\craft\web\Request $request, string $itemType, array $customFieldDefinitions = []): array
     {
         $metadata = [];
+
+        // Same rule as the rest of this method, applied to a bag whose keys
+        // *are* editor-defined: the definitions decide which handles exist,
+        // so a posted `customFields[whatever]` for a handle this menu
+        // doesn't define is dropped rather than written into metadata.
+        $customValues = CustomFieldHelper::valuesForStorage($customFieldDefinitions, $this->bodyArray('customFields'));
+
+        if ($customValues !== []) {
+            $metadata[CustomFieldHelper::VALUES_KEY] = $customValues;
+        }
 
         if ((bool)$request->getBodyParam('megaMenuEnabled', false)) {
             $columns = (int)$request->getBodyParam('megaMenuColumns', 1);
             $metadata['megaMenu'] = ['enabled' => true, 'columns' => max(1, min(6, $columns))];
+        }
+
+        // Only stored alongside actual badge text: a style left behind by a
+        // cleared badge would otherwise sit in metadata forever, and come
+        // back the next time the editor typed a badge.
+        $badgeStyle = BadgeHelper::style($this->bodyString('badgeStyle'));
+
+        if ($badgeStyle !== null && BadgeHelper::hasBadge($this->bodyString('badge'))) {
+            $metadata['badgeStyle'] = $badgeStyle;
         }
 
         $column = $request->getBodyParam('megaMenuColumn');

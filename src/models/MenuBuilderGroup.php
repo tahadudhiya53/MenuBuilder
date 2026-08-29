@@ -2,7 +2,9 @@
 
 namespace Tahadudhiya\MenuBuilder\models;
 
+use Craft;
 use craft\base\Model;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 
 /**
@@ -39,6 +41,18 @@ class MenuBuilderGroup extends Model
     /** @var array<string,mixed> Reserved for future frontend-rendering configuration. */
     public array $settings = [];
 
+    /**
+     * @var MenuBuilderCustomField[] The extra editor-defined fields every
+     *      item in this menu is offered (icon/badge/description and the rest
+     *      of the built-ins are *not* here — they have their own columns).
+     *
+     * Persisted inside the `settings` bag, exactly as `siteIds` is (see
+     * MenuBuilderGroupService::CUSTOM_FIELDS_KEY), so `$settings` stays a
+     * plain bag and no schema change is involved. Values live on the item,
+     * in `metadata['custom']` — see {@see CustomFieldHelper}.
+     */
+    public array $customFields = [];
+
     public ?string $uid = null;
     public ?string $dateCreated = null;
     public ?string $dateUpdated = null;
@@ -60,6 +74,8 @@ class MenuBuilderGroup extends Model
             [['sortOrder'], 'integer'],
             [['maxDepth'], 'integer', 'min' => 1, 'max' => 10],
             [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
+            [['customFields'], 'validateCustomFields', 'skipOnEmpty' => false],
+            [['customFields'], 'safe'],
             [['siteIds'], 'validateSiteIds', 'skipOnEmpty' => false],
             [['siteIds'], 'safe'],
             [['htmlAttributes', 'settings'], 'safe'],
@@ -83,6 +99,61 @@ class MenuBuilderGroup extends Model
         foreach (LinkAttributeHelper::validateHtmlAttributes($this->htmlAttributes) as $error) {
             $this->addError('htmlAttributes', $error);
         }
+    }
+
+    /**
+     * Each definition validates itself ({@see MenuBuilderCustomField}); this
+     * adds the two rules that are only knowable across the whole set —
+     * handles must be unique within a menu (otherwise an item's
+     * `metadata['custom']` key would be ambiguous), and there is a hard
+     * ceiling on how many a menu can define, since every one of them is
+     * stored per item in a shared TEXT column.
+     */
+    public function validateCustomFields(): void
+    {
+        if (!is_array($this->customFields)) {
+            $this->addError('customFields', Craft::t('menu-builder', 'Invalid custom fields.'));
+
+            return;
+        }
+
+        if (count($this->customFields) > CustomFieldHelper::MAX_FIELDS) {
+            $this->addError('customFields', Craft::t('menu-builder', 'A menu can define at most {max} custom fields.', ['max' => CustomFieldHelper::MAX_FIELDS]));
+
+            return;
+        }
+
+        $seen = [];
+
+        foreach ($this->customFields as $index => $field) {
+            if (!$field instanceof MenuBuilderCustomField) {
+                $this->addError('customFields', Craft::t('menu-builder', 'Invalid custom fields.'));
+
+                return;
+            }
+
+            if (!$field->validate()) {
+                foreach ($field->getErrorSummary(true) as $error) {
+                    $this->addError('customFields', Craft::t('menu-builder', 'Custom field #{index}: {error}', ['index' => (int)$index + 1, 'error' => $error]));
+                }
+
+                continue;
+            }
+
+            if (isset($seen[$field->handle])) {
+                $this->addError('customFields', Craft::t('menu-builder', 'Two custom fields share the handle “{handle}”.', ['handle' => $field->handle]));
+
+                continue;
+            }
+
+            $seen[$field->handle] = true;
+        }
+    }
+
+    /** One of this menu's custom field definitions by handle, or null. */
+    public function customField(string $handle): ?MenuBuilderCustomField
+    {
+        return CustomFieldHelper::definitionByHandle($this->customFields, $handle);
     }
 
     /**
@@ -123,6 +194,19 @@ class MenuBuilderGroup extends Model
         }
 
         return $siteId !== null && in_array($siteId, $this->siteIds, true);
+    }
+
+    /**
+     * This menu's custom HTML attributes as the bundled `renderNav()` macro
+     * emits them: re-checked at render time and stripped of anything unsafe
+     * or reserved, exactly as {@see \Tahadudhiya\MenuBuilder\models\MenuBuilderNode::safeHtmlAttributes()}
+     * does for an item. `$htmlAttributes` remains the stored bag.
+     *
+     * @return array<string,string>
+     */
+    public function safeHtmlAttributes(): array
+    {
+        return LinkAttributeHelper::filterHtmlAttributes($this->htmlAttributes);
     }
 
     /**

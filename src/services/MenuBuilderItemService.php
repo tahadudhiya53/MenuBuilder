@@ -4,9 +4,6 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
-use craft\elements\Asset;
-use craft\elements\Category;
-use craft\elements\Entry;
 use craft\helpers\Json;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderHierarchyHelper;
@@ -114,6 +111,17 @@ class MenuBuilderItemService extends Component
 
     public function save(MenuBuilderItem $item, bool $runValidation = true): bool
     {
+        // Custom field values are validated against the *menu's* definitions
+        // (MenuBuilderGroup::$customFields), which the model can't look up
+        // itself without a database. Resolving them here means every write
+        // path is definition-aware — the CP editor, a console script, an
+        // import — not just the one that happens to set them. An already-set
+        // list is honoured, so a caller that has the menu in hand doesn't
+        // pay for a second query.
+        if ($item->customFieldDefinitions === null && $item->groupId !== null) {
+            $item->customFieldDefinitions = MenuBuilder::getInstance()->groups->getById($item->groupId)?->customFields ?? [];
+        }
+
         if ($runValidation && !$item->validate()) {
             return false;
         }
@@ -440,59 +448,20 @@ class MenuBuilderItemService extends Component
 
     /**
      * IDs of items in the group whose linked element (entry/category/asset)
-     * no longer exists — e.g. hard-deleted rather than soft-deleted/disabled,
-     * which `ElementLinkResolver` already handles via `fallbackBehavior`.
-     * Batched into at most one query per element type (never per item), so
-     * this stays cheap regardless of group size.
+     * no longer exists.
+     *
+     * Kept as the narrow, long-standing entry point for that one question,
+     * but no longer implemented here: "missing" is one of the states
+     * {@see MenuBuilderLinkHealthService} classifies, and two copies of the
+     * element lookup could disagree about what counts as gone. The CP tree
+     * reads the full health map instead — this remains for callers that only
+     * ever wanted the set.
      *
      * @return array<int,true> Item IDs, as a set for O(1) lookup in Twig.
      */
     public function getOrphanedItemIds(int $groupId): array
     {
-        $elementClasses = [
-            MenuBuilderItem::TYPE_ENTRY => Entry::class,
-            MenuBuilderItem::TYPE_CATEGORY => Category::class,
-            MenuBuilderItem::TYPE_ASSET => Asset::class,
-        ];
-
-        $orphaned = [];
-
-        foreach ($elementClasses as $type => $elementClass) {
-            $rows = MenuBuilderItemRecord::find()
-                ->select(['id', 'elementId'])
-                ->where(['groupId' => $groupId, 'type' => $type])
-                ->andWhere(['not', ['elementId' => null]])
-                ->asArray()
-                ->all();
-
-            if (empty($rows)) {
-                continue;
-            }
-
-            $elementIdToItemIds = [];
-            foreach ($rows as $row) {
-                $elementIdToItemIds[(int)$row['elementId']][] = (int)$row['id'];
-            }
-
-            $existingElementIds = $elementClass::find()
-                ->id(array_keys($elementIdToItemIds))
-                ->site('*')
-                ->unique()
-                ->status(null)
-                ->select(['elements.id'])
-                ->column();
-            $existingElementIds = array_map('intval', $existingElementIds);
-
-            foreach ($elementIdToItemIds as $elementId => $itemIds) {
-                if (!in_array($elementId, $existingElementIds, true)) {
-                    foreach ($itemIds as $itemId) {
-                        $orphaned[$itemId] = true;
-                    }
-                }
-            }
-        }
-
-        return $orphaned;
+        return MenuBuilder::getInstance()->linkHealth->getMissingElementItemIds($groupId);
     }
 
     /**
@@ -975,13 +944,19 @@ class MenuBuilderItemService extends Component
         return $max === null ? 0 : ((int)$max + 1);
     }
 
+    /**
+     * One menu's cached tree only — never a blanket flush, and never another
+     * menu's. Menu **ID** rather than handle, so a rename can't leave an
+     * entry behind, and so no group lookup is needed at all: a bulk
+     * operation invalidating once per item does no extra query.
+     *
+     * Inside a transaction (every bulk operation is one) the cache service
+     * queues this until the outermost commit — see
+     * MenuBuilderCacheService, "Transactions".
+     */
     private function invalidateGroup(int $groupId): void
     {
-        $handle = MenuBuilder::getInstance()->groups->getHandleById($groupId);
-
-        if ($handle !== null) {
-            MenuBuilder::getInstance()->cache->invalidateGroup($handle);
-        }
+        MenuBuilder::getInstance()->cache->invalidateGroupId($groupId);
     }
 
     private function recordToModel(MenuBuilderItemRecord $record): MenuBuilderItem

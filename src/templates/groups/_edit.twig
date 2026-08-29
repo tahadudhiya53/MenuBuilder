@@ -1,21 +1,62 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = isNew ? "New navigation group"|t('menu-builder') : group.name %}
-{% set fullPageForm = true %}
-{% set crumbs = [{ label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') }] %}
+{% set title = isNew ? "New menu"|t('menu-builder') : group.name %}
 
-{% block actionButton %}
-    <div class="btngroup">
-        <input type="submit" class="btn submit" value="{{ 'Save'|t('app') }}">
-    </div>
-{% endblock %}
+{# `groups/edit` needs only `view`, so this form is reachable by someone who
+   may not save it. Rendering it read-only is the honest answer; a Save button
+   that answers 403 is not. #}
+{% set fullPageForm = canManageSettings %}
+{% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
+
+{# Duplicate and Delete live in the action-button menu, not in a <form> of
+   their own. The delete used to be a nested <form>, which is invalid HTML:
+   the parser drops the inner start tag, so its `onsubmit` confirmation never
+   ran and its button ended up submitting the page form instead. Craft's own
+   formActions mechanism posts the page form to a different action, with a
+   confirmation, and without nesting anything. #}
+{% set formActions = [] %}
+{% if not isNew and canManageSettings %}
+    {% set formActions = formActions|merge([{
+        label: "Save and continue editing"|t('menu-builder'),
+        redirect: ('menu-builder/groups/' ~ group.id)|hash,
+        shortcut: true,
+        retainScroll: true,
+    }, {
+        label: "Duplicate menu"|t('menu-builder'),
+        action: 'menu-builder/groups/duplicate',
+        params: { id: group.id },
+    }]) %}
+{% endif %}
+{% if not isNew and canDelete %}
+    {% set formActions = formActions|merge([{
+        label: "Delete menu"|t('menu-builder'),
+        action: 'menu-builder/groups/delete',
+        params: { id: group.id },
+        redirect: 'menu-builder'|hash,
+        confirm: 'Delete “{name}” and all of its menu items? This cannot be undone.'|t('menu-builder', { name: group.name }),
+        destructive: true,
+    }]) %}
+{% endif %}
+{% set formActions = formActions|length ? formActions : null %}
+
+{% if not canManageSettings %}
+    {% set contentNotice = "You have read-only access to menu settings."|t('menu-builder') %}
+{% endif %}
 
 {% block content %}
+{% if canManageSettings %}
 <input type="hidden" name="action" value="menu-builder/groups/save">
 <input type="hidden" name="groupId" value="{{ group.id }}">
 {{ redirectInput('menu-builder') }}
 {{ csrfInput() }}
+{% endif %}
+
+{# A disabled fieldset makes every control inside it genuinely inert — no
+   focus, no edit, nothing submitted — in one place, rather than threading a
+   `disabled` flag through a dozen field calls where one omission would leave
+   a field that looks editable and silently isn't. #}
+<fieldset class="menu-builder-fieldset"{{ canManageSettings ? '' : ' disabled' }}>
 
 {{ forms.textField({
     label: "Name"|t('menu-builder'),
@@ -75,6 +116,52 @@
     }) }}
 {% endif %}
 
+{# The menu's custom field *definitions*. Values live on each item, under
+   `metadata['custom']` — see helpers/CustomFieldHelper for why definitions
+   and values are stored where they are. The type list is closed and has no
+   markup member, so nothing defined here can produce executable content. #}
+{{ forms.editableTableField({
+    label: "Custom fields"|t('menu-builder'),
+    instructions: "Extra fields every item in this menu can fill in, on top of the built-in icon, badge, description and image. Read in Twig as `node.custom('handle')`."|t('menu-builder'),
+    id: 'customFields',
+    name: 'customFields',
+    allowAdd: true,
+    allowReorder: true,
+    allowDelete: true,
+    addRowLabel: "Add a custom field"|t('menu-builder'),
+    maxRows: 20,
+    cols: {
+        name: { type: 'singleline', heading: "Name"|t('menu-builder'), width: 200 },
+        handle: { type: 'singleline', heading: "Handle"|t('menu-builder'), class: 'code', width: 160 },
+        type: {
+            type: 'select',
+            heading: "Type"|t('menu-builder'),
+            width: 140,
+            options: [
+                { label: "Text"|t('menu-builder'), value: 'text' },
+                { label: "Multi-line text"|t('menu-builder'), value: 'textarea' },
+                { label: "Number"|t('menu-builder'), value: 'number' },
+                { label: "Boolean"|t('menu-builder'), value: 'boolean' },
+                { label: "Dropdown"|t('menu-builder'), value: 'select' },
+                { label: "URL"|t('menu-builder'), value: 'url' },
+                { label: "Asset"|t('menu-builder'), value: 'asset' },
+            ],
+        },
+        options: { type: 'singleline', heading: "Dropdown options (comma-separated)"|t('menu-builder') },
+        instructions: { type: 'singleline', heading: "Instructions"|t('menu-builder') },
+        required: { type: 'checkbox', heading: "Required"|t('menu-builder'), thin: true },
+    },
+    rows: group.customFields|map(field => {
+        name: field.name,
+        handle: field.handle,
+        type: field.type,
+        options: field.options|join(', '),
+        instructions: field.instructions,
+        required: field.required,
+    })|values,
+    errors: group.getErrors('customFields'),
+}) }}
+
 {{ forms.textField({
     label: "CSS class"|t('menu-builder'),
     instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menu-builder'),
@@ -92,28 +179,13 @@
     rows: 3,
 }) }}
 
+</fieldset>
+
 {% if not isNew %}
     <hr>
-    <div class="btngroup">
-        <button type="button" class="btn" id="menu-builder-duplicate-group">{{ "Duplicate"|t('app') }}</button>
-        <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{name}” and all of its menu items? This cannot be undone.'|t('menu-builder', { name: group.name })|e('js') }}');" style="display:inline">
-            {{ csrfInput() }}
-            <input type="hidden" name="action" value="menu-builder/groups/delete">
-            <input type="hidden" name="id" value="{{ group.id }}">
-            <button type="submit" class="btn delete">{{ "Delete menu"|t('menu-builder') }}</button>
-        </form>
-    </div>
-
-    {% js %}
-    document.getElementById('menu-builder-duplicate-group').addEventListener('click', function() {
-        Craft.sendActionRequest('POST', 'menu-builder/groups/duplicate', { data: { id: {{ group.id }} } })
-            .then(function(response) {
-                window.location.href = response.data.url;
-            })
-            .catch(function() {
-                Craft.cp.displayError(Craft.t('menu-builder', 'Couldn’t duplicate that navigation menu.'));
-            });
-    });
-    {% endjs %}
+    <p class="light">
+        {{ "{count} menu items"|t('menu-builder', { count: itemCount }) }} &middot;
+        <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ "Edit this menu’s items"|t('menu-builder') }}</a>
+    </p>
 {% endif %}
 {% endblock %}

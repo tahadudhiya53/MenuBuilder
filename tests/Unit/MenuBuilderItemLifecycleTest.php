@@ -182,7 +182,7 @@ class MenuBuilderItemLifecycleTest extends TestCase
     {
         $source = $this->methodSource(ItemsController::class, 'actionSave');
 
-        $this->assertStringContainsString('$this->buildMetadata($request, $item->type)', $source);
+        $this->assertStringContainsString('$this->buildMetadata($request, $item->type', $source);
         $this->assertStringContainsString('$this->buildVisibilityRules(', $source);
         $this->assertStringNotContainsString("getBodyParam('metadata'", $source);
     }
@@ -250,14 +250,17 @@ class MenuBuilderItemLifecycleTest extends TestCase
      * outside them.
      *
      * `sortOrder` is excluded because it is assigned by position, not
-     * copied; `id`/`uid`/`dateCreated`/`dateUpdated` are database-owned; and
-     * `children` is assembled by getTree() rather than stored.
+     * copied; `id`/`uid`/`dateCreated`/`dateUpdated` are database-owned;
+     * `children` is assembled by getTree() rather than stored; and
+     * `customFieldDefinitions` belongs to the *menu*, not the item — it is
+     * injected for validation and deliberately never written to a column
+     * (see MenuBuilderItem::$customFieldDefinitions).
      *
      * @return array<string,array{string}>
      */
     public static function persistedPropertyProvider(): array
     {
-        $excluded = ['id', 'uid', 'dateCreated', 'dateUpdated', 'children', 'sortOrder'];
+        $excluded = ['id', 'uid', 'dateCreated', 'dateUpdated', 'children', 'sortOrder', 'customFieldDefinitions'];
 
         $properties = array_values(array_diff(
             array_map(
@@ -564,6 +567,60 @@ class MenuBuilderItemLifecycleTest extends TestCase
     public static function cacheInvalidatingMethodProvider(): array
     {
         $methods = ['save', 'move', 'reorderSiblings', 'duplicate', 'deleteById'];
+
+        return array_combine($methods, array_map(fn(string $method) => [$method], $methods));
+    }
+
+    /**
+     * And it must invalidate **after** the write is committed. Invalidating
+     * inside an open transaction opens a stale-cache window: a concurrent
+     * front-end request rebuilds the tree from pre-commit data, re-caches it,
+     * and nothing invalidates it again afterwards.
+     *
+     * @dataProvider transactionalWriteProvider
+     */
+    public function testATransactionalWriteInvalidatesOnlyAfterItCommits(string $method): void
+    {
+        $source = $this->methodSource(MenuBuilderItemService::class, $method);
+
+        $this->assertGreaterThan(
+            strrpos($source, 'commit()'),
+            strrpos($source, 'invalidateGroup('),
+            "$method() must not invalidate the cache before its transaction commits."
+        );
+    }
+
+    /** @return array<string,array{string}> */
+    public static function transactionalWriteProvider(): array
+    {
+        $methods = ['save', 'move', 'reorderSiblings', 'duplicate'];
+
+        return array_combine($methods, array_map(fn(string $method) => [$method], $methods));
+    }
+
+    /**
+     * The bulk paths are the case that can't be fixed by ordering: they wrap
+     * many single-item writes, each of which invalidates, inside **one**
+     * transaction that commits after all of them. The cache service handles
+     * it by queueing invalidations raised inside a transaction until it ends
+     * (see MenuBuilderCacheService, "Transactions", and
+     * MenuBuilderCacheIntegrationTest) — so what has to hold here is that a
+     * bulk operation really is one transaction around the per-item writes.
+     *
+     * @dataProvider bulkWriteProvider
+     */
+    public function testABulkWriteIsOneTransactionAroundThePerItemWrites(string $method): void
+    {
+        $source = $this->methodSource(MenuBuilderItemService::class, $method);
+
+        $this->assertStringContainsString('beginTransaction()', $source);
+        $this->assertStringContainsString('commit()', $source);
+    }
+
+    /** @return array<string,array{string}> */
+    public static function bulkWriteProvider(): array
+    {
+        $methods = ['bulkSetEnabled', 'bulkDelete'];
 
         return array_combine($methods, array_map(fn(string $method) => [$method], $methods));
     }

@@ -5,8 +5,10 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 use Craft;
 use craft\helpers\UrlHelper;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use yii\base\Action;
 use yii\web\NotFoundHttpException;
@@ -21,7 +23,7 @@ class GroupsController extends BaseMenuBuilderController
 
     protected function permissionDeniedMessage(): string
     {
-        return 'You are not permitted to manage navigation groups.';
+        return 'You are not permitted to manage navigation menus.';
     }
 
     /**
@@ -54,7 +56,7 @@ class GroupsController extends BaseMenuBuilderController
         $group = MenuBuilder::getInstance()->groups->getById($id);
 
         if (!$group) {
-            return $this->asFailure(Craft::t('menu-builder', 'Navigation group not found.'));
+            return $this->asFailure(Craft::t('menu-builder', 'That menu no longer exists.'));
         }
 
         $group->enabled = !$group->enabled;
@@ -63,13 +65,15 @@ class GroupsController extends BaseMenuBuilderController
         if (Craft::$app->getRequest()->getAcceptsJson()) {
             return $success
                 ? $this->asSuccess(data: ['enabled' => $group->enabled])
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that menu.'));
         }
 
         if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group updated.'));
+            Craft::$app->getSession()->setSuccess($group->enabled
+                ? Craft::t('menu-builder', 'Menu enabled.')
+                : Craft::t('menu-builder', 'Menu disabled.'));
         } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that menu.'));
         }
 
         return $this->redirectToPostedUrl();
@@ -78,7 +82,6 @@ class GroupsController extends BaseMenuBuilderController
     public function actionIndex(): Response
     {
         $groups = MenuBuilder::getInstance()->groups->getAll();
-        $currentUser = Craft::$app->getUser()->getIdentity();
 
         $rows = array_map(fn(MenuBuilderGroup $group) => [
             'group' => $group,
@@ -87,9 +90,7 @@ class GroupsController extends BaseMenuBuilderController
 
         return $this->renderTemplate('menu-builder/groups/_index', [
             'rows' => $rows,
-            'canManageSettings' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:manageSettings')),
-            'canDelete' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:delete')),
-        ]);
+        ] + $this->currentUserAffordances());
     }
 
     public function actionEdit(?int $groupId = null, ?MenuBuilderGroup $group = null): Response
@@ -99,17 +100,23 @@ class GroupsController extends BaseMenuBuilderController
                 $group = MenuBuilder::getInstance()->groups->getById($groupId);
 
                 if (!$group) {
-                    throw new NotFoundHttpException('Navigation group not found.');
+                    throw new NotFoundHttpException('Menu not found.');
                 }
             } else {
                 $group = new MenuBuilderGroup();
             }
         }
 
+        // `edit` only needs `view`, so this form is reachable read-only. The
+        // template hides Save/Delete accordingly rather than offering buttons
+        // the save/delete actions would then refuse.
         return $this->renderTemplate('menu-builder/groups/_edit', [
             'group' => $group,
             'isNew' => $group->id === null,
-        ]);
+            'itemCount' => $group->id !== null
+                ? MenuBuilder::getInstance()->groups->countItems($group->id)
+                : 0,
+        ] + $this->currentUserAffordances());
     }
 
     public function actionSave(): ?Response
@@ -121,7 +128,7 @@ class GroupsController extends BaseMenuBuilderController
         $group = $groupId ? MenuBuilder::getInstance()->groups->getById($groupId) : new MenuBuilderGroup();
 
         if (!$group) {
-            throw new NotFoundHttpException('Navigation group not found.');
+            throw new NotFoundHttpException('Menu not found.');
         }
 
         $group->name = $this->bodyString('name');
@@ -134,16 +141,69 @@ class GroupsController extends BaseMenuBuilderController
         $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
         $group->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $group->siteIds = ConfigHelper::normalizeIdList($request->getBodyParam('siteIds'));
+        $group->customFields = $this->buildCustomFields($this->bodyArray('customFields'));
 
         if (!MenuBuilder::getInstance()->groups->save($group)) {
             // asModelFailure() sets the error flash itself — setting one
             // here as well surfaced the same message twice in the CP.
-            return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save navigation group.'), 'group');
+            return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save that menu.'), 'group');
         }
 
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group saved.'));
+        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu saved.'));
 
         return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menu-builder/' . $group->handle));
+    }
+
+    /**
+     * Builds the menu's custom field definitions from the editable table's
+     * posted rows.
+     *
+     * Rows are mapped, never trusted: each becomes a
+     * {@see MenuBuilderCustomField}, which validates itself, and the set is
+     * then checked for duplicate handles and the per-menu ceiling by
+     * MenuBuilderGroup::validateCustomFields(). Completely blank rows are
+     * dropped rather than reported — Craft's editable table always posts a
+     * trailing empty row.
+     *
+     * @param array<mixed,mixed> $rows
+     * @return MenuBuilderCustomField[]
+     */
+    private function buildCustomFields(array $rows): array
+    {
+        $definitions = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $handle = trim((string)($this->scalarOrEmpty($row['handle'] ?? null)));
+            $name = trim((string)($this->scalarOrEmpty($row['name'] ?? null)));
+
+            if ($handle === '' && $name === '') {
+                continue;
+            }
+
+            $field = new MenuBuilderCustomField();
+            $field->handle = $handle;
+            $field->name = $name;
+            $field->type = $this->scalarOrEmpty($row['type'] ?? null);
+            $field->instructions = $this->scalarOrEmpty($row['instructions'] ?? null) ?: null;
+            $field->required = ($row['required'] ?? false) === true || ($row['required'] ?? null) === '1';
+            // One comma-separated cell rather than a nested table: the
+            // options list is a short allowlist, and CustomFieldHelper
+            // trims, de-duplicates and drops the empties.
+            $field->options = CustomFieldHelper::normalizeOptions(explode(',', $this->scalarOrEmpty($row['options'] ?? null)));
+
+            $definitions[] = $field;
+        }
+
+        return $definitions;
+    }
+
+    private function scalarOrEmpty(mixed $value): string
+    {
+        return is_scalar($value) ? (string)$value : '';
     }
 
     public function actionDuplicate(): Response
@@ -154,10 +214,13 @@ class GroupsController extends BaseMenuBuilderController
         $clone = MenuBuilder::getInstance()->groups->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that navigation group.'));
+            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu.'));
         }
 
-        return $this->asSuccess(data: [
+        // The message matters on the non-JSON path: the edit screen's
+        // Duplicate is a form action now, so it posts and redirects like an
+        // ordinary save and would otherwise land on a generic flash.
+        return $this->asSuccess(Craft::t('menu-builder', 'Menu duplicated.'), data: [
             'id' => $clone->id,
             'url' => UrlHelper::cpUrl('menu-builder/' . $clone->handle),
         ]);
@@ -173,13 +236,13 @@ class GroupsController extends BaseMenuBuilderController
         if (Craft::$app->getRequest()->getAcceptsJson()) {
             return $success
                 ? $this->asSuccess()
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t delete that navigation group.'));
+                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
         }
 
         if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group deleted.'));
+            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu deleted.'));
         } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t delete that navigation group.'));
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
         }
 
         return $this->redirect(UrlHelper::cpUrl('menu-builder'));

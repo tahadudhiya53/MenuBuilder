@@ -1,31 +1,40 @@
 {% extends "_layouts/cp" %}
 
-{% set title = isNew ? "New menu item"|t('menu-builder') : item.title %}
-{% set fullPageForm = true %}
+{# `is not empty` would call a title of "0" empty, which is a real title. #}
+{% set itemLabel = (item.title is not null and item.title|trim != '') ? item.title : "(untitled)"|t('menu-builder') %}
+{% set title = isNew ? "New menu item"|t('menu-builder') : itemLabel %}
+
+{# Read-only when the viewer may look but not save: `items/edit` needs only
+   `view`, and this route is deep-linkable, so it has to render without
+   offering a Save the save action would refuse. #}
+{% set fullPageForm = canEdit %}
 {% set crumbs = [
-    { label: "MenuBuilder"|t('menu-builder'), url: url('menu-builder') },
+    { label: "Menus"|t('menu-builder'), url: url('menu-builder') },
     { label: group.name, url: url('menu-builder/' ~ group.handle) },
 ] %}
 
-{% block actionButton %}
-    <div class="btngroup">
-        <input type="submit" class="btn submit" value="{{ 'Save'|t('app') }}">
-    </div>
-{% endblock %}
+{# Delete lives in the action-button menu rather than in a <form> of its own.
+   It used to be a nested <form>, which is invalid HTML: the parser drops the
+   inner start tag, so its `onsubmit` confirmation never ran and the button
+   ended up submitting the page form. Craft's own formActions mechanism posts
+   the page form to a different action, with a confirmation, and no nesting. #}
+{% set formActions = canDelete and not isNew ? [
+    {
+        label: "Delete menu item"|t('menu-builder'),
+        action: 'menu-builder/items/delete',
+        params: { id: item.id },
+        redirect: ('menu-builder/' ~ group.handle)|hash,
+        confirm: 'Delete “{title}”? This also deletes any child menu items. This cannot be undone.'|t('menu-builder', { title: itemLabel }),
+        destructive: true,
+    },
+] : null %}
+
+{% if not canEdit %}
+    {% set contentNotice = "You have read-only access to this menu item."|t('menu-builder') %}
+{% endif %}
 
 {% block content %}
     {% include "menu-builder/items/_fields" %}
-
-    {% if not isNew %}
-        <hr>
-        <form method="post" action="" onsubmit="return confirm('{{ 'Delete “{title}”? This also deletes any child menu items. This cannot be undone.'|t('menu-builder', { title: item.title })|e('js') }}');">
-            {{ csrfInput() }}
-            <input type="hidden" name="action" value="menu-builder/items/delete">
-            <input type="hidden" name="id" value="{{ item.id }}">
-            <input type="hidden" name="redirect" value="menu-builder/{{ group.handle }}">
-            <button type="submit" class="btn delete">{{ "Delete menu item"|t('app') }}</button>
-        </form>
-    {% endif %}
 {% endblock %}
 
 {% do view.registerAssetBundle("Tahadudhiya\\MenuBuilder\\web\\assets\\cp\\CpAsset") %}

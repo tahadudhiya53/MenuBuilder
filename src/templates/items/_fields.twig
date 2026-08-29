@@ -1,19 +1,28 @@
 {% import "_includes/forms" as forms %}
 
 {% set megaMenuConfig = item.metadata.megaMenu ?? [] %}
+{% set badgeStyleOptions = [
+    { label: "Default"|t('menu-builder'), value: 'default' },
+    { label: "Info"|t('menu-builder'), value: 'info' },
+    { label: "Success"|t('menu-builder'), value: 'success' },
+    { label: "Warning"|t('menu-builder'), value: 'warning' },
+    { label: "Critical"|t('menu-builder'), value: 'critical' },
+] %}
 {% set dynamicSource = item.metadata.dynamicSource ?? [] %}
 
-{% set loggedInRule = item.visibility|filter(r => r.type == 'loggedIn')|first %}
-{% set loggedOutRule = item.visibility|filter(r => r.type == 'loggedOut')|first %}
-{% set userGroupRule = item.visibility|filter(r => r.type == 'userGroup')|first %}
-{% set siteRule = item.visibility|filter(r => r.type == 'site')|first %}
-{% set dateRule = item.visibility|filter(r => r.type == 'dateRange')|first %}
-{% set envRule = item.visibility|filter(r => r.type == 'environment')|first %}
+{% set loggedInRule = item.visibility|filter(r => r.type == 'loggedIn')|first ?: null %}
+{% set loggedOutRule = item.visibility|filter(r => r.type == 'loggedOut')|first ?: null %}
+{% set userGroupRule = item.visibility|filter(r => r.type == 'userGroup')|first ?: null %}
+{% set siteRule = item.visibility|filter(r => r.type == 'site')|first ?: null %}
+{% set dateRule = item.visibility|filter(r => r.type == 'dateRange')|first ?: null %}
+{% set envRule = item.visibility|filter(r => r.type == 'environment')|first ?: null %}
 
 {% set entryElement = item.type == 'entry' and item.elementId ? craft.entries.id(item.elementId).status(null).one() : null %}
 {% set categoryElement = item.type == 'category' and item.elementId ? craft.categories.id(item.elementId).status(null).one() : null %}
 {% set assetElement = item.type == 'asset' and item.elementId ? craft.assets.id(item.elementId).one() : null %}
 {% set imageElement = item.image ? craft.assets.id(item.image).one() : null %}
+{% set iconType = item.iconType() %}
+{% set iconAssetElement = item.iconAssetId() ? craft.assets.id(item.iconAssetId()).one() : null %}
 
 <div class="menu-builder-item-fields" data-menu-builder-item-fields>
 <input type="hidden" name="action" value="menu-builder/items/save">
@@ -22,6 +31,40 @@
 <input type="hidden" name="parentId" value="{{ item.parentId }}">
 {{ redirectInput('menu-builder/' ~ group.handle) }}
 {{ csrfInput() }}
+
+{# `items/edit` needs only `view`, so this partial can be rendered for someone
+   who may not save. One disabled fieldset makes every control inside it
+   genuinely inert rather than threading a flag through every field call.
+   `canEdit` defaults to true so any caller that doesn't pass it (the
+   slide-out renders the same partial) behaves exactly as before. #}
+<fieldset class="menu-builder-fieldset"{{ (canEdit ?? true) ? '' : ' disabled' }}>
+
+{# Link health for this item, computed by ItemsController from
+   MenuBuilderLinkHealthService. Shown first because it explains why the
+   editor is here at all, and because the two fields that fix it — the element
+   picker and the fallback behaviour — are further down the same form.
+
+   It is worded entirely from the health status and this item's own fallback
+   setting. Nothing about the linked element is read here or by the health
+   object, so an editor without access to the (disabled, unpublished, or
+   deleted) content learns nothing about it beyond "this link doesn't work". #}
+{% if health is defined and health and not health.isHealthy() %}
+    <div class="menu-builder-notice warning menu-builder-health-notice" role="status">
+        <p><strong>{{ health.label() }}</strong> — {{ health.message() }}</p>
+        <p class="light">{{ health.consequence() }}</p>
+        {% if health.needsElementRecovery() %}
+            {# Four safe ways out, none of which this screen takes on the
+               editor's behalf: MenuBuilder never discards a menu item because
+               the thing it pointed at went away. #}
+            <ul class="menu-builder-health-actions">
+                <li>{{ "Pick different content below to relink this item."|t('menu-builder') }}</li>
+                <li>{{ "Or set the fallback behaviour to a fallback URL, so it keeps working."|t('menu-builder') }}</li>
+                <li>{{ "Or disable this item, so it stops rendering without being lost."|t('menu-builder') }}</li>
+                <li>{{ "Or delete it from the menu — that one can’t be undone."|t('menu-builder') }}</li>
+            </ul>
+        {% endif %}
+    </div>
+{% endif %}
 
 <div data-mb-section="basic">
     <h2>{{ "Basic"|t('menu-builder') }}</h2>
@@ -126,24 +169,64 @@
                 { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
             ],
         }) }}
-        {{ forms.textField({
-            label: "Source ID"|t('menu-builder'),
-            instructions: "The section/category group/volume ID to pull from (see Settings → Sections/Categories/Assets in the CP for IDs)."|t('menu-builder'),
-            id: 'dynamicSourceId',
-            name: 'dynamicSourceId',
-            type: 'number',
-            min: 1,
-            value: dynamicSource.sourceId ?? '',
-        }) }}
+        {# One picker per source type, all posting the same `dynamicSourceId`
+           the controller already reads — item-fields.js shows the one that
+           matches and disables the rest, exactly as the link-type sections
+           work, so a hidden picker's value can never be submitted.
+
+           This used to be a bare number field asking the editor to go and
+           look an internal ID up under Settings first. Nothing about the
+           stored value changed. #}
+        <div data-dynamic-source="entries">
+            {{ forms.selectField({
+                label: "Section"|t('menu-builder'),
+                instructions: "Children are pulled from this section."|t('menu-builder'),
+                id: 'dynamicSourceIdEntries',
+                name: 'dynamicSourceId',
+                value: dynamicSource.sourceId ?? '',
+                options: [{ label: "Select a section…"|t('menu-builder'), value: '' }]
+                    |merge(craft.app.entries.getAllSections()|map(section => { label: section.name, value: section.id })|values),
+            }) }}
+        </div>
+
+        <div data-dynamic-source="categories">
+            {{ forms.selectField({
+                label: "Category group"|t('menu-builder'),
+                instructions: "Children are pulled from this category group."|t('menu-builder'),
+                id: 'dynamicSourceIdCategories',
+                name: 'dynamicSourceId',
+                value: dynamicSource.sourceId ?? '',
+                options: [{ label: "Select a category group…"|t('menu-builder'), value: '' }]
+                    |merge(craft.app.categories.getAllGroups()|map(categoryGroup => { label: categoryGroup.name, value: categoryGroup.id })|values),
+            }) }}
+        </div>
+
+        <div data-dynamic-source="assets">
+            {{ forms.selectField({
+                label: "Volume"|t('menu-builder'),
+                instructions: "Children are pulled from this asset volume."|t('menu-builder'),
+                id: 'dynamicSourceIdAssets',
+                name: 'dynamicSourceId',
+                value: dynamicSource.sourceId ?? '',
+                options: [{ label: "Select a volume…"|t('menu-builder'), value: '' }]
+                    |merge(craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values),
+            }) }}
+        </div>
+        {# Blank means "no limit stored", which
+           MenuBuilderDynamicNavigationService::normalizeConfig() reads as the
+           maximum — that is the state a quick-added dynamic item starts in, so
+           showing a made-up 10 here would report a value the item doesn't have.
+           The cap comes from MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT rather
+           than being written out again. #}
         {{ forms.textField({
             label: "Limit"|t('menu-builder'),
-            instructions: "Maximum 50, enforced server-side regardless of what's entered here."|t('menu-builder'),
+            instructions: "How many children to pull in. Leave blank for the maximum ({max}), which is enforced server-side regardless of what's entered here."|t('menu-builder', { max: dynamicSourceMaxLimit }),
             id: 'dynamicSourceLimit',
             name: 'dynamicSourceLimit',
             type: 'number',
             min: 1,
-            max: 50,
-            value: dynamicSource.limit ?? 10,
+            max: dynamicSourceMaxLimit,
+            value: dynamicSource.limit ?? '',
         }) }}
         {{ forms.selectField({
             label: "Order by"|t('menu-builder'),
@@ -231,8 +314,61 @@
 
 <div data-mb-section="appearance">
     <h2>{{ "Appearance"|t('menu-builder') }}</h2>
-    {{ forms.textField({ label: "Icon"|t('menu-builder'), instructions: "Any identifier your templates know how to render (icon font class, SVG handle, etc.).", id: 'icon', name: 'icon', value: item.icon }) }}
-    {{ forms.textField({ label: "Badge"|t('menu-builder'), id: 'badge', name: 'badge', value: item.badge }) }}
+    {{ forms.selectField({
+        label: "Icon"|t('menu-builder'),
+        instructions: "How this item's icon is stored. Raw SVG markup isn't accepted — upload the SVG and pick it as an asset."|t('menu-builder'),
+        id: 'iconSource',
+        name: 'iconSource',
+        value: iconType,
+        options: [
+            { label: "None"|t('menu-builder'), value: '' },
+            { label: "Icon handle / CSS class"|t('menu-builder'), value: 'class' },
+            { label: "Asset"|t('menu-builder'), value: 'asset' },
+        ],
+    }) }}
+    <div data-icon-class>
+        {{ forms.textField({
+            label: "Icon handle or CSS class"|t('menu-builder'),
+            instructions: "Any identifier your templates know how to render — `icon-cart`, `fa fa-cart`, `heroicons/outline/home`."|t('menu-builder'),
+            id: 'icon',
+            name: 'icon',
+            value: iconType == 'asset' ? '' : item.iconClass(),
+            errors: item.getErrors('icon'),
+        }) }}
+    </div>
+    <div data-icon-asset>
+        {{ forms.elementSelectField({
+            label: "Icon asset"|t('menu-builder'),
+            instructions: "Rendered as an image, never inlined — an SVG uploaded here can't run script in the page."|t('menu-builder'),
+            id: 'iconAsset',
+            name: 'iconAsset',
+            elementType: 'craft\\elements\\Asset',
+            sources: '*',
+            single: true,
+            limit: 1,
+            elements: iconAssetElement ? [iconAssetElement] : [],
+        }) }}
+    </div>
+    {# Badge text is free text and is escaped where it renders, so no
+       character is rejected here; the style beside it is a closed enum
+       because that half reaches a class attribute. See helpers/BadgeHelper. #}
+    {{ forms.textField({
+        label: "Badge"|t('menu-builder'),
+        instructions: "A short flag shown beside the label — NEW, SALE, BETA. Leave blank for no badge."|t('menu-builder'),
+        id: 'badge',
+        name: 'badge',
+        value: item.badge,
+        maxlength: 255,
+        errors: item.getErrors('badge'),
+    }) }}
+    {{ forms.selectField({
+        label: "Badge style"|t('menu-builder'),
+        instructions: "Adds a `menu-builder-badge--<style>` class for your own CSS. Ignored when the badge is blank."|t('menu-builder'),
+        id: 'badgeStyle',
+        name: 'badgeStyle',
+        options: badgeStyleOptions,
+        value: item.badgeStyle() ?? 'default',
+    }) }}
     {{ forms.textareaField({ label: "Description"|t('menu-builder'), id: 'description', name: 'description', value: item.description, rows: 2 }) }}
     {{ forms.elementSelectField({
         label: "Image"|t('menu-builder'),
@@ -282,8 +418,9 @@
 
     {{ forms.textField({ label: "Visible from"|t('menu-builder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
     {{ forms.textField({ label: "Visible until"|t('menu-builder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
-    {# `envRule.environments ?? [] | join(', ')` parsed as `envRule.environments ?? ([]|join(', '))`, #}
-    {# so an item that *had* an environment rule rendered the raw array into the field. #}
+    {# Rules are resolved with `|first ?: null` above: Twig's `first` returns `false`, not `null`, #}
+    {# for an empty match, and `false is not null` is true — so without the coalesce this line #}
+    {# tried to read `environments` off a bool and blew up the whole edit slideout. #}
     {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT). An unrecognized environment hides the item."|t('menu-builder'), id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule is not null ? envRule.environments|join(', ') : '' }) }}
 </div>
 
@@ -317,6 +454,64 @@
     }) }}
 </div>
 
+{% if group.customFields|length %}
+{# Editor-defined fields for this menu (Menus → this menu → Custom fields).
+   One control per definition, all posting under `customFields[<handle>]`;
+   which handles may be stored at all is decided server-side from the same
+   definitions (ItemsController::buildMetadata()), never from what was
+   posted. Values live in the item's `metadata['custom']` bag — see
+   helpers/CustomFieldHelper. #}
+<div data-mb-section="customFields">
+    <h2>{{ "Custom fields"|t('menu-builder') }}</h2>
+
+    {% set customValues = item.customFieldValues() %}
+
+    {% for field in group.customFields %}
+        {% set value = customValues[field.handle] ?? null %}
+        {% set customAssetElement = field.type == 'asset' and value ? craft.assets.id(value).one() : null %}
+        {% set base = {
+            label: field.name,
+            instructions: field.instructions,
+            id: 'customField-' ~ field.handle,
+            name: 'customFields[' ~ field.handle ~ ']',
+            required: field.required,
+        } %}
+
+        {% if field.type == 'textarea' %}
+            {{ forms.textareaField(base|merge({ value: value, rows: 3, maxlength: 2000 })) }}
+        {% elseif field.type == 'boolean' %}
+            {{ forms.lightswitchField(base|merge({ on: value ? true : false })) }}
+        {% elseif field.type == 'number' %}
+            {{ forms.textField(base|merge({ value: value, type: 'number', step: 'any' })) }}
+        {% elseif field.type == 'select' %}
+            {{ forms.selectField(base|merge({
+                value: value,
+                options: [{ label: "None"|t('menu-builder'), value: '' }]
+                    |merge(field.options|map(option => { label: option, value: option })|values),
+            })) }}
+        {% elseif field.type == 'asset' %}
+            {{ forms.elementSelectField(base|merge({
+                elementType: 'craft\\elements\\Asset',
+                sources: '*',
+                single: true,
+                limit: 1,
+                elements: customAssetElement ? [customAssetElement] : [],
+            })) }}
+        {% elseif field.type == 'url' %}
+            {{ forms.textField(base|merge({ value: value, maxlength: 2000 })) }}
+        {% else %}
+            {{ forms.textField(base|merge({ value: value, maxlength: 255 })) }}
+        {% endif %}
+    {% endfor %}
+
+    {# Custom field values share the `metadata` attribute with the mega-menu
+       and dynamic-source config, so their validation errors land there. #}
+    {% for error in item.getErrors('metadata') %}
+        <p class="error">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div data-mb-section="advanced">
     <h2>{{ "Advanced"|t('menu-builder') }}</h2>
     {{ forms.textField({ label: "Handle"|t('menu-builder'), instructions: "Used for anchor links and CSS targeting.", id: 'handle', name: 'handle', value: item.handle, errors: item.getErrors('handle') }) }}
@@ -333,6 +528,7 @@
     }) }}
 </div>
 {% endif %}
+</fieldset>
 </div>
 
 {% js %}

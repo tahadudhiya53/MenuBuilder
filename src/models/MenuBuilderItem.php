@@ -4,8 +4,11 @@ namespace Tahadudhiya\MenuBuilder\models;
 
 use Craft;
 use craft\base\Model;
+use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
+use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
 
@@ -104,6 +107,26 @@ class MenuBuilderItem extends Model
     /** @var array<string,mixed> Open-ended extension point (e.g. future mega-menu column data). */
     public array $metadata = [];
 
+    /**
+     * @var MenuBuilderCustomField[]|null The owning menu's custom field
+     *      definitions, when they are known — **not persisted**, and not
+     *      part of this item's identity: they belong to the menu (see
+     *      MenuBuilderGroup::$customFields).
+     *
+     * They are injected rather than looked up so this model stays free of
+     * database access and remains unit-testable without a booted Craft app,
+     * the same reasoning as everywhere else in `defineRules()`.
+     * MenuBuilderItemService::save() fills them in for every write path that
+     * doesn't set them itself, so a save is always definition-aware.
+     *
+     * `null` means "not resolved" — validation then checks the *shape* of
+     * `metadata['custom']` only. A stored value still can't reach a template
+     * unvalidated: MenuBuilderResolver reads it through
+     * CustomFieldHelper::valuesForOutput(), which fails closed against the
+     * definitions of the day.
+     */
+    public ?array $customFieldDefinitions = null;
+
     public ?string $uid = null;
     public ?string $dateCreated = null;
     public ?string $dateUpdated = null;
@@ -151,9 +174,15 @@ class MenuBuilderItem extends Model
             [['description'], 'string'],
             [['htmlId'], 'validateHtmlId', 'skipOnEmpty' => true],
             [['cssClass'], 'validateCssClass', 'skipOnEmpty' => true],
+            [['icon'], 'validateIcon', 'skipOnEmpty' => true],
+            // Not skipOnEmpty: clearing the badge has to normalize an
+            // all-whitespace value to null, and the style lives in
+            // `metadata`, which is validated whether or not `badge` is set.
+            [['badge'], 'validateBadge', 'skipOnEmpty' => false],
             [['visibility'], 'validateVisibility', 'skipOnEmpty' => false],
             [['metadata'], 'validateMegaMenu', 'skipOnEmpty' => false],
             [['metadata'], 'validateDynamicSource', 'skipOnEmpty' => false],
+            [['metadata'], 'validateCustomFields', 'skipOnEmpty' => false],
             [['htmlAttributes', 'metadata'], 'safe'],
         ];
     }
@@ -230,6 +259,120 @@ class MenuBuilderItem extends Model
         if (isset($config['orderBy']) && !in_array($config['orderBy'], self::DYNAMIC_SOURCE_ORDER_BY, true)) {
             $this->addError('metadata', Craft::t('menu-builder', 'Dynamic source "orderBy" must be one of: {values}.', ['values' => implode(', ', self::DYNAMIC_SOURCE_ORDER_BY)]));
         }
+    }
+
+    /**
+     * Validates `metadata[CustomFieldHelper::VALUES_KEY]` — the item's
+     * editor-defined field values.
+     *
+     * Two layers, because the two have different prerequisites:
+     *
+     * 1. **Shape**, always: an associative bag of handle => scalar|null,
+     *    within {@see CustomFieldHelper::MAX_FIELDS} and the length cap.
+     *    This needs nothing but the item, so it runs on every write path
+     *    including an import or a console script.
+     * 2. **Type**, when {@see $customFieldDefinitions} is known: each value
+     *    against its field's type/options, and every required field present.
+     *    Handles the menu doesn't define are rejected rather than silently
+     *    dropped — a value under an unknown handle is a bug or a tampered
+     *    post, and swallowing it would hide both.
+     */
+    public function validateCustomFields(): void
+    {
+        if (!is_array($this->metadata)) {
+            return;
+        }
+
+        $values = $this->metadata[CustomFieldHelper::VALUES_KEY] ?? null;
+
+        if ($values === null) {
+            $values = [];
+        }
+
+        if (!is_array($values)) {
+            $this->addError('metadata', Craft::t('menu-builder', 'Custom field values must be an object keyed by field handle.'));
+
+            return;
+        }
+
+        if (count($values) > CustomFieldHelper::MAX_FIELDS) {
+            $this->addError('metadata', Craft::t('menu-builder', 'An item can carry values for at most {max} custom fields.', ['max' => CustomFieldHelper::MAX_FIELDS]));
+
+            return;
+        }
+
+        foreach ($values as $handle => $value) {
+            if (!is_string($handle) || preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $handle) !== 1 || strlen($handle) > CustomFieldHelper::MAX_HANDLE_LENGTH) {
+                $this->addError('metadata', Craft::t('menu-builder', 'Custom field handles must start with a letter and contain only letters, numbers, and underscores.'));
+
+                continue;
+            }
+
+            // Scalars only: a nested array or object in this bag has no
+            // field type that could produce it, and would reach a template
+            // as something no accessor is documented to return.
+            if ($value !== null && !is_scalar($value)) {
+                $this->addError('metadata', Craft::t('menu-builder', 'Custom field “{handle}” must hold a single text, number or boolean value.', ['handle' => $handle]));
+
+                continue;
+            }
+
+            if (is_string($value) && mb_strlen($value) > CustomFieldHelper::MAX_TEXTAREA_LENGTH) {
+                $this->addError('metadata', Craft::t('menu-builder', 'Custom field “{handle}” can be at most {max} characters.', ['handle' => $handle, 'max' => CustomFieldHelper::MAX_TEXTAREA_LENGTH]));
+
+                continue;
+            }
+
+            if ($this->customFieldDefinitions === null) {
+                continue;
+            }
+
+            $definition = CustomFieldHelper::definitionByHandle($this->customFieldDefinitions, $handle);
+
+            if ($definition === null) {
+                $this->addError('metadata', Craft::t('menu-builder', 'This menu has no custom field with the handle “{handle}”.', ['handle' => $handle]));
+
+                continue;
+            }
+
+            $error = CustomFieldHelper::validateValue($definition, $value);
+
+            if ($error !== null) {
+                $this->addError('metadata', $error);
+            }
+        }
+
+        foreach ($this->customFieldDefinitions ?? [] as $definition) {
+            if (!$definition->required) {
+                continue;
+            }
+
+            $error = CustomFieldHelper::validateValue($definition, $values[$definition->handle] ?? null);
+
+            if ($error !== null && !array_key_exists($definition->handle, $values)) {
+                $this->addError('metadata', $error);
+            }
+        }
+    }
+
+    /**
+     * This item's stored custom field values, keyed by handle. Raw — the
+     * fail-closed, definition-checked read a template gets is
+     * MenuBuilderNode::customFields (see CustomFieldHelper::valuesForOutput()).
+     *
+     * @return array<string,mixed>
+     */
+    public function customFieldValues(): array
+    {
+        $values = $this->metadata[CustomFieldHelper::VALUES_KEY] ?? null;
+
+        return is_array($values) ? $values : [];
+    }
+
+    /** One stored custom field value by handle, or null when the item has none. */
+    public function customFieldValue(string $handle): mixed
+    {
+        return $this->customFieldValues()[$handle] ?? null;
     }
 
     /**
@@ -550,6 +693,76 @@ class MenuBuilderItem extends Model
         if ($this->cssClass !== null && !LinkAttributeHelper::isValidCssClassList($this->cssClass)) {
             $this->addError('cssClass', Craft::t('menu-builder', 'Enter a valid CSS class list — no quotes or angle brackets.'));
         }
+    }
+
+    /**
+     * Normalizes the icon into its canonical stored form and rejects
+     * anything outside the grammar — see {@see IconHelper}. Normalizing
+     * here rather than in ItemsController means every write path (CP,
+     * console, a future import) stores the same shape, and the rejection
+     * is what keeps markup out of the column in the first place.
+     */
+    public function validateIcon(): void
+    {
+        $this->icon = IconHelper::normalize($this->icon);
+
+        if ($this->icon !== null && !IconHelper::isValid($this->icon)) {
+            $this->addError('icon', Craft::t('menu-builder', 'Enter an icon handle or CSS class list (letters, numbers, spaces and - _ . : /), or pick an asset. Markup isn’t accepted — use an SVG asset instead.'));
+        }
+    }
+
+    /**
+     * Normalizes the badge text and validates `metadata['badgeStyle']`
+     * against {@see BadgeHelper::STYLES} — the enum half fails closed at
+     * the door, the same way an unknown style would fail closed on read.
+     *
+     * The badge *text* is never rejected for its characters: it is plain
+     * text, escaped where it is rendered (see BadgeHelper's docblock).
+     * Its only limit is the varchar(255) one already declared above.
+     */
+    public function validateBadge(): void
+    {
+        $this->badge = BadgeHelper::normalizeText($this->badge);
+
+        if (!is_array($this->metadata)) {
+            return;
+        }
+
+        $style = $this->metadata['badgeStyle'] ?? null;
+
+        if (!BadgeHelper::isValidStyle($style)) {
+            $this->addError('badge', Craft::t('menu-builder', 'Badge style must be one of: {styles}.', ['styles' => implode(', ', BadgeHelper::STYLES)]));
+        }
+    }
+
+    /** The badge's style, or null for the default/none — fail-closed, see {@see BadgeHelper::style()}. */
+    public function badgeStyle(): ?string
+    {
+        return BadgeHelper::style($this->metadata['badgeStyle'] ?? null);
+    }
+
+    /** True when this item has badge text to render; a style on its own is not a badge. */
+    public function hasBadge(): bool
+    {
+        return BadgeHelper::hasBadge($this->badge);
+    }
+
+    /** `IconHelper::TYPE_CLASS` / `TYPE_ASSET`, or null when there is no usable icon. */
+    public function iconType(): ?string
+    {
+        return IconHelper::type($this->icon);
+    }
+
+    /** The icon's class list, or null when the icon is empty, an asset, or (fail-closed) unsafe. */
+    public function iconClass(): ?string
+    {
+        return IconHelper::classValue($this->icon);
+    }
+
+    /** The icon's asset id, or null when the icon is empty or a class. */
+    public function iconAssetId(): ?int
+    {
+        return IconHelper::assetId($this->icon);
     }
 
     public function isLinkable(): bool

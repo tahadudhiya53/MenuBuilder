@@ -6,7 +6,9 @@ use Craft;
 use craft\base\Component;
 use craft\helpers\Json;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\records\MenuBuilderGroupRecord;
 
@@ -36,6 +38,16 @@ class MenuBuilderGroupService extends Component
     public const SITE_IDS_KEY = 'siteIds';
 
     /**
+     * Key the menu's custom field *definitions* live under inside the same
+     * `settings` bag — see MenuBuilderGroup::$customFields and
+     * {@see CustomFieldHelper}. Same reasoning as {@see SITE_IDS_KEY}: an
+     * existing open-ended bag rather than a new column or a second settings
+     * system, lifted back out on read so `$group->settings` stays a plain
+     * user-facing bag.
+     */
+    public const CUSTOM_FIELDS_KEY = 'customFields';
+
+    /**
      * Length of the `name`/`handle`/`cssClass` columns (see the Install
      * migration). {@see MenuBuilderGroup} rejects anything longer on the
      * user-facing path; {@see duplicate()} derives new values from existing
@@ -62,25 +74,6 @@ class MenuBuilderGroupService extends Component
         }
 
         return array_values(array_filter($this->allCache, fn(MenuBuilderGroup $group) => $group->enabled));
-    }
-
-    /**
-     * A group's handle by ID, served from the same request-level cache
-     * {@see getAll()} fills. The cache-invalidation paths
-     * (MenuBuilderItemService, MenuBuilderElementService) need one handle per
-     * affected group, so going through the cache keeps a bulk operation or an
-     * element save off an N+1 of `getById()` queries. Returns a scalar rather
-     * than the cached model so callers can't mutate shared state.
-     */
-    public function getHandleById(int $id): ?string
-    {
-        foreach ($this->getAll() as $group) {
-            if ($group->id === $id) {
-                return $group->handle;
-            }
-        }
-
-        return null;
     }
 
     public function getById(int $id): ?MenuBuilderGroup
@@ -138,7 +131,10 @@ class MenuBuilderGroupService extends Component
         $record->maxDepth = $group->maxDepth;
         $record->cssClass = $group->cssClass;
         $record->htmlAttributes = Json::encode($group->htmlAttributes);
-        $record->settings = Json::encode($this->settingsWithSiteIds($group->settings, $group->siteIds));
+        $record->settings = Json::encode($this->settingsWithCustomFields(
+            $this->settingsWithSiteIds($group->settings, $group->siteIds),
+            $group->customFields
+        ));
 
         if (!$record->save()) {
             $group->addErrors($record->getErrors());
@@ -149,7 +145,12 @@ class MenuBuilderGroupService extends Component
         $group->id = $record->id;
         $group->uid = $record->uid;
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
+        // This menu only — a menu save must never flush another menu's
+        // cache. Invalidating by ID is what makes a *rename* safe: cache
+        // entries are tagged per menu ID, not per handle, so the entries
+        // written under the old handle are reached too (see
+        // MenuBuilderCacheService).
+        MenuBuilder::getInstance()->cache->invalidateGroupId((int)$record->id);
 
         return true;
     }
@@ -201,7 +202,11 @@ class MenuBuilderGroupService extends Component
         }
 
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
+        // Only the clone can have anything cached: the original is unchanged
+        // by a duplicate, and the clone's handle is new. Not a no-op in the
+        // one case that matters — a handle freed by an earlier delete and
+        // picked up again here.
+        MenuBuilder::getInstance()->cache->invalidateGroupId((int)$clone->id);
 
         return $this->recordToModel($clone);
     }
@@ -254,7 +259,11 @@ class MenuBuilderGroupService extends Component
         // group, so no orphans are left behind and no PHP-side sweep is needed.
         $result = (bool)$record->delete();
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
+        // The deleted menu's entries only. They are already unreachable by
+        // key — nothing resolves the handle any more — but the handle is now
+        // free for a new menu to take, and that menu must not read what this
+        // one left behind.
+        MenuBuilder::getInstance()->cache->invalidateGroupId($id);
 
         return $result;
     }
@@ -306,7 +315,12 @@ class MenuBuilderGroupService extends Component
         $group->htmlAttributes = ConfigHelper::decodeJsonBag($record->htmlAttributes);
         $settings = ConfigHelper::decodeJsonBag($record->settings);
         $group->siteIds = ConfigHelper::normalizeIdList($settings[self::SITE_IDS_KEY] ?? null);
+        // Fail-closed: a malformed definition (an import, a hand-written
+        // row) is dropped here rather than reaching the item editor or a
+        // template as a field with a guessed type.
+        $group->customFields = CustomFieldHelper::definitionsFromConfig($settings[self::CUSTOM_FIELDS_KEY] ?? null);
         unset($settings[self::SITE_IDS_KEY]);
+        unset($settings[self::CUSTOM_FIELDS_KEY]);
         $group->settings = $settings;
         $group->uid = $record->uid;
         $group->dateCreated = $record->dateCreated;
@@ -331,6 +345,32 @@ class MenuBuilderGroupService extends Component
         }
 
         $settings[self::SITE_IDS_KEY] = $siteIds;
+
+        return $settings;
+    }
+
+    /**
+     * The custom field half of the same fold, kept separate from
+     * {@see settingsWithSiteIds()} so each reserved key is one small pure
+     * function. Removed when the menu defines none, rather than written as
+     * `[]`, so a menu that uses no custom fields stores exactly the bag the
+     * user sees.
+     *
+     * @param array<string,mixed> $settings
+     * @param MenuBuilderCustomField[] $customFields
+     * @return array<string,mixed>
+     */
+    private function settingsWithCustomFields(array $settings, array $customFields): array
+    {
+        $config = CustomFieldHelper::definitionsToConfig($customFields);
+
+        if (empty($config)) {
+            unset($settings[self::CUSTOM_FIELDS_KEY]);
+
+            return $settings;
+        }
+
+        $settings[self::CUSTOM_FIELDS_KEY] = $config;
 
         return $settings;
     }

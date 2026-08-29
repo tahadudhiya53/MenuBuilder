@@ -417,14 +417,45 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
+     * Every menu write invalidates — and invalidates **only that menu**. A
+     * menu save/duplicate/delete used to flush every cached tree on the
+     * install because the cache key was built from the handle a save could
+     * change; entries are now tagged by menu ID, so the targeted call reaches
+     * the old handle's entries too (MenuBuilderCacheService::groupTag()).
+     *
      * @dataProvider cacheInvalidatingProvider
      */
-    public function testEveryContentAffectingWriteInvalidatesTheCache(string $method): void
+    public function testEveryContentAffectingWriteInvalidatesOnlyItsOwnMenu(string $method): void
     {
-        $this->assertStringContainsString(
-            'cache->invalidateAll()',
-            $this->methodSource(MenuBuilderGroupService::class, $method)
-        );
+        $source = $this->methodSource(MenuBuilderGroupService::class, $method);
+
+        $this->assertStringContainsString('cache->invalidateGroupId(', $source);
+        $this->assertStringNotContainsString('invalidateAll(', $source, 'A change to one menu must never flush every menu.');
+    }
+
+    /**
+     * The whole-cache flush exists for exactly one change — a site save or
+     * delete, which moves the base URL, language or existence every cached
+     * tree was resolved against (MenuBuilderElementService::handleSiteChange()).
+     * Nothing else in the plugin may reach for it.
+     */
+    public function testTheWholeCacheFlushIsReservedForSiteChanges(): void
+    {
+        $callers = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__ . '/../../src'));
+
+        /** @var \SplFileInfo $file */
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            if (str_contains((string)file_get_contents($file->getPathname()), 'cache->invalidateAll(')) {
+                $callers[] = $file->getFilename();
+            }
+        }
+
+        $this->assertSame(['MenuBuilderElementService.php'], $callers);
     }
 
     /** @return array<string,array{string}> */

@@ -3,66 +3,250 @@
  # yourself for full control over markup/CSS. Usage:
  #
  #   {% import "menu-builder/_macros/tree" as menuMacros %}
- #   {{ menuMacros.render(craft.menuBuilder.get('main')) }}
+ #   {{ menuMacros.renderNav(craft.menuBuilder.get('main')) }}
+ #
+ # `renderNav()` is the whole navigation, landmark included; `render()` is the
+ # list on its own, for a template that owns its own wrapper.
+ #
+ # Every accessibility attribute these macros emit describes something the
+ # markup actually does: `aria-current="page"` only on the link for the page
+ # being served, and — for a mega menu — no ARIA disclosure state at all,
+ # because the state belongs to a native `<details>` element that the browser
+ # keeps true whether or not any JavaScript runs. Nothing here announces a
+ # widget that isn't there — see ACCESSIBILITY.md.
+ #
+ # All three macros take an optional `disclosure` mode, threaded down the
+ # whole tree:
+ #
+ #   'details' (default)  mega-menu children live in a native <details>, so
+ #                        open/closed is one attribute the browser owns
+ #   'none'               no disclosure at all: the columns render in flow as
+ #                        an ordinary group, for a theme that provides its own
+ #                        opening behaviour and wants no state claimed here
  #}
+{#
+ # The navigation landmark: one `<nav>` per menu, named after the menu, with
+ # the menu's own CSS class and (safe) HTML attributes on it.
+ #
+ # The accessible name matters when a page has more than one navigation —
+ # "Main" and "Footer" are how a screen-reader user tells the landmark list
+ # apart. It is the menu's name unless you pass your own, and it deliberately
+ # does not contain the word "navigation": assistive technology already
+ # announces the role, and "Main navigation navigation" is what happens when
+ # a label repeats it.
+ #
+ #   {{ menuMacros.renderNav(craft.menuBuilder.get('main')) }}
+ #   {{ menuMacros.renderNav(craft.menuBuilder.get('main'), 'Utility links'|t) }}
+ #
+ # An empty or missing menu renders nothing at all — an empty landmark is
+ # something a screen-reader user has to visit to discover it was empty.
+ #}
+{% macro renderNav(menu, label = null, disclosure = 'details') %}
+    {% import _self as self %}
+    {% if menu is not empty %}
+        <nav class="{{ menu.group.cssClass }}"
+             aria-label="{{ label ?: menu.group.name }}"
+             data-menu-builder-nav
+             {%- for key, value in menu.group.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>
+            {{ self.render(menu.items, disclosure) }}
+        </nav>
+    {% endif %}
+{% endmacro %}
+
 {#
  # Optional mega-menu renderer for one node whose `megaMenu` is set
  # (see MenuBuilderNode::$megaMenu / ::megaMenuColumns()). Renders each
- # column's items as its own <ul>, with an accessible disclosure button
- # (aria-haspopup/aria-expanded, toggled purely by CSS via the button's own
- # `aria-expanded` attribute — no JS framework required, but a project using
- # this markup as-is needs a few lines of vanilla JS to flip that attribute
- # on click/keyboard, and CSS keyed off `[aria-expanded="true"]` to show the
- # panel). Entirely optional, like render() above — hand-write your own
- # markup for full control.
+ # column's items as its own <ul>, inside a native `<details>` disclosure.
+ #
+ # **Why `<details>` and not a button with `aria-expanded`.** A disclosure has
+ # two states that must never disagree: whether the panel is *visible*, and
+ # what the markup *says* about it. A `<button aria-expanded="false">` splits
+ # those across two owners — the attribute belongs to whatever script is
+ # running, the visibility to whatever CSS the site wrote — so a theme opening
+ # the panel on `:hover` or `:focus-within`, or a page where the optional
+ # script never loaded, leaves `aria-expanded="false"` on a panel that is on
+ # screen. That is not a bug this plugin can fix from the outside; it is the
+ # architecture being wrong.
+ #
+ # `<details>` collapses the two into **one attribute the browser owns**:
+ # `open` *is* the visibility and *is* the accessible state, it is toggled
+ # natively by pointer, Enter and Space with no JavaScript at all, and a
+ # screen reader reads the expanded/collapsed state from the same place the
+ # rendering comes from. There is nothing left to keep in step, so nothing
+ # left to drift.
+ #
+ # The optional `NavAsset` script is therefore an *enhancement* — Escape,
+ # arrow keys, closing a sibling panel — and never the thing that makes the
+ # markup honest. Without it the mega menu still opens, still closes, and
+ # still announces itself correctly.
+ #
+ # The item's own label is already rendered above this element, as a link or
+ # as a heading, so the summary does not repeat it: it carries a decorative
+ # caret and an accessible name that says what it *does* ("Explore submenu").
+ # Repeating the label would put two controls with the same name next to each
+ # other, and a screen-reader user would have no way to tell which one opens
+ # the panel and which one navigates.
+ #
+ # Ordinary links inside, deliberately: no `role="menu"`/`menuitem`, and no
+ # `aria-haspopup`. Those announce a menu widget with roving focus and no Tab
+ # stops, which is not what a panel of links does.
+ #
+ # `disclosure: 'none'` renders the columns with no `<details>` and no state
+ # claimed — the escape hatch for a theme that opens its panels its own way.
  #
  #   {{ menuMacros.renderMegaMenu(node) }}
+ #   {{ menuMacros.renderMegaMenu(node, 'none') }}
  #}
-{% macro renderMegaMenu(node) %}
+{% macro renderMegaMenu(node, disclosure = 'details') %}
     {% import _self as self %}
-    <button type="button" class="menu-builder-megamenu-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="menu-builder-megamenu-{{ node.id }}">
-        {{ node.title }}
-    </button>
+    {% if disclosure == 'none' %}
+        {{ self.megaMenuPanel(node, disclosure) }}
+    {% else %}
+        <details class="menu-builder-megamenu" data-mb-disclosure>
+            <summary class="menu-builder-megamenu-trigger"
+                     aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
+                <span class="menu-builder-megamenu-caret" aria-hidden="true">&#9662;</span>
+            </summary>
+            {{ self.megaMenuPanel(node, disclosure) }}
+        </details>
+    {% endif %}
+{% endmacro %}
+
+{#
+ # The panel itself — one <ul> per used column, grouped and named after the
+ # item. Split out so the two disclosure modes render the *same* panel and
+ # cannot drift into two different groupings.
+ #}
+{% macro megaMenuPanel(node, disclosure) %}
+    {% import _self as self %}
     <div id="menu-builder-megamenu-{{ node.id }}" class="menu-builder-megamenu-panel" role="group" aria-label="{{ node.ariaLabel ?: node.title }}">
         {% for column, columnNodes in node.megaMenuColumns() %}
             <div class="menu-builder-megamenu-column">
-                {{ self.render(columnNodes) }}
+                {{ self.render(columnNodes, disclosure) }}
             </div>
         {% endfor %}
     </div>
 {% endmacro %}
 
-{% macro render(nodes) %}
+{#
+ # Renders one node's icon, if it has one. Two forms, one stored column
+ # (see helpers/IconHelper.php):
+ #
+ #   class icon → an empty <span> carrying the class list, for icon fonts
+ #                and CSS-sprite icon sets
+ #   asset icon → an <img>, never inlined markup: an uploaded SVG rendered
+ #                through <img src> cannot run script, which is exactly why
+ #                raw SVG is not a storable icon form
+ #
+ # Always aria-hidden / alt="" — the item's own title (or ariaLabel) is the
+ # accessible name, and a decorative icon repeating it is noise for a screen
+ # reader. If an icon is ever the *only* label for an item, give that item an
+ # ariaLabel instead.
+ #}
+{% macro icon(node) %}
+    {% if node.iconType() == 'class' %}
+        <span class="menu-builder-icon {{ node.iconClass() }}" aria-hidden="true"></span>
+    {% elseif node.iconType() == 'asset' %}
+        {% set iconAsset = craft.menuBuilder.iconAsset(node) %}
+        {% if iconAsset %}
+            <img class="menu-builder-icon" src="{{ iconAsset.url }}" alt="" width="{{ iconAsset.width ?: 24 }}" height="{{ iconAsset.height ?: 24 }}" loading="lazy">
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+
+{#
+ # Renders one node's badge, if it has one — the short flag beside a
+ # label: "Products [NEW]".
+ #
+ # Two stored values, no new column (see helpers/BadgeHelper.php): free
+ # text in the `badge` column, and an optional style from a closed enum in
+ # `metadata['badgeStyle']`, which is what `node.badgeClass()` turns into
+ # `menu-builder-badge menu-builder-badge--info`. The class list comes from
+ # that allowlist and never from editor input, so the only editor-authored
+ # thing here is the text, printed with `{{ }}` — escaped by Twig's
+ # autoescaping like any other string. Never use `|raw` on it: a badge
+ # reading `<script>` is a badge that says "<script>", not a script.
+ #
+ # Rendered inside the link/label so the badge is part of the item's
+ # accessible name ("Products NEW") rather than a floating word a screen
+ # reader meets out of context. An empty (or whitespace-only) badge renders
+ # nothing at all, style or no style.
+ #}
+{% macro badge(node) %}
+    {%- if node.hasBadge() %} <span class="{{ node.badgeClass() }}">{{ node.badge }}</span>{% endif -%}
+{% endmacro %}
+
+{#
+ # "Opens in a new tab", for the accessible name of a link that does.
+ #
+ # A sighted user learns a new tab opened from the browser; a screen-reader
+ # user is told nothing unless the link says so (WCAG 3.2.5, Change on
+ # Request). It sits inside the link so it becomes part of the name —
+ # "Partner (opens in a new tab)" — rather than a stray phrase in the list.
+ #
+ # Hidden with an inline style, not only a class, so the macro is correct in
+ # a theme that has no visually-hidden helper of its own: without it the
+ # phrase would be *visible* beside every external link. Override it with
+ # `.menu-builder-visually-hidden` if your CSS would rather own this.
+ #}
+{% macro newTabHint(node) %}
+    {%- if node.opensInNewTab() %} <span class="menu-builder-visually-hidden" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0">{{ "(opens in a new tab)"|t('menu-builder') }}</span>{% endif -%}
+{% endmacro %}
+
+{% macro render(nodes, disclosure = 'details') %}
     {% import _self as self %}
     <ul>
         {% for node in nodes %}
             {% if node.type == 'separator' %}
-                <li role="separator"{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
+                {# The `<hr>` is the separator — that is its native role. The
+                   `<li>` around it stays an ordinary list item: moving the
+                   role up onto it would take a non-`listitem` child into a
+                   list and state the same thing twice. #}
+                <li{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}><hr></li>
             {% else %}
                 {% set liClasses = (node.cssClass ? node.cssClass ~ ' ' : '') ~ (node.isActiveOrAncestor() ? 'is-active' : '') %}
                 <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ node.htmlId }}"{% endif %}>
                     {% if node.isClickable %}
+                        {# `aria-current="page"` is `isActive` only — the one
+                           node whose URL *is* the page being served. An
+                           ancestor of it gets the `is-active` class for
+                           styling and no aria-current: "the page I am on"
+                           can only be true of one link.
+
+                           `target` is emitted only when it changes tab —
+                           `target="_self"` is the default a browser already
+                           applies, and printing it on every link only makes
+                           the real ones harder to spot. #}
                         <a href="{{ node.url }}"
-                           target="{{ node.target }}"
+                           {% if node.opensInNewTab() %}target="_blank"{% endif %}
                            {% if node.rel %}rel="{{ node.rel }}"{% endif %}
                            {% if node.ariaLabel %}aria-label="{{ node.ariaLabel }}"{% endif %}
                            {% if node.titleAttribute %}title="{{ node.titleAttribute }}"{% endif %}
                            {% if node.isActive %}aria-current="page"{% endif %}
-                           {% for key, value in node.htmlAttributes %}{{ key }}="{{ value }}" {% endfor %}
-                        >{{ node.title }}</a>
+                           {%- for key, value in node.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}
+                        >{{ self.icon(node) }}{{ node.title }}{{ self.badge(node) }}{{ self.newTabHint(node) }}</a>
                     {% else %}
                         {# A non-clickable heading is a label, never a fake link — no href, ever.
                          # It still carries the accessibility/appearance options an
                          # editor set on it: those are properties of the item, not of
                          # its link. #}
                         <span{% if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}{% if node.titleAttribute %} title="{{ node.titleAttribute }}"{% endif %}
-                              {%- for key, value in node.htmlAttributes %} {{ key }}="{{ value }}"{% endfor %}>{{ node.title }}</span>
+                              {%- for key, value in node.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>{{ self.icon(node) }}{{ node.title }}{{ self.badge(node) }}</span>
                     {% endif %}
 
                     {% if node.megaMenu %}
-                        {{ self.renderMegaMenu(node) }}
+                        {{ self.renderMegaMenu(node, disclosure) }}
                     {% elseif node.hasChildren() %}
-                        {{ self.render(node.children) }}
+                        {# A plain submenu is a nested list of ordinary links,
+                           with nothing hiding them from the keyboard: every
+                           child is a Tab stop wherever it sits, and no
+                           disclosure state is claimed for CSS to contradict.
+                           If your CSS hides submenus until hover, open them on
+                           `:focus-within` too — or turn the parent into a real
+                           disclosure the way renderMegaMenu() does, with a
+                           <details> whose `open` the browser owns. See
+                           ACCESSIBILITY.md. #}
+                        {{ self.render(node.children, disclosure) }}
                     {% endif %}
                 </li>
             {% endif %}

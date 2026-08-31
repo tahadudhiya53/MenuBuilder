@@ -31,6 +31,7 @@ against template source.
 | **Mega menus** | A native `<details>` disclosure: `<summary>` as the control, the panel inside it. Open/closed is the browser's own `open` attribute — see [Who owns mega-menu state](#who-owns-mega-menu-state). No `aria-expanded`, no `aria-controls`, no `aria-haspopup`. The summary does not repeat the item's label (already on screen as the link or heading beside it) but is named for what it does — "Explore submenu" — over a decorative caret. The panel is `role="group"` with the item's own accessible name, holding ordinary links: no `role="menu"`/`menuitem`, which would promise roving focus and no Tab stops. |
 | **Icons** | `aria-hidden="true"` on a class icon, `alt=""` on an asset icon. The item's title (or its ARIA label) is the accessible name; an icon repeating it is noise. An icon that is an item's *only* label needs an ARIA label on the item. |
 | **Badges** | Rendered *inside* the link, so the name reads "Products New" rather than leaving "New" floating in the list. |
+| **Breadcrumbs** | `_macros/breadcrumbs.twig` emits one named `<nav aria-label="Breadcrumb">` around an **`<ol>`** — ordered, because the order of a trail is its meaning — with `aria-current="page"` on the last crumb only, whether or not that crumb is a link. Non-clickable crumbs are text, exactly as headings are in a menu. There are **no separator characters in the markup**: a literal `›` or `/` between items is text a screen reader reads out on every crumb, so it belongs to your CSS (`li + li::before`). An empty trail, or a menu that doesn't exist, renders nothing — never an empty landmark. |
 | **Custom attributes** | Filtered at render: no event handlers, no `javascript:`/`vbscript:` values, and none of the attributes the macros own or the ARIA states nothing implements. See below. |
 
 ## Who owns mega-menu state
@@ -147,7 +148,7 @@ Ordinary `data-*`, `aria-describedby`, `title` and the like still render.
 Automated tests cover the markup; these are the things only a person can answer. Run them against
 a real front-end template using the bundled macros, on a menu with at least: a mega-menu parent, a
 plain submenu, a separator, a non-clickable heading, an icon, a badge, and an external `_blank`
-link.
+link. If you render breadcrumbs, do it on a page that is deep in that menu.
 
 ### Disclosure state — do this one first
 
@@ -194,6 +195,9 @@ same thing. Open the page, open DevTools on the mega-menu's `<details>` element,
 - [ ] A heading item is read as text, not as a link or a button.
 - [ ] Icons add nothing to any item's name; a badge reads as part of it ("Products New").
 - [ ] A separator is either announced as a separator or skipped — never as an empty item.
+- [ ] On a page with breadcrumbs, the landmark list shows a separate "Breadcrumb" navigation; the
+      trail is announced as an ordered list, the last crumb as **current page**, and no separator
+      character is read between the crumbs.
 
 ### Zoom, motion and appearance
 

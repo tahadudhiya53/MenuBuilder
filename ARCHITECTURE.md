@@ -19,8 +19,8 @@ Twig render → MenuBuilderVariable → MenuBuilderResolver → cache / links / 
 | Layer | Classes | Rules it obeys |
 |---|---|---|
 | Controllers | `BaseMenuBuilderController` + `GroupsController`, `ItemsController`, `DashboardController`, `PreviewController` | The **only** classes that touch `craft\web\Request` or the session. The permission check itself lives once, in the base class's `beforeAction()`; subclasses only declare *which* permission an action needs. |
-| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
-| Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `ResolvedLink`, `MenuBuilderMegaMenuConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
+| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
+| Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `MenuBuilderBreadcrumbTrail`, `ResolvedLink`, `MenuBuilderMegaMenuConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
 | Records | `MenuBuilderGroupRecord`, `MenuBuilderItemRecord` | Thin `ActiveRecord`: `tableName()` and nothing else. No business logic, and deliberately **no AR relations** — every join this plugin needs is an explicit service query, so there is no lazy-load path that could silently become an N+1. Never visible to controllers or Twig. |
 | Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper` | Pure static functions, no Craft app required. Where logic that two layers both need lives, so there is one implementation rather than a copy per caller. |
 
@@ -72,6 +72,12 @@ Items are the only entity with tree structure; Groups are always flat (one row p
    the current user, date, and environment.
 5. Mark `isActive`/`isActiveAncestor` against the current request URI (`MenuBuilderActiveResolver`)
    — also per-request, never cached. See "Active state" below for the matching rules.
+
+`craft.menuBuilder.breadcrumbs()` adds an optional **step 6** on top of the finished tree:
+`MenuBuilderBreadcrumbService` walks it for the node step 5 marked active and returns the path
+taken to reach it. It is a separate call rather than part of `getTree()` because most pages render
+a menu without a breadcrumb, and it reads the tree without re-resolving, re-filtering or
+re-marking anything. See "Breadcrumbs" below.
 
 Disabled items and disabled groups are excluded before step 3 ever runs.
 
@@ -309,6 +315,48 @@ What can never be the current page:
 Templates can override the URI they're matched against —
 `craft.menuBuilder.get('main', '/products/shoes')` — which is what makes the whole thing testable
 without a request and useful for previews.
+
+---
+
+## Breadcrumbs
+
+`MenuBuilderBreadcrumbService::trailForTree()` turns a resolved tree into a
+`MenuBuilderBreadcrumbTrail`: the root-to-current chain of the node active state marked, root
+first, current page last. `getTrail()` is the same thing from a handle, resolving the menu first.
+
+**The trail is the menu's hierarchy, not a parsed URL.** The tempting cheaper implementation —
+split the request path on `/`, make a crumb per segment, title-case the slugs — is deliberately
+absent, in any form, including as a fallback for when nothing matches:
+
+- a path segment is not a page (`/products/2024/shoes` yields a "2024" crumb linking to a 404),
+- URL structure and navigation structure are routinely different (a shoe at `/products/shoes`
+  hanging under "Footwear"),
+- and inventing titles from slugs makes a wrong answer indistinguishable from a right one.
+
+So when the menu can't answer, the trail is **empty** and the caller renders nothing. Empty is a
+result, not an error: an unpublished/disabled/deleted item is not a page anyone is on, and a page
+no item points at is exactly the case a URL-splitting implementation gets wrong. `null` is kept
+distinct from empty and means *no such menu* — missing, disabled, or not on this site, the same
+three outcomes as `getTree()`, so `get()` and `breadcrumbs()` can never disagree about whether a
+menu exists.
+
+Three decisions worth knowing:
+
+| Decision | Why |
+|---|---|
+| **Crumbs are `MenuBuilderNode`s** — there is no breadcrumb item type | Title, URL, clickability, active state and depth are already facts of the resolved node. A parallel representation would be a second copy to keep true and a second thing to invalidate, and would have to re-state the icon/badge/custom-field contract. Anything a node exposes, a crumb exposes. |
+| **The chain comes from the DFS path**, not from `MenuBuilderNode::$parent` | The walk descends the tree carrying the path it took, so the ancestors are this tree's own nesting. Walking `parent` upward would trust a pointer a caller could leave unwired and would have to be cycle-guarded. |
+| **First active node in document order wins** | The same URL can legitimately be in one menu twice ("Contact" in the header and in a utility strip). Document order is the order the CP shows and the menu renders, so the choice is stable across requests and explainable without reading the code. |
+
+Nothing here is cached: the trail is a function of active state, which is per-request by
+definition, and the walk is over a tree that is already cached where it can be. A tree resolved
+with `markActive: false` (the CP preview, which doesn't simulate a page) has no current page and
+therefore yields an empty trail — the honest answer rather than an invented one.
+
+`_macros/breadcrumbs.twig` is the optional renderer: a named `<nav>` landmark around an `<ol>`,
+`aria-current="page"` on the last crumb only, non-clickable crumbs as text, the "opens in a new
+tab" hint imported from `_macros/tree.twig` rather than restated, and no separator characters in
+the markup — a literal `›` is text a screen reader reads on every crumb, so it belongs to CSS.
 
 ---
 
@@ -991,6 +1039,12 @@ cannot see.
 countable over its top-level nodes, with `.group`, `.items`, and `.flatten()` (depth-first walk, so
 templates never recurse to find the active node). `getGroup()`/`getItem()` are thin read-only
 service passthroughs with no logic of their own.
+
+`breadcrumbs()` → `MenuBuilderBreadcrumbService` → `MenuBuilderBreadcrumbTrail`, iterable and
+countable over crumbs that are themselves `MenuBuilderNode`s (see "Breadcrumbs"). It takes either a
+handle or an already-resolved `MenuBuilderTree`, so a page that renders the menu *and* a breadcrumb
+resolves the menu once — the only overload in the variable, and it exists to stop templates paying
+twice for the same tree.
 
 `MenuBuilderNode` is the only object Twig should treat as public and stable — no database ids to
 join, no internal columns, and dynamic children merged transparently into `children` so there's one

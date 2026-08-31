@@ -371,6 +371,21 @@ during 1.0.0 development that affect anyone who tracked the plugin pre-release.
 - `MenuBuilderNode` as the single stable Twig contract — no database ids, no internal columns;
   dynamic children merged transparently into `children`.
 - Optional `menu-builder/_macros/tree` render macros, importable from front-end templates.
+- `craft.menuBuilder.breadcrumbs(menu, currentUri = null)` returning an iterable, countable
+  `MenuBuilderBreadcrumbTrail` — the root-to-current chain of the item that *is* the page being
+  served, with `.crumbs`, `.current()`, `.root()`, `.ancestors()`, `.isEmpty()` and `.group`.
+  Crumbs are the same `MenuBuilderNode` objects the menu renders, so they carry title, URL,
+  clickability, active state, depth and custom fields with no second contract to learn. Accepts an
+  already-resolved `MenuBuilderTree` as well as a handle, so a page that renders both the menu and
+  a breadcrumb resolves the menu once.
+- Breadcrumbs are derived from the **menu hierarchy** and never from the request URL's segments —
+  not even as a fallback. A page the menu doesn't cover (including one whose item is disabled, or
+  whose linked entry is unpublished or deleted) gets an **empty** trail to render nothing, rather
+  than crumbs invented from path segments and slugs. `null` is reserved for "no such menu",
+  matching `get()`.
+- Optional `menu-builder/_macros/breadcrumbs` renderer: a named `<nav>` landmark around an `<ol>`,
+  `aria-current="page"` on the last crumb only, non-clickable crumbs as text, and no separator
+  characters in the markup (they belong to CSS).
 - Two extension events: `MenuBuilderLinkResolver::EVENT_REGISTER_LINK_TYPES` and
   `MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES`.
 

@@ -5,6 +5,7 @@ namespace Tahadudhiya\MenuBuilder\Tests\Unit;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderBreadcrumbTrail;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
@@ -56,6 +57,8 @@ trait NavMacroRendering
 
     private const LANDMARK_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderNav(menu, label, disclosure) }}';
 
+    private const BREADCRUMB_HARNESS = '{% import "_macros/breadcrumbs.twig" as crumbs %}{{ crumbs.render(trail, label, linkCurrent) }}';
+
     protected function twig(): Environment
     {
         $twig = new Environment(new ChainLoader([
@@ -63,6 +66,15 @@ trait NavMacroRendering
             new ArrayLoader([
                 '__nav' => self::HARNESS,
                 '__navLandmark' => self::LANDMARK_HARNESS,
+                '__breadcrumbs' => self::BREADCRUMB_HARNESS,
+                // The plugin's templates refer to each other the way Craft
+                // resolves them — by the registered `menu-builder` root
+                // (`preview/index.twig` does the same) — which a bare
+                // FilesystemLoader knows nothing about. Aliasing the two
+                // spellings Craft accepts, to the one real file, keeps the
+                // template under test byte-for-byte the shipped one.
+                'menu-builder/_macros/tree' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
+                'menu-builder/_macros/tree.twig' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
             ]),
         ]), [
             'autoescape' => 'html',
@@ -137,6 +149,27 @@ trait NavMacroRendering
             'label' => $label,
             'disclosure' => $disclosure,
         ]);
+    }
+
+    /**
+     * The breadcrumb trail — what `_macros/breadcrumbs.twig` emits for a
+     * real `MenuBuilderBreadcrumbTrail`.
+     *
+     * @param MenuBuilderNode[] $crumbs
+     */
+    protected function renderBreadcrumbs(array $crumbs, ?string $label = null, bool $linkCurrent = true): string
+    {
+        return $this->twig()->render('__breadcrumbs', [
+            'trail' => new MenuBuilderBreadcrumbTrail(new MenuBuilderGroup(['name' => 'Main', 'handle' => 'main']), $crumbs),
+            'label' => $label,
+            'linkCurrent' => $linkCurrent,
+        ]);
+    }
+
+    /** What the macro emits when there is no menu at all — `craft.menuBuilder.breadcrumbs()` returned null. */
+    protected function renderBreadcrumbsForMissingMenu(): string
+    {
+        return $this->twig()->render('__breadcrumbs', ['trail' => null, 'label' => null, 'linkCurrent' => true]);
     }
 
     /**

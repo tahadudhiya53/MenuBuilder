@@ -4,6 +4,7 @@ namespace Tahadudhiya\MenuBuilder\variables;
 
 use craft\elements\Asset;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderBreadcrumbTrail;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
@@ -25,6 +26,38 @@ class MenuBuilderVariable
     public function get(string $groupHandle, ?string $currentUri = null): ?MenuBuilderTree
     {
         return MenuBuilder::getInstance()->resolver->getTree($groupHandle, $currentUri);
+    }
+
+    /**
+     * The breadcrumb trail for the page being served, derived from the
+     * menu's own hierarchy — never from the request URL's segments (see
+     * {@see MenuBuilderBreadcrumbService}).
+     *
+     *     {% set trail = craft.menuBuilder.breadcrumbs('main') %}
+     *
+     * `null` when the menu doesn't exist, is disabled, or isn't available on
+     * this site — the same three outcomes as {@see get()}. An **empty** trail
+     * (`trail.isEmpty()`) when the menu is there but nothing in it is this
+     * page: render no breadcrumbs.
+     *
+     * Pass a `MenuBuilderTree` instead of a handle to reuse a menu this
+     * template has already resolved, so the page resolves it once:
+     *
+     *     {% set menu  = craft.menuBuilder.get('main') %}
+     *     {% set trail = craft.menuBuilder.breadcrumbs(menu) %}
+     *
+     * @param MenuBuilderTree|string $menu The menu's handle, or an already-resolved tree.
+     * @param string|null $currentUri Overrides the page the trail is built for, exactly as
+     *                                {@see get()} does. Ignored when a resolved tree is passed —
+     *                                that tree's active state was already decided.
+     */
+    public function breadcrumbs(MenuBuilderTree|string $menu, ?string $currentUri = null): ?MenuBuilderBreadcrumbTrail
+    {
+        $breadcrumbs = MenuBuilder::getInstance()->breadcrumbs;
+
+        return $menu instanceof MenuBuilderTree
+            ? $breadcrumbs->trailForTree($menu)
+            : $breadcrumbs->getTrail($menu, $currentUri);
     }
 
     /** The group itself (name, handle, maxDepth, cssClass, htmlAttributes, settings) — not its resolved tree. */

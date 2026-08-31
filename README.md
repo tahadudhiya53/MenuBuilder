@@ -97,8 +97,9 @@ A `dynamic` item synthesises its children at render time from a source instead o
 
 ### Developer surface
 
-- `craft.menuBuilder.get()` / `.getGroup()` / `.getItem()`
-- Optional recursive render macros (`renderNav`, `render`, `renderMegaMenu`) and an optional front-end asset bundle for mega-menu keyboard behaviour
+- `craft.menuBuilder.get()` / `.breadcrumbs()` / `.getGroup()` / `.getItem()`
+- **Breadcrumbs** derived from the menu's own hierarchy — never guessed from the URL's segments — see [Breadcrumbs](#breadcrumbs)
+- Optional recursive render macros (`renderNav`, `render`, `renderMegaMenu`), an optional breadcrumb macro, and an optional front-end asset bundle for mega-menu keyboard behaviour
 - Two extension events: register a link type, register a visibility rule
 - Targeted caching: per menu, per site, invalidated on the exact change that affects it
 
@@ -387,6 +388,116 @@ child item for the current page.
 Never active: a URL on a host that isn't part of this Craft install (an external custom URL with a
 coincidentally matching path), a `mailto:`/`tel:` link, an unavailable or blank link, and a
 fragment-only anchor item. Active state is recomputed on every request and is never cached.
+
+### Breadcrumbs
+
+```twig
+{% set trail = craft.menuBuilder.breadcrumbs('main') %}
+```
+
+`craft.menuBuilder.breadcrumbs(menu, currentUri = null)` returns the **root-to-current chain** of
+the menu item that *is* the page being served:
+
+```
+Home  →  Products  →  Shoes  →  Running Shoes
+```
+
+`menu` is a handle, or a `MenuBuilderTree` you already resolved — pass the tree when the page also
+renders the menu, and the page resolves it once:
+
+```twig
+{% set menu  = craft.menuBuilder.get('main') %}
+{% set trail = craft.menuBuilder.breadcrumbs(menu) %}
+```
+
+#### The trail
+
+| Member | Description |
+|---|---|
+| `{% for crumb in trail %}` | The crumbs, **root first, current page last** |
+| `trail.crumbs` | The same list, explicitly |
+| `trail.current()` | The node for the page being served — the last crumb — or `null` |
+| `trail.root()` | The top-level node the trail descends from, or `null` |
+| `trail.ancestors()` | Every crumb *except* the last |
+| `trail.isEmpty()` / `trail|length` | Whether there is a trail at all, and how long it is |
+| `trail.group` | The `MenuBuilderGroup` the trail came from |
+
+Each crumb **is** a `MenuBuilderNode` — the very same object the menu renders, not a parallel
+breadcrumb type. So a crumb has everything a node has: `title`, `url`, `isClickable`,
+`isActive`, `level` (its 1-based depth, which for a trail is also its position), `custom()`,
+`safeHtmlAttributes()`, and the rest of [Node properties](#node-properties).
+
+#### Exact behaviour
+
+The trail is **the menu hierarchy**, and nothing else:
+
+- The last crumb is the node with `isActive` — the same single node the menu puts
+  `aria-current="page"` on, matched the same way ([Active state](#active-state)). The crumbs before
+  it are the items it is nested under **in the menu**, which is often not what its URL looks like:
+  a page at `/products/2024/shoes` placed under "Footwear" gets *Footwear → Running Shoes*.
+- **Breadcrumbs are never assembled from the URL.** MenuBuilder does not split the request path
+  into segments, not even as a fallback, because a path segment is not a page (`/products/2024/…`
+  would produce a "2024" crumb linking to a 404) and a slug is not a title. When the menu can't
+  answer, it says so.
+- `null` means **there is no such menu** — it doesn't exist, is disabled, or isn't available on
+  this site (the same three outcomes as `get()`). Usually a typo in a template.
+- An **empty trail** (`trail.isEmpty()`) means the menu is there but this page isn't in it.
+  Ordinary, and the correct answer for: a page no item points at, an item that is **disabled**
+  (a disabled item, and everything under it, is not in the menu at all), an item whose linked
+  entry is **unpublished, disabled or deleted** (there is no page to be on), an item that was
+  deleted, an external custom URL that merely shares a path with the request, a `mailto:`/`tel:`
+  item, and a fragment-only anchor. Render nothing.
+- An **ancestor** whose own link is unavailable stays in the trail as an unlinked crumb — the path
+  the editor built is not silently shortened. Check `crumb.isClickable` before emitting an `<a>`;
+  a heading item behaves the same way.
+- The same URL placed **twice** in one menu (a "Contact" in the header and in a utility strip)
+  resolves to the **first in document order** — the order the control panel shows and the menu
+  renders in.
+- **Multi-site** follows active state exactly: an item pointing at a sibling site is not the page
+  being served while this site is being rendered, so it starts no trail here; on its own site it
+  does. Site-restricted menus and per-item visibility rules apply first, so a crumb an audience
+  can't see is not in their trail.
+- Nothing about a trail is cached — it is derived from active state, which is per-request by
+  definition.
+
+#### Rendering
+
+```twig
+{% import "menu-builder/_macros/breadcrumbs" as crumbs %}
+
+{{ crumbs.render(craft.menuBuilder.breadcrumbs('main')) }}
+{{ crumbs.render(trail, 'You are here'|t, false) }}  {# own label; last crumb as text, not a link #}
+```
+
+The macro emits a named `<nav aria-label="Breadcrumb">` landmark around an `<ol>`, with
+`aria-current="page"` on the last crumb only, non-clickable crumbs as text rather than fake links,
+and **no separator characters** — a literal `›` between items is read out by a screen reader on
+every crumb. Draw it in CSS instead:
+
+```css
+.menu-builder-breadcrumbs li + li::before { content: "›"; margin: 0 .5em }
+```
+
+A missing menu and an empty trail both render nothing at all. Hand-rolling it is fine too:
+
+```twig
+{% set trail = craft.menuBuilder.breadcrumbs('main') %}
+{% if trail is not empty %}
+    <nav aria-label="{{ "Breadcrumb"|t }}">
+        <ol>
+            {% for crumb in trail %}
+                <li>
+                    {% if crumb.isClickable and not loop.last %}
+                        <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+                    {% else %}
+                        <span{% if loop.last %} aria-current="page"{% endif %}>{{ crumb.title }}</span>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ol>
+    </nav>
+{% endif %}
+```
 
 ### Accessibility
 

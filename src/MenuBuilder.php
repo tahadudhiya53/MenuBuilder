@@ -12,6 +12,7 @@ use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderActiveResolver;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderBreadcrumbService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderCacheService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
@@ -37,6 +38,7 @@ use yii\base\Event;
  * @property-read MenuBuilderElementService $elements
  * @property-read MenuBuilderDynamicNavigationService $dynamicNavigation
  * @property-read MenuBuilderPreviewService $preview
+ * @property-read MenuBuilderBreadcrumbService $breadcrumbs
  */
 class MenuBuilder extends Plugin
 {
@@ -59,6 +61,7 @@ class MenuBuilder extends Plugin
                 'elements' => MenuBuilderElementService::class,
                 'dynamicNavigation' => MenuBuilderDynamicNavigationService::class,
                 'preview' => MenuBuilderPreviewService::class,
+                'breadcrumbs' => MenuBuilderBreadcrumbService::class,
             ],
         ];
     }

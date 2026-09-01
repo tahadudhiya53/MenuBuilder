@@ -6,3 +6,17 @@ parameters:
     paths:
         - src
         - tests
+    excludePaths:
+        # The integration harness boots a real Craft install under tests/_craft;
+        # storage/ is filled with Craft's own generated code (compiled Twig
+        # templates, CustomFieldBehavior) and is not source.
+        - tests/_craft/storage
+    ignoreErrors:
+        # Craft adds one magic element-query method per custom field handle at
+        # runtime (`->navigation()`, `->navigationPerSite()`), so no static
+        # analysis can see them. Exercising exactly those methods is the point
+        # of the query integration tests, and asserting them through
+        # `andWhere()` instead would test something else.
+        -
+            message: '#Call to an undefined method craft\\elements\\db\\EntryQuery::navigation(PerSite)?\(\)#'
+            path: tests/Integration/*

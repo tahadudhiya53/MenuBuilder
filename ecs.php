@@ -13,5 +13,12 @@ return static function(ECSConfig $ecsConfig): void {
         __FILE__,
     ]);
 
+    // The integration harness boots a real Craft install under tests/_craft,
+    // which fills storage/ with Craft's own generated code (compiled Twig
+    // templates, CustomFieldBehavior). None of it is ours to style.
+    $ecsConfig->skip([
+        __DIR__ . '/tests/_craft/storage/*',
+    ]);
+
     $ecsConfig->sets([SetList::CRAFT_CMS_4]);
 };

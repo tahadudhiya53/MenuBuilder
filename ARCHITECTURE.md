@@ -18,11 +18,11 @@ Twig render → MenuBuilderVariable → MenuBuilderResolver → cache / links / 
 
 | Layer | Classes | Rules it obeys |
 |---|---|---|
-| Controllers | `BaseMenuBuilderController` + `GroupsController`, `ItemsController`, `DashboardController`, `PreviewController` | The **only** classes that touch `craft\web\Request` or the session. The permission check itself lives once, in the base class's `beforeAction()`; subclasses only declare *which* permission an action needs. |
-| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
-| Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `MenuBuilderBreadcrumbTrail`, `ResolvedLink`, `MenuBuilderMegaMenuConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
+| Controllers | `BaseMenuBuilderController` + `GroupsController`, `ItemsController`, `DashboardController`, `PreviewController`; `ApiController` stands apart | The **only** classes that touch `craft\web\Request` or the session. The CP permission check itself lives once, in the base class's `beforeAction()`; subclasses only declare *which* permission an action needs. `ApiController` deliberately does **not** extend that base: it is a front-end endpoint with no CP request, no session and no MenuBuilder permissions — its gate is a GraphQL schema, not a user (see "REST API"). |
+| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderScopeService`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
+| Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `MenuBuilderBreadcrumbTrail`, `ResolvedLink`, `MenuBuilderMegaMenuConfig`, `MenuBuilderApiConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
 | Records | `MenuBuilderGroupRecord`, `MenuBuilderItemRecord` | Thin `ActiveRecord`: `tableName()` and nothing else. No business logic, and deliberately **no AR relations** — every join this plugin needs is an explicit service query, so there is no lazy-load path that could silently become an N+1. Never visible to controllers or Twig. |
-| Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper` | Pure static functions, no Craft app required. Where logic that two layers both need lives, so there is one implementation rather than a copy per caller. |
+| Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper`, `MenuBuilderGqlHelper`, `MenuBuilderApiHelper` | Pure static functions, no Craft app required. Where logic that two layers both need lives, so there is one implementation rather than a copy per caller. |
 
 All services are registered as plugin components in `MenuBuilder::config()`, so they're reachable as
 `MenuBuilder::getInstance()->items`, `->resolver`, and so on.
@@ -66,8 +66,8 @@ Items are the only entity with tree structure; Groups are always flat (one row p
    the current site — the group-level site restriction gates the whole menu *before* any item is
    loaded.
 3. **Cached step.** Load the raw item tree (`MenuBuilderItemService::getTree()` — one flat query,
-   assembled in PHP, never N+1), resolve each item's link, synthesise dynamic children, and convert
-   to `MenuBuilderNode[]`.
+   assembled in PHP, never N+1), preload every element the tree links to (see "Link resolution"),
+   resolve each item's link, synthesise dynamic children, and convert to `MenuBuilderNode[]`.
 4. Re-filter those nodes against **current** visibility rules — never cached, since it depends on
    the current user, date, and environment.
 5. Mark `isActive`/`isActiveAncestor` against the current request URI (`MenuBuilderActiveResolver`)
@@ -92,9 +92,22 @@ mechanisms — a branch is either reachable through its parent or it isn't rende
 (`includeDisabled: true`) still shows every row, disabled ones flagged, so nothing becomes
 unreachable to edit.
 
-Step 4 re-reads the persisted items (`getFlatForGroup()`) because visibility rules live on the
-`MenuBuilderItem`, not on the cached `MenuBuilderNode`. The item map is built once in `getTree()`
-and passed down, not re-queried per node.
+Step 4 re-reads the persisted rows because visibility rules live on the item, not on the cached
+`MenuBuilderNode`. It reads **only** `id` and `visibility`
+(`MenuBuilderItemService::getVisibilityRulesForGroup()`), built once in `getTree()` and passed
+down, never re-queried per node. Two columns rather than a hydrated `MenuBuilderItem` per row
+because this is the one query every cache *hit* still pays, and the pass reads nothing else from
+the row: measured on a 1000-item menu, hydrating models was 10.4 ms of a 13.1 ms cached request
+against 0.55 ms for the projection.
+
+The map's keys carry meaning as well as its values: an item with no rules is a **present key
+holding an empty bag**, and a *missing* key means the row is gone or has been disabled since the
+tree was cached — which is what makes `filterVisible()` fail closed on a stale entry that outlived
+its item. The `enabled` predicate is therefore deliberately identical to `getFlatForGroup()`'s.
+
+`MenuBuilderVisibilityService::passes()` is the rule evaluation over that raw bag;
+`isVisible(MenuBuilderItem)` delegates to it. One decision, two entry points — not two
+implementations to keep in step.
 
 ---
 
@@ -110,6 +123,39 @@ One `LinkTypeResolverInterface` implementation per `MenuBuilderItem::TYPE_*`, re
 | `anchor` | `AnchorLinkResolver` | `#` + the editor's anchor field (`customUrl`), falling back to `handle`. That precedence lives in `AnchorLinkResolver::anchorTarget()`, which `MenuBuilderItem::validateAnchorTarget()` also uses, so validation and resolution can't disagree about which field is the anchor. A malformed stored fragment resolves unavailable. |
 | `nonclickable` / `separator` | `NonClickableLinkResolver` | Never a link. `isLinkable()` is authoritative; a leftover `clickable`/`customUrl` on the row can't produce one, and the editor exposes no link field for these types. |
 | `dynamic` | `DynamicLinkResolver` | The item itself has no link (available, no URL); its *children* are synthesised (see below). It must still be **registered** — an unregistered type resolves `unavailable()`, and `convert()` drops unavailable items whose `fallbackBehavior` is `hide`, which is the only value the type-scoped editor fields leave a dynamic item with. `LinkTypeResolverTest` guards that. |
+
+### Element preloading
+
+`ElementLinkResolver` re-queries the element on every resolve, which — one item at a time — is a
+textbook N+1: a 100-item entry menu cost 100 element queries to build (measured at 102 queries /
+17.3 ms of SQL, against 3 queries / 1.7 ms once batched).
+
+Before `convert()` runs, `MenuBuilderResolver::buildResolvedNodes()` walks the item tree, groups
+its `elementId`s **by item type**, and hands each group to the matching resolver via
+`MenuBuilderLinkResolver::preload()`. Grouped by type rather than pooled because each type resolves
+against its own element class — an entry ID handed to the category resolver simply isn't there.
+
+Four things keep it honest:
+
+- **Opt-in.** Preloading is `PreloadingLinkTypeResolverInterface`, a *separate* interface extending
+  `LinkTypeResolverInterface`. Most link types resolve from the item's own columns and have nothing
+  to preload, and a third-party resolver registered through `EVENT_REGISTER_LINK_TYPES` keeps
+  working untouched — `preload()` skips anything that doesn't implement it.
+- **Identical query.** The batch query is the per-item query with `id($ids)` instead of `id($id)`:
+  same site scoping, same `status(null)`. A preloaded element is the element `resolve()` would have
+  fetched for itself, which is what makes this invisible to every other layer.
+- **Absence is recorded.** Every requested ID is seeded as `null` before the query runs, so an ID
+  the query doesn't return (deleted, trashed, not enabled for this site) stays recorded and reaches
+  the fallback path without a second look — otherwise the N+1 would survive in precisely its worst
+  case.
+- **Site-keyed, and released.** The map is `[siteId][elementId]`, because the same element
+  legitimately resolves to a different URL, title and availability per site and a request that
+  resolves for more than one (the preview, a console command) must not be served another site's
+  answer. It is dropped in a `finally` once the tree is built: the resolvers are memoized for the
+  whole request, the elements are wanted only for the build.
+
+This is a cache-*miss* optimisation. A warm menu never touches the elements table at all — resolved
+URLs are in the cached payload.
 
 Two invariants worth preserving:
 
@@ -182,7 +228,7 @@ its fallback URL — and a configured-but-unsafe fallback URL is described as un
 `ElementLinkResolver::fallbackFor()` re-checks it and emits nothing.
 
 `MenuBuilderItemService::getOrphanedItemIds()` remains as the narrow "which items lost their
-element" accessor, but is now a thin delegation to this service rather than a second element
+element" accessor, and is a thin delegation to this service rather than a second element
 lookup.
 
 External URLs are **not** checked. Nothing in this phase makes an HTTP request; an external link is
@@ -239,7 +285,7 @@ They are deliberately *not* `normalizeIdList()`, which is form-post oriented and
 scalar: fine for a posted ID list, wrong for anything that gates access.
 
 `MenuBuilderItem::validateVisibility()` mirrors those shapes server-side as defence-in-depth for
-imports/direct API writes, and now **rejects** an empty restriction list rather than accepting it as
+imports/direct API writes, and **rejects** an empty restriction list rather than accepting it as
 a no-op — otherwise a save would persist an item that silently never renders anywhere. One
 deliberate asymmetry remains: a rule `type` the model doesn't recognise (e.g. one registered via
 `EVENT_REGISTER_VISIBILITY_RULES`) is **accepted** here — the model can't know a third party's
@@ -395,7 +441,7 @@ The tree maths behind those rules lives in `helpers/MenuBuilderHierarchyHelper` 
 over a snapshot of one group's `(id, parentId, sortOrder)` rows — ancestor walks, subtree height,
 cycle detection, sibling-order reconciliation, and `planMove()`, which returns the complete set of
 writes a move needs. The service only validates, locks and executes that plan, so every ordering
-and depth decision is exercised for real in `MenuBuilderTreeMoveTest` without a booted Craft app.
+and depth decision is exercised for real in `MenuBuilderTreeTest` without a booted Craft app.
 The helper stores nothing; it is not a second hierarchy.
 
 **Concurrency.** Validation that ran before a transaction only proves a move was legal against a
@@ -415,9 +461,9 @@ rows whose position actually changed — a drag in a 500-item set costs a couple
 Related invariant: an existing item's `groupId` can never change.
 `MenuBuilderItemService::save()` rejects it (`isGroupChangeAllowed()` is the pure, testable core)
 and `ItemsController::actionSave()` never lets a posted value override an existing item's group in
-the first place. Reassigning a group used to silently break the tree — a moved item's children keep
-their own `groupId`, so they became orphaned roots in the old group and vanished from the new one,
-with no error anywhere. New items still pick their group from the posted value.
+the first place. Reassigning a group would silently break the tree — a moved item's children keep
+their own `groupId`, so they would become orphaned roots in the old group and vanish from the new
+one, with no error anywhere. New items pick their group from the posted value.
 
 ---
 
@@ -436,10 +482,102 @@ children by column, collapsing anything unset or out of range into column 1.
 `_macros/tree.twig`'s `renderMegaMenu(node, disclosure = 'details')` is an optional example
 renderer: a native `<details>`/`<summary>` disclosure around one `<ul>` per column, or — with
 `disclosure: 'none'` — the columns in flow with no disclosure at all. `render()` calls it
-automatically for any node whose `megaMenu` is set. Hand-rolled Twig can ignore the macros and read
+automatically for any node whose `megaMenu` is set **and that has children left after visibility
+filtering** — a parent with nothing to show renders no disclosure and no empty `role="group"`, in
+either mode and whether the macro is reached through `render()` or called directly. Since grouping
+runs on the per-request, visibility-filtered children (`withChildren()` clones carry the config
+across), a column whose only member is hidden from this visitor simply isn't rendered for them,
+while the shared cached node keeps it for everyone else. Hand-rolled Twig can ignore the macros and read
 `node.megaMenu`/`megaMenuColumns()` directly. Why it is a native disclosure rather than a button
 with `aria-expanded`, and why that is a correctness decision rather than a styling one, is in
 "Accessibility" below.
+
+---
+
+## Mobile navigation
+
+**No second menu, and the decision is load-bearing.** A `mobileGroupId` with its own items would
+duplicate the tree, the cache entry, the invalidation, the visibility rules, the link health and the
+syncing — and would give one site two hierarchies, so `MenuBuilderActiveResolver` and
+`MenuBuilderBreadcrumbService` would produce two different answers to "where am I", only one of
+which matches the navigation on screen. What actually varies by viewport is how much of the menu is
+shown, in what order, and how deep a level is disclosed: presentation facts about items that already
+exist.
+
+They live in `metadata['mobile']`, the same extension point as `megaMenu`, `badgeStyle` and
+`dynamicSource`:
+
+```
+metadata['mobile'] = {
+    visibility:  'both' | 'desktopOnly' | 'mobileOnly',   // absent = both
+    order:       0-9999,                                   // absent = no override
+    collapsible: bool,                                     // absent = derived from hasChildren()
+    megaMenu:    'stack' | 'columns' | 'hide',             // absent = stack
+}
+```
+
+`helpers/MobileHelper.php` owns the grammar, in the "one reader, fail closed" shape of `IconHelper`
+and `BadgeHelper`. Two invariants:
+
+- **Every read fails closed toward keeping the link.** An unrecognised visibility reads as `both`;
+  an unrecognised mega behaviour reads as `stack` and *never* as `hide`; an unknown viewport passed
+  to `isVisibleOn()` keeps the item. The opposite failure — links silently vanishing from the only
+  navigation a phone has — is the one nobody notices until a customer can't find the shop.
+- **A default is never stored.** `MobileHelper::config()` and `fromForm()` omit every key at its
+  default, so an item nobody has configured carries no `mobile` key at all and "empty means
+  unconfigured" stays true in the column, in the cache and in the form. Changing a default later is
+  then a code change, not a migration.
+
+`MenuBuilderItem::validateMobile()` rejects values of the wrong *kind* (an unknown visibility, a
+non-numeric order, a non-boolean `collapsible`) rather than defaulting them silently — the
+fail-closed reads remain the backstop for rows this validator never saw. An out-of-range order is
+the one exception: it clamps, because a sequence hint isn't worth refusing to save an item over.
+
+### Where a viewport is decided — and where it is not
+
+Nothing in this plugin sniffs a user agent, guesses a width or stores a breakpoint. The `mobile` bag
+is a property of the **item**, decided by an editor, and of nothing about the visitor or the device,
+which is why `MenuBuilderResolver` puts it in the cached `MenuBuilderNode` alongside the mega-menu
+config: **one cache entry serves both viewports**. A viewport is chosen, downstream of the cache
+boundary, in exactly two places — the template calling `MenuBuilderTree::forViewport()`, or the
+stylesheet reacting to `data-mb-viewport`.
+
+`MenuBuilderTree::forViewport($viewport)` is a pure re-shaping of an already-resolved tree: it
+filters restricted items at every depth and, for `mobile`, stably sorts each sibling list by
+`mobileOrder()` (numbered items at their number; the rest keep their editor-dragged order and follow
+after). No query, no cache read, no link resolution, no visibility evaluation — rendering both
+navigations costs one resolve. Nodes are copied through `MenuBuilderNode::withChildren()` for the
+same reason the resolver copies (these can be the cached objects), with `preserveActiveState: true`
+— the tree it re-shapes has already been active-marked, and losing that would drop
+`aria-current="page"` from the mobile navigation.
+
+**Ordering is a re-sort, never a CSS `order`.** A CSS `order` changes the visual sequence and leaves
+the DOM, the Tab order and the screen-reader reading order alone: WCAG 1.3.2 and 2.4.3, broken. The
+macros emit no `order` property, and mobile order is therefore only meaningful in a separately
+rendered mobile navigation.
+
+### Rendering
+
+`_macros/tree.twig`'s three macros take an optional `viewport`, threaded like `disclosure`:
+
+| `viewport` | Behaviour |
+|---|---|
+| `'both'` (default) | One navigation for every screen. Restricted items still render, carrying `data-mb-viewport="desktop\|mobile"` on their `<li>`. The whole CSS contract. |
+| `'desktop'` | For a tree already narrowed by `forViewport('desktop')`: no per-item attributes, `data-mb-viewport` on the `<nav>` instead. |
+| `'mobile'` | As above, plus: collapsible branches render inside a native `<details data-mb-submenu>`, and mega parents follow `mobileMegaMenuBehavior()` (stack into one list / keep columns / render no panel). |
+
+`disclosure: 'none'` still wins on mobile — it means "claim no state", and that promise holds in
+every viewport.
+
+A collapsed branch is the same native `<details>`/`<summary>` the mega menu uses, for the same
+reason: `open` is simultaneously the visibility and the accessible state, so there is no
+`aria-expanded` to drift. It is marked `data-mb-submenu`, **not** `data-mb-disclosure`, so
+`NavAsset` leaves it alone — "open one, close the siblings" and "close on focusout" are right for a
+desktop flyout and wrong for a drawer, where several sections stay open and focus moving must not
+collapse the one being read. No JavaScript is involved in the mobile navigation at all.
+
+Known gap: the control-panel preview's device toggle is still a **width** only (see "Preview") and
+does not apply mobile item metadata.
 
 ---
 
@@ -549,7 +687,7 @@ Dynamic items are matched by *source*, not merely by existence: `getDynamicSourc
 reads each enabled `dynamic` item's stored config and
 `MenuBuilderElementService::dynamicSourceMatches()` (pure, unit-tested) normalizes it through
 `MenuBuilderDynamicNavigationService::normalizeConfig()` — the same clamping the render-time query
-uses — before comparing source type and container ID. So saving an asset no longer flushes a menu
+uses — before comparing source type and container ID. So saving an asset never flushes a menu
 whose only dynamic item lists entries, and a config the dynamic service would refuse to run can
 never justify an invalidation. An element with no determinable container (a nested entry has no
 `sectionId`) fails *open* to the coarser `getGroupIdsWithDynamicItems()` list rather than risking a
@@ -574,7 +712,7 @@ Invalidating *inside* an open transaction is a stale-cache hazard rather than a 
 flush: a concurrent front-end request can rebuild the tree from **pre-commit** data, re-cache it,
 and nothing invalidates it again after the commit — the change stays invisible until something
 unrelated happens to flush the menu. Every single-item write already invalidates after its own
-`commit()` (`MenuBuilderItemLifecycleTest` pins the ordering), but the bulk paths can't be fixed by
+`commit()` (`MenuBuilderCacheTest` pins the ordering), but the bulk paths can't be fixed by
 ordering: `bulkSetEnabled()`/`bulkDelete()` wrap many per-item writes, each invalidating, in one
 transaction that commits after all of them.
 
@@ -644,7 +782,8 @@ it's unit-testable without a booted app (`ControllerPermissionTest`).
 `ItemsController`'s takes `$isNewSave` and `$bulkOp` for the create-vs-edit and per-op distinctions.
 
 `BaseMenuBuilderController::cpAffordances()` is the other half of the same rule, and is pure for the
-same reason (`CpAffordanceTest`): it turns one user's admin flag and granted permissions into the
+same reason (though it is not itself unit-covered — see "Known limitations"): it turns one user's
+admin flag and granted permissions into the
 five `canView`/`canCreate`/`canEdit`/`canDelete`/`canManageSettings` booleans every CP template asks
 before rendering a control. Every screen-rendering action spreads `currentUserAffordances()` into its
 template variables. This is a UX guarantee, not a security one — `beforeAction()` enforces access
@@ -654,10 +793,45 @@ under `create`. Note that `groups/edit` and `items/edit` require only `view`: bo
 deep-linkable and must render **read-only** (a `disabled` fieldset, no Save, no destructive form
 action) rather than offer a save the action would refuse.
 
+### What the gate actually enforces
+
+`ControllerPermissionTest` pins the *decisions* — it is pure and boots
+nothing. Neither runs `beforeAction()`, which is the code that actually stands between a
+hand-written POST and the database, so neither would notice a permission Craft never registered
+(making `can()` answer false for everyone), a CSRF check switched off somewhere in the inheritance
+chain, or an action added without a mapping.
+
+`ControllerAuthorizationTest` (integration suite) runs the gate itself: seven real users — one per
+permission, one with none, and one admin — in real user groups holding real permission rows,
+against a real CP `craft\web\Request`, for **every action of every controller**. For each action,
+exactly one of the five single-permission users gets through and the other four are refused; the
+same matrix is re-run as an AJAX/JSON request, as a logged-out request, and as a front-end request.
+Nothing in it consults the UI, which is the point: hiding a button is not a security boundary, and
+every case is the request that arrives when someone ignores the hidden button and posts anyway.
+
+Three preconditions the permission audit pins with tests:
+
+- **Craft's `accessCp` comes first.** `craft\web\Controller::_enforceAllowAnonymous()` requires a
+  login and the `accessCp` permission on every CP request, before this plugin's gate runs. A user
+  granted `menuBuilder:edit` alone therefore still reaches nothing — MenuBuilder's permissions are
+  an additional check, never a way into the control panel.
+- **Admin bypass is deliberate and is proven by an admin holding no permissions at all.** If
+  `$currentUser->admin` stopped short-circuiting the check, that fixture would fail every row.
+- **The two request-shaped decisions read the request exactly once.** `items/save` needs `create`
+  or `edit` depending on the posted `itemId`, and `items/bulk` needs `delete` or `edit` depending on
+  the posted `op` — so both are places where a request could be *checked* as one thing and
+  *executed* as another. The gate and the action read each value from the same place
+  (`getBodyParam()`), and the tests post the mismatching shapes to prove it: an `op` supplied only
+  in the query string is admitted as a non-delete and stays one, and neither omitting nor supplying
+  an `itemId` lets an editor create or a creator edit.
+
 Other guarantees:
 
 - Every `beforeAction()` requires a CP request and checks `admin` or the specific permission before
-  any client-supplied ID is used.
+  any client-supplied ID is used. `requireCpRequest()`, the `null`-identity refusal, the absence of
+  any `enableCsrfValidation` or `allowAnonymous` override, and `requirePostRequest()` on every
+  writing action are all asserted structurally in the unit suite as well, so a regression surfaces
+  in the fast suite rather than only in the one that needs a database.
 - `ItemsController::actionEdit`/`actionSave` re-derive the owning group from the posted
   `groupId`/`groupHandle` rather than trusting a client-asserted group; cross-group reparenting is
   rejected in `validateHierarchy()` regardless of what the UI sent.
@@ -706,6 +880,15 @@ and the whole read path is `menubuilder_groups` → `MenuBuilderGroupService` �
 is no mirroring into `project.yaml`, no `onAdd`/`onUpdate`/`onRemove` handlers applying config back
 to the database, and no `ProjectConfig::EVENT_REBUILD` participation.
 
+**One read per request.** `getAll()` memoizes the menu list, and `getById()`, `getByHandle()` and
+`getByUid()` all answer from that memo rather than issuing their own query. The write path is why:
+saving one item asks for its menu twice — once for its custom field definitions, once for its
+`maxDepth` — so a 100-item bulk edit was costing 200 menu queries. The memo is safe because every
+mutator in the service (`save()`, `duplicate()`, `deleteById()`, `reorder()`) clears `$allCache`,
+so it can never outlive the state it describes; `MenuBuilderPerformanceTest` pins both halves of
+that. Callers therefore share model instances within a request — the pre-existing behaviour of
+`getByHandle()`/`getByUid()` — uniform across all three.
+
 This is deliberate. A second store would have to be kept honest against the first, which means
 owning database/YAML drift, `project-config/apply` overwriting edits made in the CP, `sortOrder` and
 `uid` synchronization, stale config after a partial deploy, and a rebuild path — all for data that
@@ -738,10 +921,10 @@ No JS framework, no build step. Four plain-JS bundles registered by `CpAsset`:
 | `menu-builder.js` | Bootstrapping |
 | `preview.js` | The preview stage's interaction only: inert links, the mega-menu disclosure, the mobile toggle. Resolves nothing and requests nothing — see "Preview" |
 
-Two details that have bitten this code before, worth not regressing:
+Two details this code depends on:
 
 - Rows must be looked up by `data-id`, **never** from the clicked anchor — Craft relocates an open
-  disclosure `.menu` to near `<body>`, so the anchor is no longer inside its row.
+  disclosure `.menu` to near `<body>`, so the anchor is not inside its row.
 - The Disabled badge needs its own `menu-builder-item-disabled-flag` class, because
   `.menu-builder-item-status` is shared with the mega-menu and link-health badges.
 - **The tree's hierarchy connector needs every row to draw its *ancestors'* columns, not just its
@@ -793,7 +976,7 @@ details in one `<form>` when `fullPageForm` is set, so a nested one is invalid m
 parser silently discards — which is how both edit screens' Delete buttons ended up submitting the
 page form with their `onsubmit` confirmation gone. Destructive actions go in `formActions`
 (`destructive: true`, `action`, `params`, `confirm`, hashed `redirect`), which Craft's `formsubmit`
-posts through the page form with a real confirmation. `CpAffordanceTest` scans for both.
+posts through the page form with a real confirmation. Neither is scanned for automatically any more; both are on the manual list.
 
 The tree controller's document-wide click listener handles only the actions it owns (`ROW_ACTIONS`)
 and returns *before* `preventDefault()` for anything else, so the dashboard template stays the sole
@@ -910,7 +1093,7 @@ screen defaults to showing both common treatments and can isolate either one. A 
 is rendered as a polished column grid, because that is both familiar to visitors and the fastest
 way to read a whole menu's structure at once.
 
-The preview no longer simulates a current URI. `MenuBuilderResolver::getTree()` keeps active-state
+The preview does not simulate a current URI. `MenuBuilderResolver::getTree()` keeps active-state
 marking enabled by default for every front-end caller, while the preview passes `markActive: false`.
 This prevents the control-panel request URL—or an invented page—from placing `aria-current` on a
 generic presentation preview.
@@ -940,10 +1123,9 @@ state to be wrong about, so it uses `data-mb-open` on the `<li>` as a preview-on
 beside CSS `:hover`/`:focus-within` rules — the preview degrades to working hover and keyboard if
 the script never runs. A **mega menu** is a native `<details>`, so `preview.js` opens one by setting
 `open` and nothing else, and the stylesheet has no rule that reveals a panel whose `<details>` is
-closed. That rule used to be there: the stage opened mega panels on `:hover`/`:focus-within` while
-`aria-expanded` was maintained separately (and not for focus at all), which is precisely the
-divergence the front-end macro was redesigned to make impossible. The preview now demonstrates the
-same guarantee it documents.
+closed. Revealing a panel on `:hover`/`:focus-within` while `aria-expanded` was maintained
+separately would be exactly the divergence the front-end macro is built to make impossible, so the
+preview demonstrates the same guarantee it documents.
 
 **The site's own CSS and JS are deliberately never loaded.** Executing a project's front-end
 JavaScript inside the control panel is not a preview, it's an execution surface — it could mutate CP
@@ -960,8 +1142,8 @@ as a neutral placeholder square while an asset icon renders as its real image.
 Accessibility is a property of the markup that leaves the plugin, so it is pinned the same way
 escaping is: by rendering the real macros against real nodes and asserting on the DOM
 (`MenuBuilderAccessibilityTest`, sharing the `NavMacroRendering` harness with
-`MenuBuilderPreviewRenderTest`). [ACCESSIBILITY.md](ACCESSIBILITY.md) is the consumer-facing
-version of this section, plus the manual release checklist.
+`MenuBuilderPreviewRenderTest`). [README.md](README.md#accessibility) is the consumer-facing summary
+of this section; the manual release checklist is at the end of it.
 
 **One rule underneath all of it: an attribute must describe something that is true.** Every ARIA
 attribute the macros emit is backed by a decision made elsewhere in the pipeline, and where no such
@@ -986,7 +1168,7 @@ Three consequences worth keeping:
   from inside the plugin can prevent it, because the plugin does not own the stylesheet. So the
   second state was **removed**, not synchronised: the mega menu is a native `<details>`, whose
   `open` attribute *is* the rendering, *is* what a pointer/Enter/Space toggles, and *is* what a
-  screen reader announces. `web/assets/nav/NavAsset` is now an enhancement (Escape, arrows,
+  screen reader announces. `web/assets/nav/NavAsset` is an enhancement (Escape, arrows,
   Home/End, closing a sibling panel) that sets `details.open` and writes no attribute of its own;
   with it absent the menu still opens, closes and announces itself correctly. The plugin's own CP
   preview had the bug this removes — its stylesheet opened mega panels on `:hover`/`:focus-within`
@@ -1026,6 +1208,61 @@ What the plugin deliberately does **not** own: focus indicators, whether a subme
 structure, and a plugin that shipped opinions about them would be overriding a design system it
 cannot see.
 
+### Manual release checklist
+
+Automated tests cover the markup; these are the checks only a person can make. Run them against a
+front-end template using the bundled macros, on a menu holding a mega-menu parent, a plain submenu,
+a separator, a heading, an icon, a badge and an external `_blank` link.
+
+**Disclosure state — first, with DevTools open on the `<details>`:**
+
+- [ ] Closed: panel not visible, no `open` attribute, its links unreachable by `Tab`.
+- [ ] Open: panel visible, `<details open>` present — by pointer, `Enter`, `Space` and `ArrowDown`.
+- [ ] `Escape` closes it, removes `open`, and returns focus to the summary.
+- [ ] Hover alone never reveals a panel unless something sets `open`.
+- [ ] Clicking outside and tabbing out both close it; opening one panel closes the other.
+- [ ] Everything except the extra keys still holds with `NavAsset` **not** registered.
+
+**Keyboard, no mouse:**
+
+- [ ] `Tab` reaches every link once, in document order, with a visible focus indicator; `Shift+Tab`
+      walks back out and focus is never trapped.
+- [ ] `Enter` and `Space` both toggle a summary; `ArrowUp`/`ArrowDown`/`Home`/`End` walk an open
+      panel; `ArrowUp` on a closed summary does nothing, on purpose.
+- [ ] Nothing is reachable only by pointer.
+
+**Mobile, at 390px:**
+
+- [ ] Mobile-only items are present and desktop-only ones are absent — from `Tab` and the screen
+      reader's link list, not merely invisible. Then the reverse at desktop width.
+- [ ] With two navigations rendered, only one is on screen and only its links are tabbable; the
+      landmark list shows no two navigations with the same name.
+- [ ] Exactly one link has `aria-current="page"`.
+- [ ] A collapsed branch's `<summary>` is a Tab stop and gains `open`; a closed branch's links are
+      out of the tab order; opening one branch does not close another.
+- [ ] The mobile order you set is the order you `Tab` through.
+- [ ] A mega parent set to "Hide the panel" still leads somewhere those links can be reached from.
+
+**Screen reader (VoiceOver + Safari, NVDA + Firefox):**
+
+- [ ] Each menu's landmark is named; lists announce the right counts; only the current page's link
+      is announced as current.
+- [ ] An external link's name ends with "opens in a new tab".
+- [ ] A mega-menu summary announces collapsed/expanded and its links are absent while closed.
+- [ ] A heading reads as text, icons add nothing to a name, a badge reads as part of one, and a
+      separator is announced as a separator or skipped.
+- [ ] A breadcrumb trail is a separate named landmark, read as an ordered list, with no separator
+      characters between crumbs.
+
+**Zoom, motion, appearance, content:**
+
+- [ ] At 200% zoom and at 320px wide, everything is reachable and nothing is clipped.
+- [ ] `prefers-reduced-motion: reduce` needs no animation to see a panel open.
+- [ ] Forced-colors mode keeps the active item and focus distinguishable; focus, link, badge and
+      active-item colours meet contrast.
+- [ ] Every item has a meaningful title, or an ARIA label where the visible label is an icon alone —
+      and no two items share a label pointing at different destinations.
+
 ---
 
 ## Public Twig API
@@ -1039,6 +1276,10 @@ cannot see.
 countable over its top-level nodes, with `.group`, `.items`, and `.flatten()` (depth-first walk, so
 templates never recurse to find the active node). `getGroup()`/`getItem()` are thin read-only
 service passthroughs with no logic of their own.
+
+`MenuBuilderVariable` is six methods and nothing else: `get()`, `breadcrumbs()`, `getGroup()`,
+`getItem()`, `iconAsset()` and `customAsset()`. There is no HTML-rendering entry point — the macros
+are templates, not API — so the variable's whole contract is "hand back resolved data".
 
 `breadcrumbs()` → `MenuBuilderBreadcrumbService` → `MenuBuilderBreadcrumbTrail`, iterable and
 countable over crumbs that are themselves `MenuBuilderNode`s (see "Breadcrumbs"). It takes either a
@@ -1176,7 +1417,11 @@ Templates read values by handle:
 
 ```twig
 {{ node.custom('subtitle') }}
-{% if node.hasCustom('image') %}<img src="{{ craft.menuBuilder.customAsset(node, 'image').url }}">{% endif %}
+
+{# customAsset() is null for an empty field, a non-asset field, *and* an asset that has since been
+   deleted — so test the resolved asset, not just hasCustom(). #}
+{% set image = craft.menuBuilder.customAsset(node, 'image') %}
+{% if image %}<img src="{{ image.url }}" alt="">{% endif %}
 ```
 
 The bundled `_macros/tree.twig` renders none of them: custom fields are for the consumer's own
@@ -1185,6 +1430,457 @@ templates, so nothing about them leaks into the shipped markup by default.
 The site (front-end) template root is registered explicitly in `attachEventHandlers()` —
 `craft\base\Plugin` auto-registers only the CP root, and `menu-builder/_macros/tree` is meant to be
 importable from front-end templates.
+
+---
+
+## The Navigation field
+
+`MenuBuilderField` (`src/fields/`) lets a content author attach one menu to an element and read it
+back as `entry.navigation`. It is the only place in the plugin where a menu is referenced from
+*outside* MenuBuilder's own tables, which is what makes its three decisions load-bearing.
+
+### What is stored: a UID
+
+One menu **UID**, in a `varchar` content column.
+
+- Not the **handle** — renaming a menu's handle would silently repoint every entry that selected it,
+  with no error and no audit trail.
+- Not the **row ID** — an auto-increment ID is assigned by whichever database created the row, so
+  the same menu can legitimately have different IDs in two databases, and a stored ID could point at
+  an unrelated menu in the other one.
+
+A UID is a **stable reference, not a portable menu.** Menus are database-only and are *not*
+project-config entities (see "Group persistence — database only"), so nothing about the field makes
+a menu travel between environments: a stored UID resolves only in a database that already contains
+that menu row. In practice that means deploying the database, exactly as it does for the menus
+themselves. What the UID buys is that the reference stays correct across a handle rename and cannot
+be confused with a different menu — not that the target is guaranteed to be there.
+
+`MenuBuilderFieldHelper::normalizeUid()` is the gate: anything that isn't UID-shaped collapses to
+"nothing selected" before it can reach a lookup. That is deliberately strict — a raw handle is
+precisely the shape this field is specified *not* to accept, so it must fail at normalization rather
+than resolve.
+
+### What Twig gets: a value object, resolved lazily
+
+`MenuBuilderFieldValue` — never a record, never a bare string. It carries the selection and resolves
+the menu on demand, through `MenuBuilderResolver::getTree()`: the same single path
+`craft.menuBuilder.get()` uses, so a field-rendered menu is cached, visibility-filtered and
+active-state-marked identically. Resolution is lazy (an element index normalizing a hundred values
+must not resolve a hundred menus) and memoized per instance (a page rendering a menu and then its
+breadcrumbs pays for one resolve).
+
+The field normalizes an empty column to `null`, so `{% if entry.navigation %}` answers the question
+templates actually ask. A value object therefore always means a real selection, which can still fail
+to render for three distinguishable reasons:
+
+| | `exists()` | `.tree` | meaning |
+|---|---|---|---|
+| menu deleted | `false` | `null` | the selection outlived the menu |
+| menu disabled, or not on this site | `true` | `null` | selection fine, menu not rendering here |
+| menu resolves | `true` | tree | normal |
+
+Iterating yields nothing in all three, so a template that only loops needs none of this.
+
+### Validation
+
+`MenuBuilderFieldHelper::validationError()` owns the whole rule, pure and unit-tested, and the field
+only translates its result into an error message. It runs on `SCENARIO_LIVE` only — as
+`BaseRelationField` does — so a draft holding a now-broken selection still saves; the author is told
+at publish time, not blocked from typing.
+
+Three things are errors: a selection whose menu was **deleted**, a selection **outside the field's
+allow-list**, and — only on a translatable field — a menu **restricted away from the element's
+site**.
+
+Three things deliberately are *not*:
+
+- **Nothing selected.** Emptiness is the field layout's "required" flag to decide, not this field's.
+- **A disabled menu.** `enabled` is a publishing state an editor flips independently of any entry.
+  Treating it as a content error would make every entry pointing at a menu unsavable the moment
+  somebody turned that menu off. It resolves to no tree — which is what disabling it means.
+- **A site mismatch on an untranslatable field.** One value then covers every site, so a
+  site-restricted menu could never satisfy it; the error would be unfixable, which is worse than no
+  error.
+
+### Sites
+
+Craft's standard translation methods, unchanged. Untranslatable (the default) means one selection for
+every site, which is what a single shared navigation wants; per-site means each site gets its own
+selection — and only then does the site-mismatch error above become reportable, because only then can
+the author act on it.
+
+`isAvailableForSite()` asks about the **element's** site. `getTree()` resolves for the site of the
+**current request** — the site whose links, titles and cache entry a page is being built from. The
+two coincide except when a template renders an element fetched from another site; see "Known
+limitations".
+
+### Settings, and project config
+
+`allowedGroupUids` (empty = every menu, the same convention `MenuBuilderGroup::$siteIds` uses) and
+`includeDisabledMenus`. Craft writes both into project config as part of the field.
+
+Both are **safe to apply**: a list of UIDs and a boolean — no row IDs, no site IDs — so
+`project-config/apply` can never fail on them, and a hand-edited YAML can't leave a handle or an ID
+in the allow-list (it is re-normalized in the constructor as well as on save).
+
+Safe to apply is not the same as self-sufficient, and this is the one place the distinction matters:
+
+> **MenuBuilder menus are not project-config entities.** The UIDs in `allowedGroupUids` — and the
+> UID an entry stores as its value — are references into `menubuilder_groups`, a table project config
+> knows nothing about. Applying this field's config to another environment does **not** create the
+> menus it names. They must already exist in that environment's **database**, which means deploying
+> the database.
+
+A UID naming a menu the target database doesn't have degrades quietly and safely: the picker offers
+one fewer option, and an entry whose stored UID isn't there reads as a selection that doesn't
+resolve (`exists()` false) rather than as a wrong menu. It cannot widen the field and cannot break
+an apply.
+
+The picker always keeps the **currently stored** menu, even when it has since been disabled or
+dropped from the allow-list. Otherwise opening an unrelated entry and saving it would rewrite the
+selection to whatever the select box fell back to. Whether that stored value is still *valid* is the
+separate question answered above.
+
+### Permissions
+
+Selecting a menu is content authoring and needs no MenuBuilder permission — the field is content, not
+menu management. Reaching the menu *editor* does, so the input's "Edit this navigation" link is
+rendered only for a user who could follow it (`menuBuilder:view`, or admin). Same rule the CP
+templates follow everywhere else: never render an affordance a permission check would then reject.
+
+### GraphQL
+
+`MenuBuilderMenuType` exposes the **selection** — `uid`, `handle`, `name`, `exists`, `enabled` — and
+not the resolved tree. A tree is per-site, per-visitor and per-page; a GraphQL response is cached and
+shared, so returning one would be exactly the "visitor-specific state in a shared cache" mistake the
+resolve pipeline is arranged to avoid. Querying a menu itself is its own schema-scoped surface, and
+belongs to the GraphQL phase rather than to this field.
+
+The type is registered through `GqlEntityRegistry`, so two navigation fields in one schema share one
+type definition rather than colliding on the name. Its field definitions are a separate pure method
+(`fieldDefinitions()`) so what each resolver returns is testable without a booted app.
+
+Querying the menu *itself* is the separate, schema-scoped surface described under
+[GraphQL](#graphql) below.
+
+---
+
+## GraphQL
+
+Two distinct surfaces, deliberately not merged:
+
+| Type | What it is | Where |
+|---|---|---|
+| `MenuBuilderMenu` | The Navigation **field's value** — a selection: `uid`, `handle`, `name`, `exists`, `enabled` | `MenuBuilderMenuType`, reached from `MenuBuilderField::getContentGqlType()` |
+| `MenuBuilderNavigation` | A **resolved menu** — the tree, with its items | `MenuBuilderNavigationType`, reached from the root queries |
+
+A field's value can't be a tree, for the reason stated under the field above: a tree is per-site,
+per-visitor and per-page, and an entry query has no way to say which. The root queries exist so those
+three things can be *stated* instead of inherited.
+
+```
+menuBuilder(handle:, site:, siteId:, currentUri:, viewport:)  →  MenuBuilderNavigation
+menuBuilderNavigations(site:, siteId:, currentUri:, viewport:) →  [MenuBuilderNavigation!]!
+```
+
+### Classes
+
+| Class | Responsibility |
+|---|---|
+| `gql/MenuBuilderNavigationQuery` | The two root fields, their arguments, and the per-menu schema components |
+| `gql/MenuBuilderNavigationResolver` | webonyx's resolver signatures, and nothing else — it delegates every decision to `MenuBuilderScopeService` |
+| `gql/MenuBuilderNavigationType` | Projection of `MenuBuilderTree` |
+| `gql/MenuBuilderNavigationItemType` | Projection of `MenuBuilderNode`, recursive on `children` |
+| `helpers/MenuBuilderGqlHelper` | The decidable half: argument normalization, scope component names, the audience, value shaping |
+
+Registration is two events on `craft\services\Gql`, both in `MenuBuilder::attachEventHandlers()`:
+`EVENT_REGISTER_GQL_SCHEMA_COMPONENTS` (one `menuBuilderGroups.{uid}:read` per menu) and
+`EVENT_REGISTER_GQL_QUERIES`. No mutations — see "No write surface" below.
+
+Types go through `GqlEntityRegistry::getOrCreate()`, as the field's type does, so the install's type
+prefix is applied once and two references to a type share one definition rather than colliding on
+the name. `MenuBuilderNavigationItemType` is self-referential (`children`), so its field list is
+built lazily — webonyx has to be able to hand back the type object before the list exists, or the
+recursion never terminates.
+
+The split between `getType()` (needs a booted app, for the prefix) and `fieldDefinitions()` (pure) is
+the same one `MenuBuilderMenuType` makes, and for the same reason: what each resolver returns for a
+given node is unit-testable.
+
+### The five gates
+
+Everything security-relevant happens in `MenuBuilderScopeService`, which the REST API shares; the
+types are projection only, and `MenuBuilderNavigationResolver` is an adapter for webonyx's calling
+convention.
+
+1. **Schema scope.** The active schema must name the menu by UID (`menuBuilderGroups.{uid}:read`).
+   Scoped by UID rather than handle or ID because a schema is long-lived, hand-edited configuration
+   and a UID is the only identifier that survives a rename — the same reasoning the field's stored
+   value follows.
+2. **Existence and enabled state**, and 3. **group site availability** — both enforced by
+   `MenuBuilderResolver::getTree()`, which is not bypassed. There is no second path to a tree.
+4. **Site scope.** An explicitly requested site must be in `GqlHelper::getAllowedSites()`, the same
+   boundary Craft's own `site` argument enforces. With no site argument the request's current site is
+   used, which Craft's `GraphqlController` has already checked against the schema.
+5. **Visibility**, evaluated against the anonymous audience — below.
+
+Every failure returns the **same `null`**: unknown handle, malformed handle, disabled menu,
+out-of-scope menu, unavailable-on-this-site menu. Distinguishing them would be an enumeration oracle
+for the install's structure. `menuBuilderNavigations` omits rather than null-pads, so its length says
+nothing either. A schema naming no menu gets no fields at all — `getQueries()` returns `[]` — so the
+surface is absent from introspection too, which is what makes GraphQL genuinely optional here.
+
+### The audience is a constant, and has to be
+
+`MenuBuilderGqlHelper::anonymousContext()` builds a `VisibilityContext` with `isLoggedIn: false` and
+no user groups. This is a correctness requirement, not a convenience.
+
+Craft's `Gql::executeQuery()` caches a result under *(current site, schema UID, query hash, serialized
+variables, config version)* — and nothing about the caller. A tree resolved for whoever sent the
+request would therefore be served to every later caller sharing that key: an admin's query would fill
+the entry with the items only logged-in users may see, and the next anonymous request would read them
+out of it. That is exactly the "user-specific state in a shared cache" failure the resolve pipeline is
+arranged around (see "Caching").
+
+Making the audience a constant is what makes the response a pure function of its arguments, which is
+what makes it cacheable at all. Consequences, documented rather than hidden: `loggedIn` and
+`userGroup` rules never pass over GraphQL, `loggedOut` always does, and `dateRange` / `environment` /
+`site` are unaffected — none of them are about who is asking.
+
+Active state follows the same logic. A GraphQL request is served from the API endpoint, not from the
+page whose navigation is being built, so `currentUri` is an **argument**: marking against the request
+would be both meaningless and outside Craft's cache key. Without it, `markActive: false` and both
+flags stay false everywhere.
+
+### Site switching
+
+`resolveTree()` switches the current site for the duration of the resolve and restores it in a
+`finally`. Passing a site ID into the visibility context alone would not be enough: two things
+downstream read the *current* site and cannot be reached from the call — `MenuBuilderCacheService`
+keys entries by it, and `ElementLinkResolver` resolves element URLs against it. Filtering for one
+site while resolving URLs for another is the bug this avoids.
+
+Craft computes its result-cache key before execution, so the temporary switch doesn't corrupt it; the
+`site` / `siteId` arguments are already part of the key by virtue of being arguments.
+
+### What is not exposed
+
+- **Row IDs.** `menubuilder_items` primary keys are internal, and on a dynamic item's synthesized
+  children the node's `id` holds a Craft *element* ID instead (`buildDynamicNode()`) — one field
+  meaning two things. `handle` is the public identity.
+- **Editor-side configuration**: visibility rules, fallback behaviour, sort columns, the raw
+  `metadata` bag, a menu's `siteIds` and `settings`. A visitor can't see them in HTML, and a GraphQL
+  consumer is a visitor. A menu unavailable on the requested site is simply absent, so the surface
+  can't be used to learn which *other* sites a menu exists on.
+- **Resolved asset URLs.** `iconAssetId` / `imageId` / an asset custom field's `intValue` are IDs:
+  the node is what gets cached, and an asset's URL can change without the menu changing — the same
+  reasoning `MenuBuilderNode::iconType()` documents.
+
+Every exposed value reads through the node's own accessors (`safeHtmlAttributes()`, `iconClass()`,
+`badgeClass()`), so their fail-closed behaviour applies to a GraphQL response exactly as it applies to
+rendered markup. A rule tightened in a later release applies to trees cached before it.
+
+### No write surface
+
+Mutations are deliberately absent. Menu editing is control-panel work gated by MenuBuilder's own
+permissions and CSRF protection (`BaseMenuBuilderController`); a GraphQL token is not a user and has
+no MenuBuilder permissions to check, so a write surface would have nothing to enforce beyond the
+token itself. The schema components are read-only for the same reason.
+
+### Schema-build safety
+
+`MenuBuilderNavigationQuery::allMenus()` swallows throwables. A GraphQL schema is built in contexts
+where the plugin's tables may not be readable — mid-install, mid-migration, pending migrations — and a
+schema that fails to build takes down every query on the site. An unreadable menu list means "no menus
+to offer", not a 500.
+
+---
+
+## REST API
+
+A read-only JSON transport over the *same* surface GraphQL exposes, for consumers that can't run
+Twig: headless Craft behind Next.js or Nuxt, native mobile applications, external front ends.
+
+```
+GET {basePath}/v1/navigations            → menu-builder/api/index
+GET {basePath}/v1/navigations/{handle}   → menu-builder/api/view
+```
+
+### Why it exists at all, given GraphQL
+
+A navigation is a fixed document every page needs. GraphQL's advantage — asking for exactly the
+fields you want — buys a consumer that will render the whole tree almost nothing, and it costs a
+`POST` with a JSON body, which no HTTP cache, CDN or mobile URL loader will store. A `GET` of a
+fixed URL is cacheable by every layer in between. That is the entire justification; nothing else
+about the data differs.
+
+### It is not a second API
+
+`ApiController` decides nothing about access. Every gate — scope, existence, enabled state, site
+availability, site scope, the anonymous audience, the resolve itself — is `MenuBuilderScopeService`,
+which `MenuBuilderNavigationResolver` also goes through. The two transports differ in **how a
+refusal is spelled** (GraphQL: `null`; REST: a status code) and in nothing else. When comparing
+their behaviour, read the service.
+
+That service is an extraction, not a new implementation: the logic was `MenuBuilderNavigationResolver`'s
+private methods, moved so there is one copy of it rather than two ("Single path per behaviour"). The
+GraphQL resolver keeps `canRead()`/`readableMenus()` as delegating statics because
+`MenuBuilderNavigationQuery` asks those questions while *building a schema*, which is a GraphQL
+concern.
+
+### Classes
+
+| Class | Responsibility |
+|---|---|
+| `services/MenuBuilderScopeService` | The five gates and the resolve, shared with GraphQL |
+| `controllers/ApiController` | HTTP: methods, authentication, CORS, rate limiting, status codes, headers |
+| `helpers/MenuBuilderApiHelper` | The decidable half: parameter validation, JSON shapes, the error envelope, ETag/cache-control/rate-limit arithmetic |
+| `models/MenuBuilderApiConfig` | `config/menu-builder.php`, normalized by one pure static that never throws |
+
+### Two switches, both off
+
+| Switch | What it decides | Default |
+|---|---|---|
+| `api.enabled` in `config/menu-builder.php` | Whether the API **exists**. When off, `MenuBuilder::attachEventHandlers()` registers no URL rule at all, and `ApiController::beforeAction()` answers 404 regardless | Off |
+| The GraphQL schema component `menuBuilderGroups.{uid}:read` | Which menus it can ever serve | Unticked |
+
+The master switch is not redundant with the scope. Reusing the GraphQL scope is what keeps "menus
+this caller may read" a single list — but an install that ticked a menu into the *public* schema
+chose to expose it over GraphQL at Craft's `/api` endpoint. It did not thereby ask for a second
+unauthenticated URL to appear on its site the day it upgraded. The scope decides *which* menus; the
+config decides *whether there is an endpoint*.
+
+`MenuBuilderApiConfig::fromArray()` is pure, never throws, and replaces anything malformed with the
+default for that key rather than with "permissive" — a config file is hand-edited and deployed, so a
+typo must fail closed. `enabled` takes a literal `true` and nothing else: publishing an endpoint is
+not something a truthy string should be able to do. `basePath` is validated against a URI-path
+grammar (no empty segments, no dot segments, no regex metacharacters) because it is concatenated
+into a Yii URL rule.
+
+### The audience is nobody, and has to be
+
+Same constant as GraphQL's, for a second reason on top of the shared-cache one: a `GET` that answered
+differently for a browser carrying a session cookie is a `GET` a third-party page can use to read a
+logged-in user's data cross-origin. `ApiController` never reads the session, and Craft's admin-only
+`X-Craft-Gql-Schema` header — which turns an admin's cookie into schema selection — is deliberately
+not honoured.
+
+### Authentication
+
+`Authorization: Bearer {token}`, resolved and validated exactly as `craft\controllers\GraphqlController`
+does (enabled, unexpired, has a schema), with the same once-a-minute `lastUsed` bookkeeping so the
+CP's token list is an audit trail for REST callers too. `lastUsed` failures are logged, never fatal:
+a read-only endpoint that 500s because it couldn't record a timestamp is worse than a minute-stale
+audit trail.
+
+With no header, the request falls back to Craft's public schema unless `allowPublicSchema` is off. A
+bad token and a missing one are the same 401.
+
+`enforceSiteAccess()` mirrors `GraphqlController::_enforceSiteAccess()`: the request's *own* site
+must be one the schema may query, or a token scoped to one site would get another site's navigation
+simply by being sent to that site's URL. The `site`/`siteId` parameters are a separate check, in
+`MenuBuilderScopeService::requestedSite()`.
+
+### Status codes
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `bad_request` | A recognized query parameter was given but isn't valid. Names it |
+| 401 | `unauthorized` | No usable token and no public schema fallback |
+| 403 | `forbidden` | The schema doesn't cover the site whose URL was called |
+| 404 | `not_found` | Unknown handle, malformed handle, disabled menu, out-of-scope menu, or menu unavailable on the requested site — indistinguishably. Also a disabled API |
+| 405 | `method_not_allowed` | Anything but `GET`, `HEAD`, `OPTIONS` |
+| 429 | `rate_limited` | Over the window's budget |
+
+The five-way 404 is the same non-oracle property GraphQL's uniform `null` has. A **path segment**
+that isn't a handle is 404 rather than 400: it identifies a resource, and one that can't name a
+resource is not found. Only a malformed **query parameter** is a 400 — and unlike GraphQL, which
+folds "absent" and "malformed" into one, REST distinguishes them, because a query string is untyped
+where a GraphQL argument is typed by the schema before a resolver sees it. The normalizers are
+shared (`MenuBuilderGqlHelper`); only the presence check is added, so the transports can't drift
+about what *counts* as a handle, a site ID, a URI or a viewport.
+
+Every refusal is the JSON envelope, never Craft's HTML error template. That is also why the method
+gate runs **before** `parent::beforeAction()`: `yii\web\Controller::beforeAction()` validates a CSRF
+token on unsafe methods, so a `POST` reaching it would be answered with Craft's HTML 400 before this
+controller spoke.
+
+### Order of the gates
+
+`beforeAction()`, in order: CORS headers → `api.enabled` → `OPTIONS` preflight → method →
+`parent::beforeAction()` (site online, anonymous access) → authentication → site access → rate limit
+→ parameter validation. CORS first so a browser can *read* a refusal; the preflight before
+authentication because a preflight carries no credentials by definition, and before the method gate
+because `OPTIONS` is not `GET`.
+
+The action then resolves the **answering site** once (`answeringSite()`, through the same
+`requestedSite()` the resolve uses) and reports it as `meta.site`. A `site` parameter naming
+something the caller may not have is a 404 on *both* endpoints — the list endpoint does not return an
+empty 200 labelled with the current site, which would make `meta.site` a lie.
+
+### What the response is
+
+`{meta, data}`. `meta` carries `apiVersion`, the site that actually answered, and the honoured
+`currentUri`/`viewport` — the last two because active state is silently all-false without a
+`currentUri`, and a consumer shouldn't have to parse its own URL to notice.
+
+Item fields mirror `MenuBuilderNavigationItemType` one for one, deliberately: two transports over one
+menu must not disagree about what a menu *is*. The same things are absent for the same reasons — row
+IDs, editor-only configuration, the menu's site-restriction list, resolved asset URLs — and every
+value reads through the node's own fail-closed accessors.
+
+Where JSON has a better representation it is used rather than transcribed: `htmlAttributes` and
+`customFields` are **objects** (GraphQL has no map type, so it needs `{name, value}` pairs and four
+typed accessors); related fields are grouped into `icon`, `badge`, `megaMenu` and `mobile`. An empty
+bag is serialized through `stdClass` so it encodes as `{}` — a bag whose JSON *type* changed with its
+contents is what breaks a typed consumer.
+
+### Caching
+
+No response cache is added. The expensive half is already the tree cache, keyed by menu, site and
+config version; a second cache of derived data would be a second invalidation problem for no gain.
+What the API adds is transport caching:
+
+- `ETag` over the exact bytes sent (which is why the body is encoded in the controller rather than by
+  `asJson()` — an ETag over a re-encoding can disagree with the body), and `304` on a matching
+  `If-None-Match`.
+- `Vary: Authorization, Origin` on every response.
+- `Cache-Control`: `no-store` until `cacheDuration` is set, then `public, max-age=N` for a
+  public-schema response and **`private`** for a token-authenticated one. A token's schema can name
+  menus the public schema cannot, so its response must never be storable by a shared cache;
+  `Vary: Authorization` says the same thing, but only to caches that honour it.
+
+### CORS
+
+Exact-match allowlist only — no suffix or subdomain matching, the classic way an allowlist admits
+`evil-example.com` for `example.com`. `['*']` is honoured and echoed as `*` (not as the caller's
+origin, which would let one origin's cached response answer for all of them);
+`Access-Control-Allow-Credentials` is never sent and no cookie is ever read, so a wildcard cannot be
+used to read a browsing user's data. An empty allowlist sends no CORS headers at all, which is
+correct for a server-side consumer.
+
+### Rate limiting
+
+A fixed one-minute window in Craft's cache, keyed by `hash(tokenUid|ip)` so neither an access token
+nor an address is stored in the clear, and TTL'd to the window's own remaining life so a key can't
+leak one caller's budget into the next window. The token is part of the key so one noisy anonymous
+network can't spend an authenticated integration's budget. `rateLimit => 0` turns it off.
+
+### No write surface
+
+Same answer as GraphQL's, and for the same reason: a GraphQL token is not a user and holds no
+MenuBuilder permissions, so a write endpoint authenticated this way would have nothing to enforce
+beyond the token itself. The first question a write API has to answer is what identity a change is
+attributed to — for the audit trail, the permission check and `Edited by` in the CP. Adding one is
+not a matter of adding a verb, and it would not belong on this controller.
+
+### Versioning
+
+`/v1/` in the URL is the major version; `meta.apiVersion` and `X-MenuBuilder-Api-Version` carry the
+precise one (`MenuBuilderApiConfig::RELEASE`). Additive changes move the minor half and stay on
+`/v1/`; a removed field, a changed type, a reshaped envelope or a moved gate takes a new major and a
+new URL.
 
 ---
 
@@ -1200,6 +1896,57 @@ does. See "Known limitations" for what's deliberately absent.
 A plugin that registers its own link type owns its cache invalidation:
 `MenuBuilder::getInstance()->cache->invalidateGroups(['main'])` (handles) or `invalidateGroupIds()`
 (menu IDs) — both go through the same targeted, transaction-safe path the built-in callers use.
+
+---
+
+## Performance
+
+The rule the whole pipeline is built to: **a menu's query count must not grow with its item
+count**, at any stage. Everything below was measured against a real Craft install (MySQL 8, PHP
+8.4) at 10 / 100 / 500 / 1000 items, flat and nested ten deep.
+
+Where the time actually goes, per request, on a **cache hit** (1000 items):
+
+| Stage | Cost |
+|---|---|
+| Read the cached payload (unserialize `MenuBuilderNode[]`) | ~1.6 ms |
+| Re-read visibility (`id` + `visibility`, one query) | ~0.5 ms |
+| Evaluate visibility rules | ~0.2 ms |
+| Mark active state | ~0.3 ms |
+| **Total `getTree()`** | **~3.5 ms, 1 query** |
+
+Unserializing the cached tree is the dominant cost, which is the right shape: it is the work of
+handing over the answer, not of computing it. Twig rendering of a 1000-item menu adds ~16 ms and no
+queries.
+
+On a **cache miss** the tree is built once: one flat item query, one query per element type for the
+links (see "Element preloading"), plus one query per distinct dynamic-navigation source. 1000 flat
+items build in ~16 ms / 2 queries; 500 items nested ten deep in ~8 ms / 2 queries; a 100-item entry
+menu in ~8 ms / 3 queries.
+
+Fixed costs, deliberately not per-item:
+
+- **Sites** — Craft memoizes the current site; nothing here re-queries it.
+- **Menus** — one memoized list per request (see "Group persistence — database only").
+- **Custom field definitions** — read once per tree from the menu, passed down, never per item.
+- **Link-type and visibility-rule registries** — built once per request behind their events.
+
+What is *not* optimised, on purpose:
+
+- Visibility is evaluated per request, never cached. It depends on the current user, date and
+  environment, and a shared cache entry that knew about any of them would be a correctness bug, not
+  a speedup. It is also cheap: 0.2 ms for 1000 items.
+- The cached payload holds resolved URLs but never resolved *visibility* or *active state*. See
+  "Caching".
+- `MenuBuilderNode::withChildren()` copies rather than mutating during filtering. That allocation is
+  what keeps the cached tree immutable by construction, and it does not show up as a cost worth
+  reclaiming.
+
+`MenuBuilderPerformanceTest` exists in both suites and guards the shape rather than the clock:
+wall-clock assertions would flap between machines, so the integration suite counts queries and
+asserts they are *identical* at 5 items and at 40–60, and the unit suite pins the structural
+decisions those counts depend on (which read the pipeline uses, that preloading happens before
+conversion and is released after, that the menu memo is dropped by every mutator).
 
 ---
 
@@ -1227,12 +1974,13 @@ to keep in sync and no second place for a hierarchy bug to hide.
   select places a new item directly; `add-child`/`add-sibling` only pre-filled `parentId` on the
   same slideout. Because this is the *only* creation path, quick-add's type list is load-bearing: a
   `MenuBuilderItem::TYPES` entry missing from it is a type nobody can create, however completely the
-  model, the editor and the resolver support it. That is exactly what happened to `dynamic`, so
-  `QuickAddCreationTest` checks the list against the constant rather than against any one type.
+  model, the editor and the resolver support it. That is exactly what happened to `dynamic`, so the
+  list must be checked against the constant rather than against any one type — a manual check today,
+  since the template-shape test that did it automatically was removed.
   Quick-add asks only for what the model *requires* of a type — for `dynamic`, a source type and a
   source; limit and order-by are optional to `validateDynamicSource()`, defaulted by
   `MenuBuilderDynamicNavigationService::normalizeConfig()`, and set in the editor afterwards.
-  `ItemsController::actionEdit()` is now edit-only: its new-item branch and the
+  `ItemsController::actionEdit()` is edit-only: its new-item branch and the
   `menu-builder/<groupHandle>/items/new` route are gone, and `openItemSlideout()` takes `itemId`
   only. The full-page `menu-builder/<groupHandle>/items/<itemId>` route stays — it renders the same
   `items/_fields` partial the slideout loads (one form, two wrappers) and is the no-JS/deep-link
@@ -1250,28 +1998,56 @@ same moment. Don't collapse them.
 
 ## Testing
 
-`composer test` runs 1,011 PHPUnit unit tests (`tests/Unit`) with no booted Craft app.
+Two suites, with different bootstraps and different jobs.
+
+**`composer test`** — 1,138 unit tests in 23 files (`tests/Unit`), no booted Craft app. Fast, and covers the
+pure logic every layer is factored into.
+
+**`composer test-integration`** — 446 integration tests in 13 files (`tests/Integration`) against a **real booted
+Craft 5 application and a real database**. `tests/integration-bootstrap.php` stands up a throwaway
+install: its own database (`MENUBUILDER_TEST_DB_DATABASE`, default `menubuilder_test`), its own
+`config`/`storage` under `tests/_craft`, and the plugin's own `vendor/` — which registers MenuBuilder
+as a real Craft plugin — so the surrounding project is never involved and its `config/project/` is
+never read. It drops and recreates every table on each run, and *refuses to start* against a database
+whose name doesn't contain `test`. Connection defaults suit DDEV from inside the web container
+(`ddev exec composer test-integration`); override with `MENUBUILDER_TEST_DB_*`.
+
+The split matters. The unit suite can prove what the Navigation field *decides*; only the integration
+suite can prove it is **wired into Craft** — that a value reaches `elements_sites.content`, that
+`Entry::find()->navigation($uid)` compiles to a condition that matches it, that Craft can build a
+GraphQL schema from the field's type. A wrong `dbType()`, a `serializeValue()` returning the wrong
+shape, or a type webonyx rejects would pass every unit test and fail on the first real request.
+
 `composer check-cs` (ECS, `ecs.php`, Craft's own set) and `composer phpstan` (`phpstan.neon`,
-level 5, Craft's extension) both run clean over `src` and `tests`. Covered:
+level 5, Craft's extension) both run clean over `src` and `tests`; both skip
+`tests/_craft/storage`, which holds Craft's own generated code, and PHPStan ignores the
+per-field-handle magic query methods (`->navigation()`) it cannot see. Covered:
 
 | Area | Test |
 |---|---|
 | Link resolvers, element availability/fallback decisions, resolver registry | `LinkTypeResolverTest` |
-| Dynamic-source clamping / order-by whitelist | `DynamicNavigationConfigTest` |
+| Dynamic-source clamping / order-by whitelist | `LinkTypeResolverTest` |
 | Visibility rules, rule combination, CP form → rule configs, cache boundary and pipeline order | `MenuBuilderVisibilityTest` |
 | Item validation: per-type fields, options, URLs, anchors, attributes, mega-menu / dynamic-source metadata, executing-scheme rejection | `MenuBuilderItemModelTest` |
-| Item CRUD, hierarchy and cache invalidation | `MenuBuilderItemLifecycleTest` |
-| Drag-and-drop moves, depth and ordering | `MenuBuilderTreeMoveTest` |
+| **Integration** — item CRUD, hierarchy and ordering against the real database: the rows a move actually writes, a refused move rolling back, a delete taking the subtree, and a contiguous sibling set afterwards | `MenuBuilderItemCrudTest` |
+| Drag-and-drop moves, depth and ordering | `MenuBuilderTreeTest` |
 | Group model validation, site availability, depth, group lifecycle | `MenuBuilderGroupTest` |
-| Cached-node immutability, `flatten()`, mega-menu column grouping | `MenuBuilderNodeTest` |
+| Cached-node immutability, `flatten()`, mega-menu column grouping | `MenuBuilderTreeTest` |
 | Active-state marking: hierarchy (item / parent / grandparent / sibling), every URI shape (homepage, trailing slash, query, fragment), every link type, external hosts, non-navigable schemes, unavailable links, `currentUri` override, `aria-current` placement, cache boundary | `MenuBuilderActiveResolverTest` |
 | Cache-key and config/payload-version construction, per-menu tags, element-sync targeting (class → source type, dynamic-source container matching, cache-duration ceiling) | `MenuBuilderCacheTest` |
-| Cache behaviour against a real backend: hit, miss, targeted invalidation, per-site isolation, stale/foreign entries, transaction-deferred invalidation, and the two-user / two-day / two-page sharing of one entry | `MenuBuilderCacheIntegrationTest` |
+| Cache behaviour against a real Yii backend (`ArrayCache`, through the service's own seams): hit, miss, targeted invalidation, per-site isolation, stale/foreign entries, transaction-deferred invalidation, and the two-user / two-day / two-page sharing of one entry | `MenuBuilderCacheTest` |
 | Controller permission mappings and the shared permission gate | `ControllerPermissionTest` |
-| CP affordance flags, the permission each control is gated on, no nested `<form>` on full-page screens, filtered-tree row counts | `CpAffordanceTest` |
-| Quick-add offering every `MenuBuilderItem::TYPES` entry, the dynamic source fields it posts, one shared picker toggle, the native-form fallback | `QuickAddCreationTest` |
+| CP affordance flags, no nested `<form>` on full-page screens, filtered-tree row counts, and quick-add's type list | *manual only* — the template-shape tests that covered these were removed; `ControllerAuthorizationTest` (integration) proves the gate itself with real requests |
 | Preview: option normalization (placement, audience, user-group and site allowlists), the audience → `VisibilityContext` mapping, the no-writes and site-restore guarantees, disabled active state, and that the simulated audience is applied after the cache | `MenuBuilderPreviewTest` |
 | Preview rendering, against a real DOM: nesting, separators, headings, unavailable links, every link shape, dynamic children, icons (class, asset, deleted asset, unsafe class), badges and styles, mega-menu disclosure/columns, unique IDs in the dual-placement view, attribute escaping, the markup panel's formatter, and the illustrative stage | `MenuBuilderPreviewRenderTest` |
+| Navigation field: UID-only value normalization, allow-list normalization and project-config portability, the picker (allow-list, disabled menus, keeping the current selection), every validation outcome, the translatable/untranslatable site rule, the manage-link permission, the Twig value's laziness, memoization and three failure modes, and the GraphQL selection-not-tree shape | `MenuBuilderFieldTest` |
+| **Integration** — Navigation field storage and query API against real Craft: the UID landing in `elements_sites.content` under the field layout element's key, the value round-tripping as the value object, an empty selection reading as null, a real tree resolving, changing a selection, and `->navigation()` / `->ids()` matching by UID, by a different UID, by an unused UID, by `:empty:` / `not :empty:` / `['or', …]`, and by a deleted or disabled menu's UID — plus that the condition is built by Craft's own content-column pipeline | `MenuBuilderFieldQueryTest` |
+| **Integration** — Navigation field through Craft's real GraphQL layer: querying the selection, an empty selection as null, a deleted menu reporting `exists: false` rather than vanishing, a disabled menu reporting `enabled: false`, filtering entries by the selected UID, the mutation argument taking a UID and round-tripping, a non-UID mutation value being rejected, and — against the **built** schema — that no resolved tree is exposed and asking for one is a rejected query | `MenuBuilderFieldGqlTest` |
+| **Integration** — Navigation field on a real two-site install: shared vs per-site (translatable) selections and their independent querying, availability reported for the element's own site, a site-restricted menu resolving to no tree on a site it isn't available on, site-mismatch failing validation on a translatable field and not on a shared one, a deleted menu failing on every site, and the cross-site rendering limitation pinned as a regression test | `MenuBuilderFieldMultiSiteTest` |
+| GraphQL surface: argument normalization (handle, site ID, viewport, `currentUri` bound), scope component naming, the anonymous audience, custom-field value shaping, and what every field of both types returns — including the absence of row IDs and editor-side config | `MenuBuilderGqlTest` |
+| **Integration** — the navigation query against Craft's real GraphQL layer and a real scope: a valid query, nested children, disabled items and menus, an unknown / malformed / missing handle, an out-of-scope menu being indistinguishable from a missing one, a schema with no menus having no fields at all, site selection (explicit, disallowed, unknown, disagreeing arguments, a site-restricted menu), viewport reshaping, active state with and without `currentUri`, that a logged-in caller gets the same tree as an anonymous one, and that row IDs and mutations are not queryable | `MenuBuilderNavigationGqlTest` |
+| REST API surface: the master switch (only a literal `true` turns it on), base-path and origin-allowlist normalization, exact origin matching and the wildcard, query-parameter validation and the allowlisted argument set, the JSON shapes (grouped presentation, native custom-field types, `{}` for an empty bag, no row IDs, no install structure), the envelope and error envelope, ETag / `If-None-Match` / `Cache-Control` (`private` for a token), and the rate limiter's key and window arithmetic | `MenuBuilderApiTest` (unit) |
+| **Integration** — the REST API through the real controller, with real `craft\web\Request`s, real GraphQL tokens and real menus: a valid request and its headers, hierarchy and URLs, the list endpoint returning only in-scope menus, the five-way indistinguishable 404 (including path traversal and injection attempts) as JSON rather than Craft's HTML, an invalid / expired / missing token, `lastUsed` bookkeeping, a token reaching past its schema's sites, site selection and disagreement, the anonymous audience, malformed parameters naming themselves, active state with and without `currentUri`, ETag stability and `304`, `private` vs `public` caching, write methods refused before CSRF validation can pre-empt them, `HEAD`, CORS (absent, allowlisted, unlisted, preflight without credentials), the disabled API, and the rate limiter | `MenuBuilderApiTest` (integration) |
 | Attribute parsing, title fallback, rel merging, JSON bags, ID lists, calendar dates | `MenuBuilderHelpersTest` |
 | Link health: the element-status → health mapping (live, no URL, disabled, pending/expired, archived, unknown), agreement with the resolver's availability rule, custom-URL / anchor / structural / dynamic-source checks, the front-end consequence per `fallbackBehavior`, the summary, which statuses offer recovery actions, and the no-disclosure guarantee | `MenuBuilderLinkHealthTest` |
 
@@ -1282,7 +2058,7 @@ context-taking method** (`cacheKey()`, `requiredPermissionForAction()`, `isGroup
 
 Writing these tests caught bugs inspection hadn't: the three `metadata`/`visibility` inline
 validators were silently skipped on an empty array, because Yii's inline-validator `skipOnEmpty`
-defaults to `true` — every rule on `MenuBuilderItem` now sets it to `false` explicitly.
+defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explicitly.
 
 ---
 
@@ -1296,29 +2072,40 @@ defaults to `true` — every rule on `MenuBuilderItem` now sets it to `false` ex
    `MenuBuilderDynamicNavigationService::resolveElements()`, and both services' own database
    writes all query real element/DB state and are verified manually. The cache service is the one
    exception: it exposes its Craft touchpoints (cache component, current site, `cacheDuration`,
-   transaction state) as overridable seams, so `MenuBuilderCacheIntegrationTest` drives the real
-   key/tag/queue implementation against a real Yii cache backend. What remains manual there is only
-   whether the *events* fire — the queue's Yii transaction hookup and the element listeners. For items that means the
+   transaction state) as overridable seams, so `MenuBuilderCacheTest` drives the real
+   key/tag/queue implementation against a real Yii cache backend (`ArrayCache`) from the unit
+   suite. What remains manual there is only
+   whether the *events* fire — the queue's Yii transaction hookup and the element listeners.
+   The Navigation field is the second exception: `tests/Integration` drives it against a real booted
+   Craft application and a real database (see "Testing"), so its storage, query API, GraphQL surface
+   and multi-site behaviour are covered rather than verified by hand. For items that means the
    hierarchy rules specifically: the `parentId` cascade firing on a parent delete, a real
-   duplicated subtree, and a real circular/cross-group/max-depth move rejection are covered
-   structurally in `MenuBuilderItemLifecycleTest` and behaviourally only by hand. A Craft testing harness (Codeception
-   integration tests) is the natural next step.
-3. **Orphaned items are surfaced, not repaired.** The dashboard badges an item whose linked element
+   duplicated subtree, and a real circular/cross-group/max-depth move rejection are covered by
+   `MenuBuilderItemCrudTest` and `MenuBuilderMaxDepthTest` against the real database.
+3. **Control-panel template shape is manual only.** `BaseMenuBuilderController::cpAffordances()`
+   is pure and was written to be testable, but nothing asserts it any more: the template-shape
+   tests (affordance flags per control, no nested `<form>` on full-page screens, destructive
+   actions going through `formActions`, quick-add listing every `MenuBuilderItem::TYPES` entry,
+   filtered-tree row counts) were removed as source-text assertions and have no replacement.
+   `ControllerAuthorizationTest` proves the *gate* with real requests, which is the security
+   boundary; what is unverified is whether a control is *offered* to someone the gate would then
+   refuse — the UX regression most worth watching for. On the manual list.
+4. **Orphaned items are surfaced, not repaired.** The dashboard badges an item whose linked element
    was hard-deleted; nothing reassigns or cleans it up.
-4. **Two element changes fire no event at all.** (a) A **time-based entry status change** — a
+5. **Two element changes fire no event at all.** (a) A **time-based entry status change** — a
    pending entry reaching its `postDate`, a live entry passing its `expiryDate`. Bounded by the
    `cacheDuration` ceiling above, not eliminated. (b) **Garbage collection hard-deleting a
    trashed element** after `trashDuration`: `Gc` deletes rows directly. Harmless in practice — the
    cache was already invalidated when the element was soft-deleted, and the element resolves to
    the item's fallback either way — but it is not event-driven.
-5. **Commerce products (and any other element type) aren't synced.** MenuBuilder has no Commerce
+6. **Commerce products (and any other element type) aren't synced.** MenuBuilder has no Commerce
    dependency and no `product` link type; `MenuBuilderElementService::WATCHED_CLASSES` is
    entry/category/asset. A third-party link type registered through
    `MenuBuilderLinkResolver::EVENT_REGISTER_LINK_TYPES` resolves correctly but gets **no automatic
    cache invalidation** — its own plugin has to call
    `MenuBuilder::getInstance()->cache->invalidateGroups()`. Making the watched-class list itself
    extensible is the natural fix and is not implemented yet.
-6. **Preview has no unsaved-changes mode, and cannot have one as things stand.** Every CP mutation
+7. **Preview has no unsaved-changes mode, and cannot have one as things stand.** Every CP mutation
    writes immediately, so there is no draft to preview; a "preview my pending edits" mode would
    need a draft/session mechanism this plugin doesn't have, and inventing one only for preview
    would put a second, unvalidated copy of a menu's shape next to the real one. The screen
@@ -1326,6 +2113,20 @@ defaults to `true` — every rule on `MenuBuilderItem` now sets it to `false` ex
    simulate **time** — a "what will this look like next Monday" mode would need a simulated `now`
    on the `VisibilityContext`, which is a deliberate change to what `dateRange` means, not a
    preview option to add casually.
-7. **`MenuBuilderGroup::$settings` is still open-ended.** `siteIds` is the only documented key in
-   it. Whoever adds the next per-menu frontend setting should decide whether it deserves a validated
-   sub-model rather than another loose key.
+8. **A Navigation field resolves for the request's site, not the element's.** `MenuBuilderFieldValue::getTree()`
+   goes through `MenuBuilderResolver`, which is scoped to the current site by design — that is the
+   site whose element URLs, titles and cache entry a page is being built from. Rendering an element
+   fetched from *another* site (`craft.entries.site('de')` inside an English request) therefore
+   resolves its navigation against the English site. `isAvailableForSite()` still reports the
+   element's own site correctly. Resolving for an arbitrary site would mean plumbing a site ID
+   through the resolver, the link resolvers and the cache key, which is a change to the resolve
+   pipeline rather than to this field.
+
+   This is **pinned by a regression test** (`MenuBuilderFieldMultiSiteTest::testATreeResolvesForTheRequestsSiteNotTheElementsSite`)
+   rather than left implicit, so changing the behaviour has to be a deliberate decision that
+   updates the test, not an accident nobody notices.
+9. **`MenuBuilderGroup::$settings` is still open-ended.** Two keys live in it —
+   `siteIds` (`MenuBuilderGroupService::SITE_IDS_KEY`) and `customFields`
+   (`CUSTOM_FIELDS_KEY`), both lifted back out on read so `$settings` stays a plain bag. Whoever
+   adds the next per-menu frontend setting should decide whether it deserves a validated sub-model
+   rather than another loose key.

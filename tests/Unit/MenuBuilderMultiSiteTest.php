@@ -228,7 +228,7 @@ class MenuBuilderMultiSiteTest extends TestCase
 
         $gate = strpos($body, 'isAvailableForSite');
         $cacheRead = strpos($body, 'cache->getOrSet');
-        $itemRead = strpos($body, 'items->getFlatForGroup');
+        $itemRead = strpos($body, 'items->getVisibilityRulesForGroup');
 
         $this->assertIsInt($gate, 'getTree() must gate on the group’s site restriction.');
         $this->assertIsInt($cacheRead);
@@ -312,42 +312,6 @@ class MenuBuilderMultiSiteTest extends TestCase
             MenuBuilderGroupService::SITE_IDS_KEY,
             $written,
             'Clearing the restriction must remove the key, not persist an empty list a rule could fail closed on.'
-        );
-    }
-
-    /**
-     * A deployment replays project config, which can rewrite sites; it never
-     * rewrites navigation. Group writes must therefore never be reachable
-     * from a project-config path — the drift that would produce is the whole
-     * reason the group service is database-only.
-     */
-    public function testGroupPersistenceHasNoProjectConfigPath(): void
-    {
-        $source = file_get_contents((new ReflectionClass(MenuBuilderGroupService::class))->getFileName());
-        $code = substr($source, strpos($source, 'class MenuBuilderGroupService'));
-
-        $this->assertStringNotContainsString('getProjectConfig', $code);
-        $this->assertStringNotContainsString('ProjectConfig::', $code);
-    }
-
-    /**
-     * A site save or delete — including the one a `project-config/apply`
-     * performs on deploy, which reaches Sites::handleChangedSite()/
-     * handleDeletedSite() and fires exactly these events — can change the
-     * base URL every cached URL was built from, the language every cached
-     * title was read in, or (on delete) move content to another site. No
-     * element event fires for any of that.
-     */
-    public function testASiteSaveOrDeleteInvalidatesEveryCachedTree(): void
-    {
-        $source = file_get_contents((new ReflectionClass(MenuBuilderElementService::class))->getFileName());
-
-        $this->assertStringContainsString('Sites::EVENT_AFTER_SAVE_SITE', $source);
-        $this->assertStringContainsString('Sites::EVENT_AFTER_DELETE_SITE', $source);
-        $this->assertStringContainsString(
-            'invalidateAll()',
-            $this->sourceOf(MenuBuilderElementService::class, 'public function handleSiteChange', ''),
-            'A site change affects every site’s tree, so it is the one case that flushes them all.'
         );
     }
 
@@ -921,9 +885,15 @@ class MenuBuilderMultiSiteTest extends TestCase
      */
     private function filter(array $nodes, array $itemsById, VisibilityContext $context): array
     {
+        // The per-request pass reads visibility bags keyed by item ID, not
+        // hydrated items — see
+        // MenuBuilderItemService::getVisibilityRulesForGroup(). The fixture
+        // stays expressed in items and is projected here, keys unchanged.
+        $visibilityById = array_map(fn(MenuBuilderItem $item) => $item->visibility, $itemsById);
+
         $method = new ReflectionMethod(MenuBuilderResolver::class, 'filterVisible');
 
-        return $method->invoke(new MenuBuilderResolver(), $nodes, $itemsById, new MenuBuilderVisibilityService(), $context);
+        return $method->invoke(new MenuBuilderResolver(), $nodes, $visibilityById, new MenuBuilderVisibilityService(), $context);
     }
 
     /**

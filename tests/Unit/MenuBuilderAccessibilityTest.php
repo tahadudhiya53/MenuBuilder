@@ -428,6 +428,58 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(3, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]//a'), 'Every link is still reachable.');
     }
 
+    /**
+     * A disclosure control has to disclose something. A mega-menu parent can
+     * legitimately end up with no children — the config was set before the
+     * children were added, or every child is hidden from *this* visitor by a
+     * visibility rule, which is filtered per request before any macro sees
+     * the tree. Rendering the `<details>` anyway would put a control in the
+     * Tab order whose whole job is to open an empty `role="group"`.
+     */
+    public function testAMegaMenuParentWithNothingToShowRendersNoDisclosureAtAll(): void
+    {
+        $childless = $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
+
+        foreach (['details', 'none'] as $disclosure) {
+            $html = $this->renderNav([$childless], disclosure: $disclosure);
+
+            $this->assertCount(1, $this->query($html, '//li/a'), "The item itself is still a link ($disclosure).");
+            $this->assertCount(0, $this->query($html, '//details'), "No control that opens nothing ($disclosure).");
+            $this->assertCount(0, $this->query($html, '//summary'), "($disclosure)");
+            $this->assertCount(
+                0,
+                $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]'),
+                "No empty group announced to a screen reader ($disclosure)."
+            );
+        }
+    }
+
+    /** Same guarantee for a template that calls the renderer itself, without `render()` in front of it. */
+    public function testCallingTheMegaMenuRendererDirectlyOnAChildlessNodeRendersNothing(): void
+    {
+        $childless = $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
+
+        $this->assertSame('', trim($this->renderMegaMenuMacro($childless)));
+        $this->assertSame('', trim($this->renderMegaMenuMacro($childless, disclosure: 'none')));
+        $this->assertNotSame('', trim($this->renderMegaMenuMacro($this->megaParent())), 'A parent with children still renders its panel.');
+    }
+
+    /**
+     * The per-visitor case of the same rule: a panel whose every child is
+     * hidden from this visitor is filtered down to a childless parent
+     * (MenuBuilderResolver::filterVisible() rebuilds the node with
+     * `withChildren()`), and must then render no disclosure either.
+     */
+    public function testAPanelEmptiedByVisibilityFilteringRendersNoDisclosure(): void
+    {
+        $filtered = $this->megaParent()->withChildren([]);
+
+        $html = $this->renderNav([$filtered]);
+
+        $this->assertCount(0, $this->query($html, '//details'));
+        $this->assertCount(0, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]'));
+    }
+
     /** The mode reaches every level of the tree, not only the node it was called on. */
     public function testTheDisclosureModeIsThreadedThroughTheWholeTree(): void
     {
@@ -448,7 +500,7 @@ class MenuBuilderAccessibilityTest extends TestCase
      * could drift.
      *
      * Its keyboard behaviour (Escape, arrows, Home/End) is browser
-     * behaviour and is verified manually — see ACCESSIBILITY.md. There is no
+     * behaviour and is verified manually — see README.md → Accessibility. There is no
      * JavaScript test runner in this plugin, and adding npm + a DOM
      * implementation to a Craft plugin that ships five hand-written scripts
      * would be a build system bought for one file; what that would buy is

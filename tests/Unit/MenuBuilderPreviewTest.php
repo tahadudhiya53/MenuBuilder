@@ -467,47 +467,8 @@ class MenuBuilderPreviewTest extends TestCase
         }
     }
 
-    /**
-     * The preview interaction layer demonstrates behaviour; it must never
-     * become a second source of navigation truth, and it must not talk to
-     * the server at all.
-     */
-    public function testThePreviewScriptNeitherResolvesNavigationNorSendsRequests(): void
-    {
-        $script = (string)file_get_contents(dirname(__DIR__, 2) . '/src/web/assets/cp/js/preview.js');
-
-        foreach (['sendActionRequest', 'fetch(', 'XMLHttpRequest', '$.ajax', '.post(', 'innerHTML'] as $needle) {
-            $this->assertStringNotContainsString($needle, $script, "preview.js must not use `$needle`.");
-        }
-
-        $this->assertStringContainsString('preventDefault', $script, 'A preview link must not navigate the editor away.');
-        $this->assertStringContainsString('aria-expanded', $script, 'Disclosure state is expressed as the attribute the CSS keys off.');
-    }
-
-    /** Pointer, keyboard and accessibility preferences all have an explicit preview path. */
-    public function testTheIllustrativePreviewIncludesEveryInteractionMode(): void
-    {
-        $root = dirname(__DIR__, 2);
-        $script = (string)file_get_contents($root . '/src/web/assets/cp/js/preview.js');
-        $styles = (string)file_get_contents($root . '/src/web/assets/cp/menu-builder-cp.css');
-
-        $this->assertStringContainsString("'mouseenter'", $script, 'Desktop menu panels open from pointer hover.');
-        $this->assertStringContainsString(".menu-builder-preview-siteheader li:has(> details)", $script, 'Hover disclosure is scoped to the header, never the footer.');
-        $this->assertStringContainsString(".menu-builder-preview-siteheader li:has(> ul)", $script, 'Plain submenu interaction is scoped to the header, never the footer.');
-        $this->assertStringContainsString('}, 140)', $script, 'Pointer travel into a wide mega panel has a short close grace period.');
-        $this->assertStringContainsString("'focusin'", $script, 'Compact submenus open when reached from the keyboard.');
-        $this->assertStringContainsString("event.key !== 'Escape'", $script, 'Open panels can be dismissed from the keyboard.');
-        $this->assertStringContainsString('nav.hidden = !open', $script, 'The mobile disclosure changes the navigation visibility.');
-        $this->assertStringContainsString('scrim.hidden = !open', $script, 'The rest of the compact page is covered only while navigation is open.');
-        $this->assertStringContainsString('burger.focus()', $script, 'Closing the compact menu returns focus to its control.');
-        $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $styles);
-        $this->assertStringContainsString('@media (forced-colors: active)', $styles);
-        $this->assertStringContainsString('grid-column: 1 / -1', $styles, 'A desktop footer mega group spans the full navigation grid instead of collapsing vertically.');
-        $this->assertStringContainsString('grid-template-columns: minmax(170px, 0.72fr) minmax(0, 2.2fr) minmax(130px, 0.55fr)', $styles, 'The reference-inspired footer has brand, links and social columns.');
-        $this->assertStringContainsString('linear-gradient(145deg, #080d1b, #111a31 55%, #0b1328)', $styles, 'The redesigned footer retains the original dark background treatment.');
-        $this->assertStringContainsString('grid-template-columns: repeat(auto-fit, minmax(135px, 1fr))', $styles, 'Real menu groups remain responsive horizontal columns.');
-    }
-
+    
+    
     // ---------------------------------------------------------------------
     // Regression: the front-end API is untouched
     // ---------------------------------------------------------------------

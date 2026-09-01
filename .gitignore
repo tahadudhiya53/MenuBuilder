@@ -2,3 +2,9 @@
 composer.phar
 .phpunit.result.cache
 .DS_Store
+
+# Integration harness: a throwaway Craft install (storage, compiled templates,
+# generated config) built by tests/integration-bootstrap.php against its own
+# database. Nothing here is source.
+/tests/_craft/storage/
+/.phpunit.cache/

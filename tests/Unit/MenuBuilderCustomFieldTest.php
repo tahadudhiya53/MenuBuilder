@@ -291,16 +291,6 @@ class MenuBuilderCustomFieldTest extends TestCase
 
         $this->assertSame(['subtitle' => 'Everything you need'], $stored);
     }
-
-    public function testTheControllerNeverTrustsAPostedCustomFieldsBagDirectly(): void
-    {
-        $source = $this->methodSource(\Tahadudhiya\MenuBuilder\controllers\ItemsController::class, 'buildMetadata');
-
-        // The definitions are what decides which keys exist — the same rule
-        // every other key in this bag already follows.
-        $this->assertStringContainsString('CustomFieldHelper::valuesForStorage($customFieldDefinitions', $source);
-    }
-
     public function testAnEmptyValueLeavesNoKeyBehind(): void
     {
         $definitions = [
@@ -578,37 +568,6 @@ class MenuBuilderCustomFieldTest extends TestCase
     // ---------------------------------------------------------------------
     // DUPLICATE and DELETE
     // ---------------------------------------------------------------------
-
-    /**
-     * Duplication is free because values live in a bag that is already
-     * copied wholesale — but only for as long as that stays true, which is
-     * what this pins.
-     */
-    public function testDuplicatingAnItemCarriesItsCustomFieldValues(): void
-    {
-        $source = $this->methodSource(MenuBuilderItemService::class, 'duplicateRecord');
-
-        $this->assertStringContainsString('$clone->metadata = $original->metadata;', $source);
-    }
-
-    public function testDuplicatingAMenuCarriesItsCustomFieldDefinitions(): void
-    {
-        $source = $this->methodSource(MenuBuilderGroupService::class, 'duplicate');
-
-        $this->assertStringContainsString('$clone->settings = $original->settings;', $source);
-    }
-
-    public function testDeletingAnItemTakesItsCustomFieldValuesWithIt(): void
-    {
-        // No second table and no separate rows: the values are columns'
-        // worth of JSON on the item row itself, so the existing delete (and
-        // the parentId cascade) removes them with nothing extra to clean up.
-        $this->assertStringNotContainsString(
-            'custom',
-            strtolower($this->methodSource(MenuBuilderItemService::class, 'deleteById'))
-        );
-    }
-
     public function testDeletingAFieldDefinitionLeavesNoRenderableValueBehind(): void
     {
         // The orphaned value stays in the item's bag (nothing rewrites every

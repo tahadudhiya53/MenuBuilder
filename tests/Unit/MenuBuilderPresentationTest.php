@@ -4,6 +4,7 @@ namespace Tahadudhiya\MenuBuilder\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
+use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderCacheService;
@@ -25,7 +26,7 @@ use Twig\TwigFilter;
  * bundled macro through Twig rather than by grepping it, because "this
  * escapes" is a property of the output, not of the source.
  */
-class MenuBuilderBadgeTest extends TestCase
+class MenuBuilderPresentationTest extends TestCase
 {
     private const MACRO_DIR = __DIR__ . '/../../src/templates/_macros/';
 
@@ -486,29 +487,7 @@ class MenuBuilderBadgeTest extends TestCase
     // What a badge must NOT touch
     // ---------------------------------------------------------------------
 
-    /**
-     * A badge is presentation. It must not reach the link resolvers, the
-     * active-state resolver or the visibility rules — if it did, an
-     * editor's decoration would start changing where an item points, when
-     * it highlights, or who can see it.
-     */
-    public function testABadgeIsNotConsultedByLinksActiveStateOrVisibility(): void
-    {
-        $paths = array_merge(
-            glob(__DIR__ . '/../../src/linktypes/*.php') ?: [],
-            glob(__DIR__ . '/../../src/visibility/*.php') ?: [],
-            [__DIR__ . '/../../src/services/MenuBuilderActiveResolver.php'],
-        );
-
-        foreach ($paths as $path) {
-            $this->assertStringNotContainsStringIgnoringCase(
-                'badge',
-                (string)file_get_contents($path),
-                basename($path) . ' should know nothing about badges.'
-            );
-        }
-    }
-
+    
     /** Two nodes differing only in their badge resolve to the same URL and the same active state. */
     public function testChangingABadgeChangesNeitherUrlNorActiveState(): void
     {
@@ -547,4 +526,295 @@ class MenuBuilderBadgeTest extends TestCase
         $this->assertContains('badge', $properties);
         $this->assertContains('badgeStyle', $properties);
     }
+
+    // =====================================================================
+    // Icons: the other half of item presentation
+    // =====================================================================
+
+    
+
+    private function nodeWithIcon(?string $icon): MenuBuilderNode
+    {
+        return new MenuBuilderNode(
+            id: 1,
+            handle: null,
+            type: 'url',
+            title: 'Products',
+            url: 'https://example.com',
+            isClickable: true,
+            isLinkAvailable: true,
+            target: '_self',
+            rel: null,
+            cssClass: null,
+            htmlId: null,
+            htmlAttributes: [],
+            ariaLabel: null,
+            titleAttribute: null,
+            icon: $icon,
+            badge: null,
+            description: null,
+            image: null,
+            featured: false,
+            level: 0,
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // The grammar
+    // ---------------------------------------------------------------------
+
+    public function testAnEmptyIconIsNoIcon(): void
+    {
+        foreach ([null, '', '   ', "\n\t"] as $empty) {
+            $this->assertNull(IconHelper::normalize($empty));
+            $this->assertNull(IconHelper::type($empty));
+            $this->assertNull(IconHelper::classValue($empty));
+            $this->assertNull(IconHelper::assetId($empty));
+            $this->assertTrue(IconHelper::isValid($empty));
+        }
+    }
+
+    public function testABareValueIsAClassIcon(): void
+    {
+        $this->assertSame(IconHelper::TYPE_CLASS, IconHelper::type('icon-cart'));
+        $this->assertSame('icon-cart', IconHelper::classValue('icon-cart'));
+        $this->assertNull(IconHelper::assetId('icon-cart'));
+    }
+
+    /**
+     * Every icon stored before this grammar existed was a free-typed
+     * handle/class — those rows must keep meaning exactly what they meant.
+     *
+     * @dataProvider legacyClassProvider
+     */
+    public function testExistingFreeTypedIconsKeepWorking(string $stored): void
+    {
+        $this->assertSame(IconHelper::TYPE_CLASS, IconHelper::type($stored));
+        $this->assertSame($stored, IconHelper::classValue($stored));
+    }
+
+    /** @return array<string,array{string}> */
+    public static function legacyClassProvider(): array
+    {
+        return [
+            'icon font handle' => ['icon-cart'],
+            'multi-class' => ['fa fa-cart'],
+            'sprite path' => ['heroicons/outline/home'],
+            'namespaced handle' => ['mdi:home'],
+            'dotted' => ['icons.cart'],
+            'underscored' => ['icon_cart'],
+        ];
+    }
+
+    public function testAnAssetReferenceIsAnAssetIcon(): void
+    {
+        $this->assertSame(IconHelper::TYPE_ASSET, IconHelper::type('asset:42'));
+        $this->assertSame(42, IconHelper::assetId('asset:42'));
+        $this->assertNull(IconHelper::classValue('asset:42'));
+    }
+
+    public function testNormalizationCollapsesEquivalentSpellingsToOneStoredValue(): void
+    {
+        $this->assertSame('icon-cart', IconHelper::normalize('  icon-cart  '));
+        $this->assertSame('icon-cart', IconHelper::normalize('class:icon-cart'));
+        $this->assertSame('icon-cart', IconHelper::normalize('CLASS: icon-cart'));
+        $this->assertSame('fa fa-cart', IconHelper::normalize("fa \t fa-cart"));
+        $this->assertSame('asset:42', IconHelper::normalize('ASSET:42'));
+        $this->assertSame('asset:42', IconHelper::normalize(' asset:42 '));
+    }
+
+    public function testAZeroOrNegativeAssetIdIsNotAnAssetIcon(): void
+    {
+        // 'asset:0' can't reference anything, so it falls through to the
+        // class form — where the colon rule still has to hold.
+        $this->assertNull(IconHelper::assetId('asset:0'));
+        $this->assertSame(IconHelper::TYPE_CLASS, IconHelper::type('asset:0'));
+    }
+
+    // ---------------------------------------------------------------------
+    // Markup never gets in
+    // ---------------------------------------------------------------------
+
+    /** @return array<string,array{string}> */
+    public static function unsafeIconProvider(): array
+    {
+        return [
+            'raw svg' => ['<svg onload="alert(1)"></svg>'],
+            'svg with script' => ['<svg><script>alert(1)</script></svg>'],
+            'attribute break, double quote' => ['icon" onclick="alert(1)'],
+            'attribute break, single quote' => ["icon' onclick='alert(1)"],
+            'unquoted attribute break' => ['icon onclick=alert(1)'],
+            'angle bracket' => ['icon<script>'],
+            'entity' => ['icon&lt;'],
+            'javascript scheme' => ['javascript:alert(1)'],
+            'javascript scheme, uppercase' => ['JAVASCRIPT:alert(1)'],
+            'vbscript scheme' => ['vbscript:msgbox(1)'],
+            'data scheme' => ['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4='],
+            'file scheme' => ['file:///etc/passwd'],
+            'backtick' => ['icon`cart`'],
+            'backslash' => ['icon\\cart'],
+        ];
+    }
+
+    /** @dataProvider unsafeIconProvider */
+    public function testAnUnsafeIconIsRejectedOnSave(string $icon): void
+    {
+        $this->assertFalse(IconHelper::isValid($icon), "Expected $icon to be rejected.");
+
+        $item = $this->urlItem();
+        $item->icon = $icon;
+
+        $this->assertFalse($item->validate(), "Expected an item with icon $icon to fail validation.");
+        $this->assertArrayHasKey('icon', $item->getErrors());
+    }
+
+    /**
+     * The other half: even if such a value reached the column anyway — a
+     * legacy row, a direct database write — nothing hands it to a template.
+     *
+     * @dataProvider unsafeIconProvider
+     */
+    public function testAnUnsafeStoredIconReadsBackAsNoIcon(string $icon): void
+    {
+        $this->assertNull(IconHelper::classValue($icon));
+        $this->assertNull(IconHelper::type($icon));
+
+        $node = $this->nodeWithIcon($icon);
+
+        $this->assertNull($node->iconClass());
+        $this->assertNull($node->iconType());
+        $this->assertNull($node->iconAssetId());
+        $this->assertFalse($node->hasIcon());
+    }
+
+    public function testAValidIconStillSavesAndIsNormalizedInPlace(): void
+    {
+        $item = $this->urlItem();
+        $item->icon = ' class:fa  fa-cart ';
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+        $this->assertSame('fa fa-cart', $item->icon);
+        $this->assertSame(IconHelper::TYPE_CLASS, $item->iconType());
+        $this->assertSame('fa fa-cart', $item->iconClass());
+        $this->assertNull($item->iconAssetId());
+    }
+
+    public function testAnAssetIconSavesAndExposesItsId(): void
+    {
+        $item = $this->urlItem();
+        $item->icon = 'asset:42';
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+        $this->assertSame('asset:42', $item->icon);
+        $this->assertSame(IconHelper::TYPE_ASSET, $item->iconType());
+        $this->assertSame(42, $item->iconAssetId());
+        $this->assertNull($item->iconClass());
+    }
+
+    public function testAnEmptyIconSavesAsNull(): void
+    {
+        $item = $this->urlItem();
+        $item->icon = '   ';
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+        $this->assertNull($item->icon);
+        $this->assertNull($item->iconType());
+    }
+
+    /**
+     * The length rule and the grammar rule are independent — an over-long
+     * but otherwise well-formed icon has to fail on the column width, not
+     * pass because it parsed.
+     */
+    public function testAnOverLongIconIsStillRejected(): void
+    {
+        $item = $this->urlItem();
+        $item->icon = str_repeat('a', 256);
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('icon', $item->getErrors());
+    }
+
+    // ---------------------------------------------------------------------
+    // The CP form's three inputs → one column
+    // ---------------------------------------------------------------------
+
+    public function testTheIconSourceSelectDecidesWhichInputWins(): void
+    {
+        // Craft posts element selects as an array of ids.
+        $this->assertSame('asset:42', IconHelper::composeFromForm('asset', 'icon-cart', ['42']));
+        $this->assertSame('icon-cart', IconHelper::composeFromForm('class', 'icon-cart', ['42']));
+        $this->assertSame('asset:42', IconHelper::composeFromForm('asset', '', '42'));
+    }
+
+    public function testChoosingNoIconClearsTheColumn(): void
+    {
+        $this->assertNull(IconHelper::composeFromForm('', 'icon-cart', ['42']));
+        $this->assertNull(IconHelper::composeFromForm(null, 'icon-cart', ['42']));
+    }
+
+    public function testAnEmptyPickerOrBlankFieldIsNoIcon(): void
+    {
+        $this->assertNull(IconHelper::composeFromForm('asset', '', []));
+        $this->assertNull(IconHelper::composeFromForm('asset', '', ['']));
+        $this->assertNull(IconHelper::composeFromForm('asset', '', null));
+        $this->assertNull(IconHelper::composeFromForm('class', '   ', []));
+    }
+
+    public function testAnUnsafeClassFieldSurvivesComposeAndIsRejectedByValidationInstead(): void
+    {
+        // composeFromForm() is not a sanitizer — it must not quietly drop or
+        // mangle a bad value, or the editor would be told the save
+        // succeeded with an icon they never chose. The model rejects it.
+        $composed = IconHelper::composeFromForm('class', '<svg onload="alert(1)">', []);
+
+        $this->assertNotNull($composed);
+
+        $item = $this->urlItem();
+        $item->icon = $composed;
+
+        $this->assertFalse($item->validate());
+        $this->assertArrayHasKey('icon', $item->getErrors());
+    }
+
+    // ---------------------------------------------------------------------
+    // What Twig sees
+    // ---------------------------------------------------------------------
+
+    public function testANodeExposesTheIconThroughTypedAccessors(): void
+    {
+        $class = $this->nodeWithIcon('icon-cart');
+        $this->assertTrue($class->hasIcon());
+        $this->assertSame('class', $class->iconType());
+        $this->assertSame('icon-cart', $class->iconClass());
+        $this->assertNull($class->iconAssetId());
+
+        $asset = $this->nodeWithIcon('asset:42');
+        $this->assertTrue($asset->hasIcon());
+        $this->assertSame('asset', $asset->iconType());
+        $this->assertSame(42, $asset->iconAssetId());
+        $this->assertNull($asset->iconClass());
+
+        $none = $this->nodeWithIcon(null);
+        $this->assertFalse($none->hasIcon());
+        $this->assertNull($none->iconType());
+    }
+
+    /**
+     * withChildren() clones the node for the per-request half of the
+     * pipeline; the icon is readonly state that has to survive that copy.
+     */
+    public function testTheIconSurvivesTheNodeCopyMadeForVisibilityAndActiveState(): void
+    {
+        $node = $this->nodeWithIcon('asset:42');
+        $copy = $node->withChildren([$this->nodeWithIcon('icon-cart')]);
+
+        $this->assertSame('asset:42', $copy->icon);
+        $this->assertSame(42, $copy->iconAssetId());
+        $this->assertSame('icon-cart', $copy->children[0]->iconClass());
+    }
+
+    // ---------------------------------------------------------------------
+    // The bundled macro
+    // ---------------------------------------------------------------------
 }

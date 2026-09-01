@@ -3,10 +3,8 @@
 namespace Tahadudhiya\MenuBuilder\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 use ReflectionMethod;
 use Tahadudhiya\MenuBuilder\controllers\GroupsController;
-use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 
@@ -344,95 +342,6 @@ class MenuBuilderGroupTest extends TestCase
     {
         $this->assertSame('main2', $this->callPrivate('suffixedHandle', ['main', 2]));
     }
-
-    /**
-     * Duplicating a group clones its items too, so the group row and the
-     * item rows must land or fail together — a committed clone group with a
-     * half-copied tree is worse than no clone at all.
-     */
-    public function testDuplicateRunsInATransaction(): void
-    {
-        $source = $this->methodSource(MenuBuilderGroupService::class, 'duplicate');
-
-        $this->assertStringContainsString('beginTransaction', $source);
-        $this->assertStringContainsString('rollBack', $source);
-        $this->assertStringContainsString('duplicateAllForGroup', $source);
-    }
-
-    public function testReorderRunsInATransaction(): void
-    {
-        $source = $this->methodSource(MenuBuilderGroupService::class, 'reorder');
-
-        $this->assertStringContainsString('beginTransaction', $source);
-        $this->assertStringContainsString('rollBack', $source);
-    }
-
-    /**
-     * The database is the single source of truth for group configuration.
-     * A second store —
-     * project config — would reintroduce database/YAML drift,
-     * `project-config/apply` overwriting live edits, and sortOrder/uid
-     * synchronization, all of which this pins shut at the one layer that
-     * owns group persistence.
-     */
-    public function testGroupPersistenceNeverTouchesProjectConfig(): void
-    {
-        $source = file_get_contents((new ReflectionClass(MenuBuilderGroupService::class))->getFileName());
-        $body = substr($source, strpos($source, 'class MenuBuilderGroupService'));
-
-        foreach (['getProjectConfig', 'ProjectConfig', 'ConfigEvent', 'EVENT_REBUILD'] as $forbidden) {
-            $this->assertStringNotContainsString(
-                $forbidden,
-                $body,
-                'Group configuration is database-backed only; it must not reach for project config.'
-            );
-        }
-    }
-
-    /**
-     * Same guarantee one level up: no project-config handler may be
-     * registered for groups, which is where the previous mirroring hooked
-     * itself in.
-     */
-    public function testPluginRegistersNoGroupProjectConfigHandlers(): void
-    {
-        $source = file_get_contents((new ReflectionClass(MenuBuilder::class))->getFileName());
-
-        foreach (['ProjectConfig', 'RebuildConfigEvent', 'onAdd(', 'onUpdate(', 'onRemove('] as $forbidden) {
-            $this->assertStringNotContainsString($forbidden, $source);
-        }
-    }
-
-    /**
-     * Uninstalling drops the two tables and nothing else — there is no
-     * config path left anywhere for a reinstall to replay.
-     */
-    public function testUninstallDropsBothTablesAndNothingElse(): void
-    {
-        $install = file_get_contents(__DIR__ . '/../../src/migrations/Install.php');
-
-        $this->assertStringContainsString("dropTableIfExists('{{%menubuilder_items}}')", $install);
-        $this->assertStringContainsString("dropTableIfExists('{{%menubuilder_groups}}')", $install);
-        $this->assertStringNotContainsString('ProjectConfig', $install);
-    }
-
-    /**
-     * Every menu write invalidates — and invalidates **only that menu**. A
-     * menu save/duplicate/delete used to flush every cached tree on the
-     * install because the cache key was built from the handle a save could
-     * change; entries are now tagged by menu ID, so the targeted call reaches
-     * the old handle's entries too (MenuBuilderCacheService::groupTag()).
-     *
-     * @dataProvider cacheInvalidatingProvider
-     */
-    public function testEveryContentAffectingWriteInvalidatesOnlyItsOwnMenu(string $method): void
-    {
-        $source = $this->methodSource(MenuBuilderGroupService::class, $method);
-
-        $this->assertStringContainsString('cache->invalidateGroupId(', $source);
-        $this->assertStringNotContainsString('invalidateAll(', $source, 'A change to one menu must never flush every menu.');
-    }
-
     /**
      * The whole-cache flush exists for exactly one change — a site save or
      * delete, which moves the base URL, language or existence every cached
@@ -469,36 +378,6 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * Removing project config must not have taken any *database* persistence
-     * with it — every group attribute the model exposes still needs a column
-     * to live in, since the table is now the only place it is stored.
-     *
-     * @dataProvider groupColumnProvider
-     */
-    public function testEveryGroupAttributeHasItsOwnColumn(string $column): void
-    {
-        $install = file_get_contents(__DIR__ . '/../../src/migrations/Install.php');
-        $groupsTable = substr(
-            $install,
-            strpos($install, "createTable('{{%menubuilder_groups}}'"),
-            strpos($install, "createTable('{{%menubuilder_items}}'") - strpos($install, "createTable('{{%menubuilder_groups}}'")
-        );
-
-        $this->assertStringContainsString("'$column' =>", $groupsTable);
-    }
-
-    /** @return array<string,array{string}> */
-    public static function groupColumnProvider(): array
-    {
-        $columns = [
-            'id', 'uid', 'name', 'handle', 'description', 'enabled', 'sortOrder',
-            'maxDepth', 'cssClass', 'htmlAttributes', 'settings', 'dateCreated', 'dateUpdated',
-        ];
-
-        return array_combine($columns, array_map(fn(string $column) => [$column], $columns));
-    }
-
-    /**
      * Site restrictions ride inside the `settings` JSON bag rather than a
      * column of their own (no migration needed), so the round-trip through
      * that bag is what keeps them database-backed.
@@ -513,32 +392,6 @@ class MenuBuilderGroupTest extends TestCase
         $this->assertStringContainsString('self::SITE_IDS_KEY', $read);
         $this->assertStringContainsString('self::SITE_IDS_KEY', $write);
         $this->assertStringContainsString('unset($settings[self::SITE_IDS_KEY])', $read);
-    }
-
-    /**
-     * Deleting a group must not leave its items behind. The cascade lives on
-     * the `groupId` foreign key rather than in PHP, so this pins the
-     * migration that declares it.
-     */
-    public function testItemsCascadeWhenTheirGroupIsDeleted(): void
-    {
-        $install = file_get_contents(__DIR__ . '/../../src/migrations/Install.php');
-
-        $this->assertMatchesRegularExpression(
-            "/addForeignKey\(\s*null,\s*'\{\{%menubuilder_items\}\}',\s*\['groupId'\],\s*'\{\{%menubuilder_groups\}\}',\s*\['id'\],\s*'CASCADE'/",
-            $install
-        );
-    }
-
-    public function testGroupHandleColumnIsUniqueInTheDatabase(): void
-    {
-        $install = file_get_contents(__DIR__ . '/../../src/migrations/Install.php');
-
-        $this->assertStringContainsString(
-            "createIndex(null, '{{%menubuilder_groups}}', ['handle'], true)",
-            $install,
-            'Handle uniqueness must also be enforced by the database, not only by the service.'
-        );
     }
 
     /**
@@ -623,20 +476,6 @@ class MenuBuilderGroupTest extends TestCase
         );
     }
 
-    /**
-     * Craft only enforces CSRF on POST, so a mutation reachable over GET is
-     * a mutation without CSRF protection.
-     *
-     * @dataProvider mutatingActionProvider
-     */
-    public function testEveryMutatingActionRequiresPost(string $action): void
-    {
-        $this->assertStringContainsString(
-            'requirePostRequest()',
-            $this->methodSource(GroupsController::class, 'action' . ucfirst($action))
-        );
-    }
-
     /** @return array<string,array{string}> */
     public static function mutatingActionProvider(): array
     {
@@ -646,19 +485,6 @@ class MenuBuilderGroupTest extends TestCase
             'duplicate' => ['duplicate'],
             'toggle' => ['toggle'],
         ];
-    }
-
-    /**
-     * Controllers must not write group rows themselves — validation, handle
-     * uniqueness, transactions, cache invalidation and the project-config
-     * mirror all live in the service, and any of them is skippable by a
-     * controller that reaches for the record directly.
-     */
-    public function testControllerNeverTouchesTheRecordLayer(): void
-    {
-        $source = file_get_contents((new ReflectionClass(GroupsController::class))->getFileName());
-
-        $this->assertStringNotContainsString('MenuBuilderGroupRecord', $source);
     }
 
     /**

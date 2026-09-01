@@ -881,6 +881,42 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertFalse($item->validate());
     }
 
+    /**
+     * The flags are read straight out of a JSON bag, so a string "true" or a
+     * string "3" written by anything other than the editor has to be
+     * rejected rather than quietly coerced — `buildMegaMenuConfig()` and
+     * `megaMenuColumns()` both test for `is_int`, and a stored string would
+     * silently fall back to one column at render time.
+     */
+    public function testMegaMenuFlagsMustBeRealBooleansAndIntegers(): void
+    {
+        $item = $this->urlItem();
+        $item->metadata = ['megaMenu' => ['enabled' => 'yes', 'columns' => 2]];
+        $this->assertFalse($item->validate());
+
+        $item->metadata = ['megaMenu' => ['enabled' => true, 'columns' => '3']];
+        $this->assertFalse($item->validate());
+
+        $item->metadata = ['megaMenuColumn' => '2'];
+        $this->assertFalse($item->validate());
+    }
+
+    /**
+     * Mega-menu config is presentation layered on the hierarchy, not an item
+     * type: any item may carry it, and an item may be both a mega-menu
+     * parent and a member of its own parent's column.
+     */
+    public function testAnyItemMayBeBothAMegaMenuParentAndAColumnMember(): void
+    {
+        $item = $this->urlItem();
+        $item->metadata = [
+            'megaMenu' => ['enabled' => true, 'columns' => 6],
+            'megaMenuColumn' => 6,
+        ];
+
+        $this->assertTrue($item->validate(), json_encode($item->getErrors()));
+    }
+
     public function testMegaMenuColumnMustBeInRange(): void
     {
         $item = $this->urlItem();

@@ -53,9 +53,15 @@ trait NavMacroRendering
      * explicit because Craft's loader appends it and a bare Twig
      * FilesystemLoader does not.)
      */
-    private const HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.render(nodes, disclosure, idPrefix) }}';
+    private const HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.render(nodes, disclosure, idPrefix, viewport) }}';
 
-    private const LANDMARK_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderNav(menu, label, disclosure) }}';
+    /**
+     * The mega-menu renderer called on its own, the way a hand-rolled
+     * template that owns its outer markup calls it.
+     */
+    private const MEGA_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderMegaMenu(node, disclosure, idPrefix, viewport) }}';
+
+    private const LANDMARK_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderNav(menu, label, disclosure, idPrefix, viewport) }}';
 
     private const BREADCRUMB_HARNESS = '{% import "_macros/breadcrumbs.twig" as crumbs %}{{ crumbs.render(trail, label, linkCurrent) }}';
 
@@ -66,6 +72,7 @@ trait NavMacroRendering
             new ArrayLoader([
                 '__nav' => self::HARNESS,
                 '__navLandmark' => self::LANDMARK_HARNESS,
+                '__megaMenu' => self::MEGA_HARNESS,
                 '__breadcrumbs' => self::BREADCRUMB_HARNESS,
                 // The plugin's templates refer to each other the way Craft
                 // resolves them — by the registered `menu-builder` root
@@ -128,9 +135,15 @@ trait NavMacroRendering
      *
      * @param MenuBuilderNode[] $nodes
      */
-    protected function renderNav(array $nodes, string $disclosure = 'details'): string
+    protected function renderNav(array $nodes, string $disclosure = 'details', string $viewport = 'both'): string
     {
-        return $this->twig()->render('__nav', ['nodes' => $nodes, 'disclosure' => $disclosure, 'idPrefix' => '']);
+        return $this->twig()->render('__nav', ['nodes' => $nodes, 'disclosure' => $disclosure, 'idPrefix' => '', 'viewport' => $viewport]);
+    }
+
+    /** `renderMegaMenu()` on one node, with no `render()` around it. */
+    protected function renderMegaMenuMacro(MenuBuilderNode $node, string $disclosure = 'details', string $viewport = 'both'): string
+    {
+        return $this->twig()->render('__megaMenu', ['node' => $node, 'disclosure' => $disclosure, 'idPrefix' => '', 'viewport' => $viewport]);
     }
 
     /**
@@ -140,7 +153,7 @@ trait NavMacroRendering
      * @param MenuBuilderNode[] $nodes
      * @param array<string,mixed> $groupConfig
      */
-    protected function renderNavLandmark(array $nodes, array $groupConfig = [], ?string $label = null, string $disclosure = 'details'): string
+    protected function renderNavLandmark(array $nodes, array $groupConfig = [], ?string $label = null, string $disclosure = 'details', string $viewport = 'both', string $idPrefix = ''): string
     {
         $group = new MenuBuilderGroup($groupConfig + ['name' => 'Main', 'handle' => 'main']);
 
@@ -148,6 +161,28 @@ trait NavMacroRendering
             'menu' => new MenuBuilderTree($group, $nodes),
             'label' => $label,
             'disclosure' => $disclosure,
+            'idPrefix' => $idPrefix,
+            'viewport' => $viewport,
+        ]);
+    }
+
+    /**
+     * The whole navigation for one viewport, exactly as a front-end template
+     * builds it: an already-resolved tree narrowed with `forViewport()`, then
+     * rendered with the matching macro mode.
+     *
+     * @param MenuBuilderNode[] $nodes
+     */
+    protected function renderNavForViewport(array $nodes, string $viewport, ?string $label = null, string $disclosure = 'details'): string
+    {
+        $group = new MenuBuilderGroup(['name' => 'Main', 'handle' => 'main']);
+
+        return $this->twig()->render('__navLandmark', [
+            'menu' => (new MenuBuilderTree($group, $nodes))->forViewport($viewport),
+            'label' => $label,
+            'disclosure' => $disclosure,
+            'idPrefix' => $viewport,
+            'viewport' => $viewport,
         ]);
     }
 
@@ -188,11 +223,19 @@ trait NavMacroRendering
                 'nodes' => $nodes,
                 'disclosure' => 'details',
                 'idPrefix' => 'preview-header',
+                // 'both', deliberately: the control-panel preview renders one
+                // markup for its device toggle, which is a *width* and not a
+                // user agent (see ARCHITECTURE.md "Preview"). Mobile item
+                // metadata is not applied there — see the front-end viewport
+                // tests in MenuBuilderMobileRenderTest for what a real
+                // template gets.
+                'viewport' => 'both',
             ]), 'UTF-8'),
             'footerPreviewMarkup' => new Markup($twig->render('__nav', [
                 'nodes' => $nodes,
                 'disclosure' => 'none',
                 'idPrefix' => 'preview-footer',
+                'viewport' => 'both',
             ]), 'UTF-8'),
             'isMobile' => $isMobile,
             'placement' => $placement,
@@ -266,6 +309,7 @@ trait NavMacroRendering
         array $htmlAttributes = [],
         bool $isActive = false,
         bool $isActiveAncestor = false,
+        array $mobile = [],
     ): MenuBuilderNode {
         $node = new MenuBuilderNode(
             id: $id,
@@ -292,6 +336,7 @@ trait NavMacroRendering
             megaMenuColumn: $megaMenuColumn,
             isDynamic: $isDynamic,
             badgeStyle: $badgeStyle,
+            mobile: $mobile,
         );
         $node->children = $children;
         $node->isActive = $isActive;

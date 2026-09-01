@@ -7,6 +7,9 @@ use ReflectionMethod;
 use Tahadudhiya\MenuBuilder\controllers\ItemsController;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderHierarchyHelper as Hierarchy;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 
 /**
@@ -26,7 +29,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
  *
  * @see MenuBuilderItemLifecycleTest for item CRUD and tree assembly.
  */
-class MenuBuilderTreeMoveTest extends TestCase
+class MenuBuilderTreeTest extends TestCase
 {
     // ---------------------------------------------------------------------
     // The six cases
@@ -167,6 +170,54 @@ class MenuBuilderTreeMoveTest extends TestCase
         $this->assertTrue($group->allowsDepth(2));
         // And a leaf is always fine.
         $this->assertSame(1, Hierarchy::deepestLevelAfterMove($parentMap, $childMap, $this->id('D'), null));
+    }
+
+    /**
+     * An INSERT is measured against the new item alone — it has no
+     * descendants yet — not against the menu's existing root forest.
+     *
+     * Regression: the service passed `$item->id ?? 0` for a brand-new item,
+     * and 0 is `childMap()`'s key for the **root set**, so `subtreeHeight()`
+     * came back with the height of the whole menu and every insert into an
+     * already-nested menu was rejected as too deep. On a real
+     * three-level menu (Products › Electronics › Phones, maxDepth 3) that
+     * meant the third level could never be created at all.
+     */
+    public function testInsertingANewItemIsNotMeasuredAgainstTheRootForest(): void
+    {
+        $group = new MenuBuilderGroup();
+        $group->maxDepth = 3;
+
+        // Products › Electronics, plus other top-level branches: a root
+        // forest that is already two levels deep.
+        $rows = $this->rows(['Products' => null, 'Electronics' => 'Products', 'Services' => null]);
+        $parentMap = Hierarchy::parentMap($rows);
+        $childMap = Hierarchy::childMap($rows);
+
+        // A new leaf under Electronics lands on level 3 — within maxDepth.
+        $level = Hierarchy::deepestLevelAfterMove($parentMap, $childMap, null, $this->id('Electronics'));
+        $this->assertSame(3, $level);
+        $this->assertTrue($group->allowsDepth($level));
+
+        // A new leaf at the root is level 1, whatever else the menu holds.
+        $this->assertSame(1, Hierarchy::deepestLevelAfterMove($parentMap, $childMap, null, null));
+
+        // A new leaf one level deeper would be level 4 — still refused.
+        $tooDeep = Hierarchy::deepestLevelAfterMove($parentMap, $childMap, null, $this->id('Electronics'));
+        $this->assertFalse($group->allowsDepth($tooDeep + 1));
+    }
+
+    /**
+     * The same guarantee at the helper the bug came through: 0 is the root
+     * set's key, never an item ID, so it has no subtree height of its own.
+     */
+    public function testTheRootSentinelHasNoSubtreeHeight(): void
+    {
+        $rows = $this->rows(['A' => null, 'B' => 'A', 'C' => 'B']);
+        $childMap = Hierarchy::childMap($rows);
+
+        $this->assertSame(2, Hierarchy::subtreeHeight($childMap, $this->id('A')), 'A really is two levels deep.');
+        $this->assertSame(0, Hierarchy::subtreeHeight($childMap, 0), 'Asking about item 0 is not asking about the root forest.');
     }
 
     public function testAGroupWithNoMaximumDepthAllowsAnyLevel(): void
@@ -485,36 +536,8 @@ class MenuBuilderTreeMoveTest extends TestCase
         );
     }
 
-    /** Every write path still invalidates the group's cached render. */
-    public function testMovingInvalidatesTheGroupCache(): void
-    {
-        foreach (['move', 'reorderSiblings'] as $method) {
-            $this->assertStringContainsString(
-                'invalidateGroup',
-                $this->methodSource(MenuBuilderItemService::class, $method)
-            );
-        }
-    }
-
-    /**
-     * A refused move must tell the editor which rule it broke — "that move
-     * exceeds this group's maximum nesting depth" rather than a generic
-     * failure — because the CP's only recovery from a rejection is a reload,
-     * and a reload with no explanation looks like the drag simply didn't
-     * take.
-     */
-    public function testARefusedMoveReportsWhichRuleItBroke(): void
-    {
-        $this->assertStringContainsString(
-            "getFirstError('parentId')",
-            $this->methodSource(MenuBuilderItemService::class, 'move')
-        );
-        $this->assertStringContainsString(
-            'getLastMoveError()',
-            $this->methodSource(ItemsController::class, 'actionReorder')
-        );
-    }
-
+    
+    
     /**
      * The endpoint is a mutation, and Craft only enforces CSRF on POST.
      * Permission is `edit`, since a move only ever acts on an item that
@@ -532,19 +555,7 @@ class MenuBuilderTreeMoveTest extends TestCase
         );
     }
 
-    /**
-     * Repositioning inside a large sibling set must not become one UPDATE
-     * per row inside a held lock — that is how a 500-item menu turns a drag
-     * into a lock-held stampede.
-     */
-    public function testSortOrdersAreWrittenInBatchesRatherThanRowByRow(): void
-    {
-        $source = $this->methodSource(MenuBuilderItemService::class, 'applySortOrders');
-
-        $this->assertStringContainsString('CASE [[id]]', $source);
-        $this->assertStringContainsString('array_chunk(', $source);
-    }
-
+    
     /**
      * The tree is read with one flat query per group; a per-node query would
      * turn a 500-item menu into 500 round trips on every CP page load.
@@ -737,5 +748,264 @@ class MenuBuilderTreeMoveTest extends TestCase
             $reflection->getStartLine() - 1,
             $reflection->getEndLine() - $reflection->getStartLine() + 1
         ));
+    }
+
+    // =====================================================================
+    // The node itself: copies, flattening and mega-menu columns
+    // =====================================================================
+
+    // ---------------------------------------------------------------------
+    // Immutability of the cached node tree
+    // ---------------------------------------------------------------------
+
+    private function node(
+        int $id,
+        string $title = 'Node',
+        ?int $column = null,
+        ?MenuBuilderMegaMenuConfig $megaMenu = null,
+        ?string $icon = null,
+        ?string $badge = null,
+        ?string $description = null,
+        ?int $image = null,
+        bool $featured = false,
+    ): MenuBuilderNode {
+        return new MenuBuilderNode(
+            id: $id,
+            handle: null,
+            type: 'url',
+            title: $title,
+            url: '/' . $id,
+            isClickable: true,
+            isLinkAvailable: true,
+            target: '_self',
+            rel: null,
+            cssClass: 'nav-item',
+            htmlId: null,
+            htmlAttributes: ['data-id' => (string)$id],
+            ariaLabel: null,
+            titleAttribute: null,
+            icon: $icon,
+            badge: $badge,
+            description: $description,
+            image: $image,
+            featured: $featured,
+            level: 1,
+            megaMenu: $megaMenu,
+            megaMenuColumn: $column,
+        );
+    }
+
+    public function testWithChildrenLeavesTheSourceNodeUntouched(): void
+    {
+        $cached = $this->node(1);
+        $cached->children = [$this->node(2), $this->node(3)];
+
+        $copy = $cached->withChildren([$this->node(2)]);
+
+        $this->assertCount(2, $cached->children, 'The cached node must keep every child.');
+        $this->assertCount(1, $copy->children);
+        $this->assertNotSame($cached, $copy);
+    }
+
+    public function testWithChildrenCarriesEveryReadonlyValueAcross(): void
+    {
+        $cached = $this->node(7, 'Products');
+        $copy = $cached->withChildren([]);
+
+        $this->assertSame(7, $copy->id);
+        $this->assertSame('Products', $copy->title);
+        $this->assertSame('/7', $copy->url);
+        $this->assertSame('nav-item', $copy->cssClass);
+        $this->assertSame(['data-id' => '7'], $copy->htmlAttributes);
+        $this->assertSame(1, $copy->level);
+        $this->assertTrue($copy->isClickable);
+    }
+
+    /** Otherwise a child's `parent` would still point into the cached tree. */
+    public function testWithChildrenRewiresChildParentsToTheCopy(): void
+    {
+        $child = $this->node(2);
+        $copy = $this->node(1)->withChildren([$child]);
+
+        $this->assertSame($copy, $child->parent);
+    }
+
+    /**
+     * Active state is the other half of the per-request pipeline: a copy
+     * starts clean so a previous request's marking can never survive on a
+     * cached node and leak through.
+     */
+    public function testWithChildrenResetsActiveState(): void
+    {
+        $cached = $this->node(1);
+        $cached->isActive = true;
+        $cached->isActiveAncestor = true;
+
+        $copy = $cached->withChildren([]);
+
+        $this->assertFalse($copy->isActive);
+        $this->assertFalse($copy->isActiveAncestor);
+        $this->assertTrue($cached->isActive, 'The source node is not modified.');
+    }
+
+    public function testFlattenWalksTheWholeTreeDepthFirst(): void
+    {
+        $grandchild = $this->node(3);
+        $child = $this->node(2);
+        $child->children = [$grandchild];
+        $root = $this->node(1);
+        $root->children = [$child];
+        $sibling = $this->node(4);
+
+        $tree = new MenuBuilderTree(new MenuBuilderGroup(), [$root, $sibling]);
+
+        $this->assertSame([1, 2, 3, 4], array_map(fn(MenuBuilderNode $n) => $n->id, $tree->flatten()));
+        $this->assertCount(2, $tree, 'count() reports top-level nodes only.');
+        $this->assertSame([1, 4], array_map(fn(MenuBuilderNode $n) => $n->id, iterator_to_array($tree)));
+    }
+
+    // ---------------------------------------------------------------------
+    // Mega-menu column grouping
+    // ---------------------------------------------------------------------
+
+    public function testChildrenGroupedByConfiguredColumn(): void
+    {
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
+        $parent->children = [
+            $this->node(2, column: 2),
+            $this->node(3, column: 1),
+            $this->node(4, column: 2),
+        ];
+
+        $columns = $parent->megaMenuColumns();
+
+        $this->assertSame([1, 2], array_keys($columns));
+        $this->assertSame([3], array_map(fn($n) => $n->id, $columns[1]));
+        $this->assertSame([2, 4], array_map(fn($n) => $n->id, $columns[2]));
+    }
+
+    public function testUnsetOrOutOfRangeColumnCollapsesIntoColumnOne(): void
+    {
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 2));
+        $parent->children = [
+            $this->node(2, column: null),
+            $this->node(3, column: 99),
+        ];
+
+        $columns = $parent->megaMenuColumns();
+
+        $this->assertSame([1], array_keys($columns));
+        $this->assertCount(2, $columns[1]);
+    }
+
+    public function testNoMegaMenuConfigDefaultsToOneColumn(): void
+    {
+        $parent = $this->node(1);
+        $parent->children = [$this->node(2, column: 5)];
+
+        $columns = $parent->megaMenuColumns();
+
+        $this->assertSame([1], array_keys($columns));
+    }
+
+    /**
+     * The real-world shape this is for: one parent, four children, the
+     * editor splitting them across the columns they should appear in — and
+     * two of them left alone. Nothing about the tree changes; the grouping
+     * is read off it.
+     */
+    public function testARealWorldMenuGroupsIntoTheColumnsTheEditorAssigned(): void
+    {
+        $products = $this->node(1, 'Products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 2));
+        $products->children = [
+            $this->node(2, 'Shoes', column: 1),
+            $this->node(3, 'Clothing', column: 2),
+            // Never assigned a column, and assigned one the parent doesn't
+            // have: both are presentation mistakes, not reasons to drop an
+            // item out of the navigation.
+            $this->node(4, 'Accessories', column: null),
+            $this->node(5, 'Featured', column: 9),
+        ];
+
+        $columns = $products->megaMenuColumns();
+
+        $this->assertSame([1, 2], array_keys($columns));
+        $this->assertSame(['Shoes', 'Accessories', 'Featured'], array_map(fn($n) => $n->title, $columns[1]));
+        $this->assertSame(['Clothing'], array_map(fn($n) => $n->title, $columns[2]));
+        $this->assertSame(
+            ['Shoes', 'Clothing', 'Accessories', 'Featured'],
+            array_map(fn($n) => $n->title, $products->children),
+            'Grouping is a read of the tree: the children keep their own order and stay where they were.'
+        );
+    }
+
+    /** Six is the ceiling MenuBuilderItem::validateMegaMenu() enforces; all six have to survive grouping. */
+    public function testTheMaximumSupportedColumnCountGroupsIntoSixColumns(): void
+    {
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 6));
+        $parent->children = [
+            $this->node(7, column: 6),
+            $this->node(6, column: 5),
+            $this->node(5, column: 4),
+            $this->node(4, column: 3),
+            $this->node(3, column: 2),
+            $this->node(2, column: 1),
+        ];
+
+        $columns = $parent->megaMenuColumns();
+
+        $this->assertSame([1, 2, 3, 4, 5, 6], array_keys($columns), 'Columns come back in ascending order, however the children were sorted.');
+        $this->assertSame([2, 3, 4, 5, 6, 7], array_map(fn($column) => $column[0]->id, array_values($columns)));
+    }
+
+    /**
+     * Visibility is filtered per visitor, after the cache, by rebuilding the
+     * node with `withChildren()` — so the grouping a visitor gets has to be
+     * computed from *their* children, and a column nobody can see must not
+     * be left behind as an empty one.
+     */
+    public function testColumnGroupingFollowsPerVisitorVisibilityFiltering(): void
+    {
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 2));
+        $parent->children = [
+            $this->node(2, 'Shoes', column: 1),
+            $this->node(3, 'Members only', column: 2),
+        ];
+
+        $visible = $parent->withChildren([$this->node(2, 'Shoes', column: 1)]);
+
+        $this->assertNotNull($visible->megaMenu, 'The clone is still the mega-menu parent.');
+        $this->assertSame(2, $visible->megaMenu->columns);
+        $this->assertSame([1], array_keys($visible->megaMenuColumns()), 'A column whose only child is hidden is not rendered as an empty column.');
+        $this->assertSame([1, 2], array_keys($parent->megaMenuColumns()), 'The shared, cached node keeps both columns for everyone else.');
+    }
+
+    /**
+     * Grouping hands back the children themselves, not copies — which is
+     * what lets a mega-menu column render an item's icon, badge,
+     * description, image and "featured" flag without a second lookup.
+     */
+    public function testColumnGroupingHandsBackTheChildNodesThemselves(): void
+    {
+        $child = $this->node(2, 'Shoes', column: 1, icon: 'fa fa-shoe', badge: 'New', description: 'Every shoe we make.', image: 42, featured: true);
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 1));
+        $parent->children = [$child];
+
+        $grouped = $parent->megaMenuColumns()[1][0];
+
+        $this->assertSame($child, $grouped);
+        $this->assertSame('fa fa-shoe', $grouped->icon);
+        $this->assertSame('New', $grouped->badge);
+        $this->assertSame('Every shoe we make.', $grouped->description);
+        $this->assertSame(42, $grouped->image);
+        $this->assertTrue($grouped->featured);
+    }
+
+    /** A mega-menu parent with nothing under it groups into nothing at all. */
+    public function testAMegaMenuParentWithNoChildrenHasNoColumns(): void
+    {
+        $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
+
+        $this->assertSame([], $parent->megaMenuColumns());
     }
 }

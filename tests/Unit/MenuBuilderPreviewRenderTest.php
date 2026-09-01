@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderPreviewService;
 
 require_once __DIR__ . '/NavMacroRendering.php';
@@ -320,6 +321,101 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $html = $this->renderNav([$this->megaParent()]);
 
         $this->assertCount(0, $this->query($html, '/html/body/ul/li/ul'), 'The panel replaces the plain submenu.');
+    }
+
+    /**
+     * The menu this feature exists for: one parent, its children split
+     * across columns, two of them left for the fallback — assigned to a
+     * column the parent doesn't have, or never assigned one at all. Neither
+     * mistake may drop an item out of the navigation.
+     */
+    public function testARealWorldMegaMenuGroupsItsChildrenIntoTheAssignedColumns(): void
+    {
+        $html = $this->renderNav([
+            $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 2), children: [
+                $this->node(2, title: 'Shoes', url: '/products/shoes', level: 2, megaMenuColumn: 1),
+                $this->node(3, title: 'Clothing', url: '/products/clothing', level: 2, megaMenuColumn: 2),
+                $this->node(4, title: 'Accessories', url: '/products/accessories', level: 2, megaMenuColumn: 9),
+                $this->node(5, title: 'Featured', url: '/products/featured', level: 2),
+            ]),
+        ]);
+
+        $columns = $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]');
+
+        $this->assertCount(2, $columns, 'Two configured columns, two rendered — not one per child.');
+        $this->assertSame(
+            ['Shoes', 'Accessories', 'Featured'],
+            array_map(fn($a) => trim($a->textContent), $this->query($html, '(//div[contains(@class, "menu-builder-megamenu-column")])[1]//a'))
+        );
+        $this->assertSame(
+            ['Clothing'],
+            array_map(fn($a) => trim($a->textContent), $this->query($html, '(//div[contains(@class, "menu-builder-megamenu-column")])[2]//a'))
+        );
+        $this->assertCount(4, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]//a'), 'Every child is still in the navigation.');
+    }
+
+    /** One column is a legitimate mega menu: a single wide panel. */
+    public function testASingleColumnMegaMenuRendersOneColumn(): void
+    {
+        $html = $this->renderNav([
+            $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 1), children: [
+                $this->node(2, title: 'Shoes', url: '/products/shoes', level: 2, megaMenuColumn: 1),
+                $this->node(3, title: 'Clothing', url: '/products/clothing', level: 2, megaMenuColumn: 1),
+            ]),
+        ]);
+
+        $this->assertCount(1, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]'));
+        $this->assertCount(2, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//a'));
+    }
+
+    /** Six columns is the configured ceiling; all six have to reach the markup. */
+    public function testTheMaximumSupportedColumnCountRendersSixColumns(): void
+    {
+        $children = [];
+
+        for ($column = 1; $column <= 6; $column++) {
+            $children[] = $this->node($column + 1, title: 'Column ' . $column, url: '/c' . $column, level: 2, megaMenuColumn: $column);
+        }
+
+        $html = $this->renderNav([
+            $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 6), children: $children),
+        ]);
+
+        $columns = $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]');
+
+        $this->assertCount(6, $columns);
+        $this->assertSame(
+            ['Column 1', 'Column 2', 'Column 3', 'Column 4', 'Column 5', 'Column 6'],
+            array_map(fn($column) => trim($column->textContent), $columns),
+            'Columns render in ascending order.'
+        );
+    }
+
+    /**
+     * A column is rendered by the same `render()` the rest of the tree uses,
+     * so everything an item carries — icon, badge, and a submenu of its own
+     * — renders inside the panel exactly as it does outside it.
+     */
+    public function testAMegaMenuColumnRendersTheSameItemPresentationAsTheRestOfTheTree(): void
+    {
+        $html = $this->renderNav([
+            $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 1), children: [
+                $this->node(2, title: 'Shoes', url: '/products/shoes', level: 2, megaMenuColumn: 1, icon: 'fa fa-shoe', badge: 'New', badgeStyle: 'info', children: [
+                    $this->node(3, title: 'Running', url: '/products/shoes/running', level: 3),
+                ]),
+            ]),
+        ]);
+
+        $link = $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//a')[0];
+
+        $this->assertCount(1, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//a/span[contains(@class, "menu-builder-icon")]'));
+        $this->assertStringContainsString('New', $link->textContent);
+        $this->assertCount(1, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//a/span[contains(@class, "menu-builder-badge--info")]'));
+        $this->assertSame(
+            ['Running'],
+            array_map(fn($a) => trim($a->textContent), $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//li/ul/li/a')),
+            'A child of a column member is an ordinary nested list, not a second panel.'
+        );
     }
 
     // ---------------------------------------------------------------------

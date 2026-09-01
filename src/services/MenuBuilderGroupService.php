@@ -4,37 +4,56 @@ namespace Tahadudhiya\MenuBuilder\services;
 
 use Craft;
 use craft\base\Component;
-use craft\events\ConfigEvent;
 use craft\helpers\Json;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\records\MenuBuilderGroupRecord;
 
 /**
- * Phase 10 project config: the database record remains authoritative for
- * every locally-initiated save/delete in this class (zero change to the
- * already-hardened Phase 1/5 write path) — after a successful write, the
- * current state is *mirrored* into project config under
- * {@see CONFIG_PATH}.`{uid}` so it's captured in `project.yaml` and
- * portable/diffable across environments, the same way Craft's own
- * structural resources (Sections, Fields, …) are. `handleChangedConfig()`/
- * `handleDeletedConfig()` (registered by MenuBuilder::attachEventHandlers())
- * handle the *other* direction — applying a config change that arrived from
- * project.yaml (e.g. after a deploy pulls a teammate's change) to the local
- * database.
+ * Owns navigation-group persistence and business logic. The database is the
+ * **single source of truth** for group configuration: every read and every
+ * write goes through `menubuilder_groups`, and nothing about a group is
+ * mirrored into, synchronized with, or applied from Craft's project config.
+ * That's a deliberate architectural decision — a second store would mean
+ * database/YAML drift, `project-config/apply` overwriting live edits,
+ * sortOrder and uid synchronization, and a rebuild path to keep honest, none
+ * of which buys anything for data editors manage in the CP.
+ *
+ * Controllers never touch MenuBuilderGroupRecord directly; validation
+ * (MenuBuilderGroup), handle uniqueness, transactions and cache
+ * invalidation all live here, and reaching past this class skips them.
  */
 class MenuBuilderGroupService extends Component
 {
-    public const CONFIG_PATH = 'menuBuilder.groups';
-
     /**
      * Key the group's site restriction lives under inside the `settings`
      * JSON column — see MenuBuilderGroup::$siteIds. Kept in the existing
-     * open-ended bag rather than a new column so no migration (and no
-     * project-config schema bump) is needed; recordToModel() lifts it back
-     * out so `$group->settings` stays a plain user-facing bag.
+     * open-ended bag rather than a new column so no migration is needed;
+     * recordToModel() lifts it back out so `$group->settings` stays a plain
+     * user-facing bag.
      */
     public const SITE_IDS_KEY = 'siteIds';
+
+    /**
+     * Key the menu's custom field *definitions* live under inside the same
+     * `settings` bag — see MenuBuilderGroup::$customFields and
+     * {@see CustomFieldHelper}. Same reasoning as {@see SITE_IDS_KEY}: an
+     * existing open-ended bag rather than a new column or a second settings
+     * system, lifted back out on read so `$group->settings` stays a plain
+     * user-facing bag.
+     */
+    public const CUSTOM_FIELDS_KEY = 'customFields';
+
+    /**
+     * Length of the `name`/`handle`/`cssClass` columns (see the Install
+     * migration). {@see MenuBuilderGroup} rejects anything longer on the
+     * user-facing path; {@see duplicate()} derives new values from existing
+     * ones instead, so it has to trim them itself.
+     */
+    private const MAX_STRING_LENGTH = 255;
 
     /** @var MenuBuilderGroup[]|null */
     private ?array $allCache = null;
@@ -45,6 +64,7 @@ class MenuBuilderGroupService extends Component
     public function getAll(bool $includeDisabled = true): array
     {
         if ($this->allCache === null) {
+            /** @var MenuBuilderGroupRecord[] $records */
             $records = MenuBuilderGroupRecord::find()->orderBy(['sortOrder' => SORT_ASC, 'name' => SORT_ASC])->all();
             $this->allCache = array_map(fn(MenuBuilderGroupRecord $record) => $this->recordToModel($record), $records);
         }
@@ -56,17 +76,55 @@ class MenuBuilderGroupService extends Component
         return array_values(array_filter($this->allCache, fn(MenuBuilderGroup $group) => $group->enabled));
     }
 
+    /**
+     * Served from the same memoized `getAll()` list as {@see getByHandle()}
+     * and {@see getByUid()}, and consistent for the same reason: every write
+     * path in this class clears `$allCache`, so the memo can never outlive
+     * the state it describes within a request.
+     *
+     * It reads from the memo rather than the database because the write path
+     * asks for the same menu more than once per saved item — once for its
+     * custom field definitions, once for its `maxDepth`
+     * ({@see \Tahadudhiya\MenuBuilder\services\MenuBuilderItemService::save()})
+     * — which made a 100-item bulk save cost 200 menu queries.
+     */
     public function getById(int $id): ?MenuBuilderGroup
     {
-        $record = MenuBuilderGroupRecord::findOne($id);
+        foreach ($this->getAll() as $group) {
+            if ((int)$group->id === $id) {
+                return $group;
+            }
+        }
 
-        return $record ? $this->recordToModel($record) : null;
+        return null;
     }
 
     public function getByHandle(string $handle): ?MenuBuilderGroup
     {
         foreach ($this->getAll() as $group) {
             if ($group->handle === $handle) {
+                return $group;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A menu by its UID — the identity {@see \Tahadudhiya\MenuBuilder\fields\MenuBuilderField}
+     * persists, because a field value has to survive a handle rename, and
+     * because a row ID identifies a menu only within the database that
+     * assigned it. Menus remain database-only either way (see this class's
+     * docblock): a UID is a stable reference, not a menu that travels.
+     *
+     * Served from the same memoized `getAll()` list `getByHandle()` uses, so
+     * an element index normalizing a hundred field values costs one query,
+     * not a hundred.
+     */
+    public function getByUid(string $uid): ?MenuBuilderGroup
+    {
+        foreach ($this->getAll() as $group) {
+            if ($group->uid === $uid) {
                 return $group;
             }
         }
@@ -111,7 +169,10 @@ class MenuBuilderGroupService extends Component
         $record->maxDepth = $group->maxDepth;
         $record->cssClass = $group->cssClass;
         $record->htmlAttributes = Json::encode($group->htmlAttributes);
-        $record->settings = Json::encode($this->settingsWithSiteIds($group->settings, $group->siteIds));
+        $record->settings = Json::encode($this->settingsWithCustomFields(
+            $this->settingsWithSiteIds($group->settings, $group->siteIds),
+            $group->customFields
+        ));
 
         if (!$record->save()) {
             $group->addErrors($record->getErrors());
@@ -122,99 +183,14 @@ class MenuBuilderGroupService extends Component
         $group->id = $record->id;
         $group->uid = $record->uid;
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
-        $this->mirrorToProjectConfig($record);
+        // This menu only — a menu save must never flush another menu's
+        // cache. Invalidating by ID is what makes a *rename* safe: cache
+        // entries are tagged per menu ID, not per handle, so the entries
+        // written under the old handle are reached too (see
+        // MenuBuilderCacheService).
+        MenuBuilder::getInstance()->cache->invalidateGroupId((int)$record->id);
 
         return true;
-    }
-
-    /**
-     * Writes/updates the config path from a *local* database change. Craft
-     * only fires the `onAdd`/`onUpdate` handlers registered on this same
-     * path (see MenuBuilder::attachEventHandlers()) when the new value
-     * actually differs from what's currently stored, so this doesn't cause
-     * an immediate redundant re-save via handleChangedConfig() for the
-     * common case of no other pending change.
-     */
-    private function mirrorToProjectConfig(MenuBuilderGroupRecord $record): void
-    {
-        Craft::$app->getProjectConfig()->set(
-            self::CONFIG_PATH . '.' . $record->uid,
-            $this->configDataFromRecord($record),
-            "Save navigation group “{$record->name}”"
-        );
-    }
-
-    private function configDataFromRecord(MenuBuilderGroupRecord $record): array
-    {
-        return [
-            'name' => $record->name,
-            'handle' => $record->handle,
-            'description' => $record->description,
-            'enabled' => (bool)$record->enabled,
-            'sortOrder' => (int)$record->sortOrder,
-            'maxDepth' => $record->maxDepth !== null ? (int)$record->maxDepth : null,
-            'cssClass' => $record->cssClass,
-            'htmlAttributes' => $this->decodeArray($record->htmlAttributes),
-            'settings' => $this->decodeArray($record->settings),
-        ];
-    }
-
-    /**
-     * Applies a group config change that originated from project.yaml
-     * (not from {@see save()} in this same request — see that method's
-     * docblock) to the local database. Registered on
-     * `ProjectConfig::EVENT_...` via `onAdd`/`onUpdate` in
-     * MenuBuilder::attachEventHandlers().
-     */
-    public function handleChangedConfig(ConfigEvent $event): void
-    {
-        $uid = $event->tokenMatches[0] ?? null;
-        $data = $event->newValue;
-
-        if (!is_string($uid) || !is_array($data)) {
-            return;
-        }
-
-        $record = MenuBuilderGroupRecord::find()->where(['uid' => $uid])->one() ?? new MenuBuilderGroupRecord(['uid' => $uid]);
-        $isNew = $record->id === null;
-
-        $record->name = (string)($data['name'] ?? $data['handle'] ?? $uid);
-        $record->handle = (string)($data['handle'] ?? '');
-        $record->description = $data['description'] ?? null;
-        $record->enabled = (bool)($data['enabled'] ?? true);
-        $record->sortOrder = $isNew ? ($data['sortOrder'] ?? $this->nextSortOrder()) : $record->sortOrder;
-        $record->maxDepth = isset($data['maxDepth']) ? (int)$data['maxDepth'] : null;
-        $record->cssClass = $data['cssClass'] ?? null;
-        $record->htmlAttributes = Json::encode(is_array($data['htmlAttributes'] ?? null) ? $data['htmlAttributes'] : []);
-        $record->settings = Json::encode(is_array($data['settings'] ?? null) ? $data['settings'] : []);
-
-        if (!$record->save(false)) {
-            Craft::warning('Failed to apply navigation group config change for uid ' . $uid, __METHOD__);
-
-            return;
-        }
-
-        $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
-    }
-
-    /** Registered on `ProjectConfig::EVENT_...`'s `onRemove` — deletes the local record matching a removed config entry. */
-    public function handleDeletedConfig(ConfigEvent $event): void
-    {
-        $uid = $event->tokenMatches[0] ?? null;
-
-        if (!is_string($uid)) {
-            return;
-        }
-
-        $record = MenuBuilderGroupRecord::find()->where(['uid' => $uid])->one();
-
-        if ($record !== null) {
-            $record->delete();
-            $this->allCache = null;
-            MenuBuilder::getInstance()->cache->invalidateAll();
-        }
     }
 
     public function countItems(int $groupId): int
@@ -238,7 +214,7 @@ class MenuBuilderGroupService extends Component
 
         try {
             $clone = new MenuBuilderGroupRecord();
-            $clone->name = $original->name . ' Copy';
+            $clone->name = self::truncate($original->name . ' Copy', self::MAX_STRING_LENGTH);
             $clone->handle = $this->uniqueHandle($original->handle);
             $clone->description = $original->description;
             $clone->enabled = $original->enabled;
@@ -264,23 +240,49 @@ class MenuBuilderGroupService extends Component
         }
 
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
-        $this->mirrorToProjectConfig($clone);
+        // Only the clone can have anything cached: the original is unchanged
+        // by a duplicate, and the clone's handle is new. Not a no-op in the
+        // one case that matters — a handle freed by an earlier delete and
+        // picked up again here.
+        MenuBuilder::getInstance()->cache->invalidateGroupId((int)$clone->id);
 
         return $this->recordToModel($clone);
     }
 
+    /**
+     * The base handle is trimmed before the numeric suffix is appended, so
+     * duplicating a group whose handle already fills the column produces a
+     * valid shorter handle rather than an over-long one the database
+     * rejects (or silently truncates into a collision).
+     */
     private function uniqueHandle(string $baseHandle): string
     {
-        $handle = $baseHandle;
+        $handle = self::truncate($baseHandle, self::MAX_STRING_LENGTH);
         $suffix = 2;
 
         while (MenuBuilderGroupRecord::find()->where(['handle' => $handle])->exists()) {
-            $handle = $baseHandle . $suffix;
+            $handle = self::suffixedHandle($baseHandle, $suffix);
             $suffix++;
         }
 
         return $handle;
+    }
+
+    /**
+     * `$baseHandle` with `$suffix` appended, trimmed so the result still
+     * fits the column. Pure, so the length arithmetic {@see uniqueHandle()}
+     * depends on is testable without a database.
+     */
+    private static function suffixedHandle(string $baseHandle, int $suffix): string
+    {
+        $suffixString = (string)$suffix;
+
+        return self::truncate($baseHandle, self::MAX_STRING_LENGTH - strlen($suffixString)) . $suffixString;
+    }
+
+    private static function truncate(string $value, int $length): string
+    {
+        return strlen($value) > $length ? substr($value, 0, $length) : $value;
     }
 
     public function deleteById(int $id): bool
@@ -291,20 +293,24 @@ class MenuBuilderGroupService extends Component
             return false;
         }
 
-        $uid = $record->uid;
-
-        // Cascading FK on menubuilder_items.groupId removes every item in the group.
+        // Cascading FK on menubuilder_items.groupId removes every item in the
+        // group, so no orphans are left behind and no PHP-side sweep is needed.
         $result = (bool)$record->delete();
         $this->allCache = null;
-        MenuBuilder::getInstance()->cache->invalidateAll();
-
-        if ($result) {
-            Craft::$app->getProjectConfig()->remove(self::CONFIG_PATH . '.' . $uid);
-        }
+        // The deleted menu's entries only. They are already unreachable by
+        // key — nothing resolves the handle any more — but the handle is now
+        // free for a new menu to take, and that menu must not read what this
+        // one left behind.
+        MenuBuilder::getInstance()->cache->invalidateGroupId($id);
 
         return $result;
     }
 
+    /**
+     * Persists an explicit menu order. `sortOrder` is database-only — there
+     * is no second copy anywhere to keep in step — so the transaction below
+     * is the whole write.
+     */
     public function reorder(array $groupIdsInOrder): bool
     {
         $transaction = Craft::$app->getDb()->beginTransaction();
@@ -344,10 +350,15 @@ class MenuBuilderGroupService extends Component
         $group->sortOrder = (int)$record->sortOrder;
         $group->maxDepth = $record->maxDepth !== null ? (int)$record->maxDepth : null;
         $group->cssClass = $record->cssClass;
-        $group->htmlAttributes = $this->decodeArray($record->htmlAttributes);
-        $settings = $this->decodeArray($record->settings);
-        $group->siteIds = $this->normalizeSiteIds($settings[self::SITE_IDS_KEY] ?? null);
+        $group->htmlAttributes = ConfigHelper::decodeJsonBag($record->htmlAttributes);
+        $settings = ConfigHelper::decodeJsonBag($record->settings);
+        $group->siteIds = ConfigHelper::normalizeIdList($settings[self::SITE_IDS_KEY] ?? null);
+        // Fail-closed: a malformed definition (an import, a hand-written
+        // row) is dropped here rather than reaching the item editor or a
+        // template as a field with a guessed type.
+        $group->customFields = CustomFieldHelper::definitionsFromConfig($settings[self::CUSTOM_FIELDS_KEY] ?? null);
         unset($settings[self::SITE_IDS_KEY]);
+        unset($settings[self::CUSTOM_FIELDS_KEY]);
         $group->settings = $settings;
         $group->uid = $record->uid;
         $group->dateCreated = $record->dateCreated;
@@ -363,7 +374,7 @@ class MenuBuilderGroupService extends Component
      */
     private function settingsWithSiteIds(array $settings, array $siteIds): array
     {
-        $siteIds = $this->normalizeSiteIds($siteIds);
+        $siteIds = ConfigHelper::normalizeIdList($siteIds);
 
         if (empty($siteIds)) {
             unset($settings[self::SITE_IDS_KEY]);
@@ -377,31 +388,28 @@ class MenuBuilderGroupService extends Component
     }
 
     /**
-     * @return int[]
+     * The custom field half of the same fold, kept separate from
+     * {@see settingsWithSiteIds()} so each reserved key is one small pure
+     * function. Removed when the menu defines none, rather than written as
+     * `[]`, so a menu that uses no custom fields stores exactly the bag the
+     * user sees.
+     *
+     * @param array<string,mixed> $settings
+     * @param MenuBuilderCustomField[] $customFields
+     * @return array<string,mixed>
      */
-    private function normalizeSiteIds(mixed $value): array
+    private function settingsWithCustomFields(array $settings, array $customFields): array
     {
-        if (!is_array($value)) {
-            return [];
+        $config = CustomFieldHelper::definitionsToConfig($customFields);
+
+        if (empty($config)) {
+            unset($settings[self::CUSTOM_FIELDS_KEY]);
+
+            return $settings;
         }
 
-        $siteIds = array_filter(array_map('intval', array_filter($value, 'is_scalar')), fn(int $id) => $id > 0);
+        $settings[self::CUSTOM_FIELDS_KEY] = $config;
 
-        return array_values(array_unique($siteIds));
-    }
-
-    private function decodeArray(?string $json): array
-    {
-        if (!$json) {
-            return [];
-        }
-
-        try {
-            $decoded = Json::decode($json);
-        } catch (\Throwable) {
-            return [];
-        }
-
-        return is_array($decoded) ? $decoded : [];
+        return $settings;
     }
 }

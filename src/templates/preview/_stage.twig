@@ -1,0 +1,210 @@
+{#
+ # A polished, illustrative website surface around the production menu.
+ #
+ # `previewMarkup` is captured from the shipped tree macro in index.twig. This
+ # partial never reads nodes or recreates navigation: it only supplies the
+ # kind of header, page content and footer a large public website might use.
+ # The small "illustrative" label is intentional. MenuBuilder can prove the
+ # menu's structure and state, but it cannot know a project's front-end theme.
+ #
+ # Expected variables:
+ #   headerPreviewMarkup captured menu output with header-safe IDs
+ #   footerPreviewMarkup captured menu output with footer-safe IDs
+ #   isMobile       whether the compact viewport is selected
+ #   placement      header, footer or both
+ #   siteName       simulated site name
+ #   navLabel       accessible name for the navigation landmark
+#}
+{% import _self as stage %}
+
+{% macro nav(previewMarkup, navLabel, instance, startsHidden = false) %}
+    <nav id="menu-builder-preview-nav-{{ instance }}"
+         class="menu-builder-preview-nav"
+         aria-label="{{ navLabel }}"
+         {{ startsHidden ? 'hidden' : '' }}
+         data-mb-preview-nav>
+        {{ previewMarkup }}
+    </nav>
+{% endmacro %}
+
+{% set showHeader = placement != 'footer' %}
+{% set showFooter = placement != 'header' %}
+{% set showBoth = placement == 'both' %}
+
+{# Decorative stand-ins make the non-selected region feel complete without
+   inventing links or a second navigation landmark. #}
+{% macro headerPlaceholder() %}
+    <span class="menu-builder-preview-nav-placeholder menu-builder-preview-nav-placeholder--header" aria-hidden="true">
+        {% for i in 1..4 %}<span class="menu-builder-preview-pill"></span>{% endfor %}
+    </span>
+{% endmacro %}
+
+{% macro footerPlaceholder() %}
+    <span class="menu-builder-preview-footer-placeholder" aria-hidden="true">
+        {% for i in 1..3 %}
+            <span class="menu-builder-preview-footer-column">
+                <span class="menu-builder-preview-footer-heading"></span>
+                <span></span><span></span><span></span>
+            </span>
+        {% endfor %}
+    </span>
+{% endmacro %}
+
+<div class="menu-builder-preview-stage menu-builder-preview-stage--{{ isMobile ? 'mobile' : 'desktop' }} menu-builder-preview-stage--{{ placement }}" data-mb-preview>
+    <div class="menu-builder-preview-stage-meta" aria-hidden="true">
+        <span class="menu-builder-preview-stage-label">{{ "Illustrative website preview"|t('menu-builder') }}</span>
+        <span class="menu-builder-preview-stage-context">{{ showBoth ? "Header + footer treatment"|t('menu-builder') : (showFooter ? "Footer treatment"|t('menu-builder') : "Header treatment"|t('menu-builder')) }}</span>
+        <span class="menu-builder-preview-stage-viewport">{{ isMobile ? "390 px"|t('menu-builder') : "Responsive desktop"|t('menu-builder') }}</span>
+    </div>
+
+    <div class="menu-builder-preview-device">
+        <div class="menu-builder-preview-page">
+            <div class="menu-builder-preview-announcement" aria-hidden="true">
+                <span>{{ "New: Discover what’s possible with a better digital experience"|t('menu-builder') }}</span>
+                <span class="menu-builder-preview-announcement-arrow">&#8594;</span>
+            </div>
+
+            <header class="menu-builder-preview-siteheader">
+                <span class="menu-builder-preview-brand">
+                    <span class="menu-builder-preview-brand-mark" aria-hidden="true">{{ siteName|slice(0, 1)|upper }}</span>
+                    <span class="menu-builder-preview-brand-name">{{ siteName }}</span>
+                </span>
+
+                {% if isMobile and showHeader %}
+                    <button type="button"
+                            class="menu-builder-preview-burger"
+                            data-mb-preview-burger
+                            aria-expanded="false"
+                            aria-controls="menu-builder-preview-nav-header">
+                        <span class="menu-builder-preview-burger-bars" aria-hidden="true"></span>
+                        <span class="visually-hidden">{{ "Show or hide the navigation"|t('menu-builder') }}</span>
+                    </button>
+                {% endif %}
+
+                {% if showHeader %}
+                    {{ stage.nav(
+                        headerPreviewMarkup,
+                        showBoth ? "{label} — header"|t('menu-builder', { label: navLabel }) : navLabel,
+                        'header',
+                        isMobile
+                    ) }}
+                {% else %}
+                    {{ stage.headerPlaceholder() }}
+                {% endif %}
+
+                <span class="menu-builder-preview-header-slot" aria-hidden="true">
+                    <span class="menu-builder-preview-header-search">&#8981;</span>
+                    <span class="menu-builder-preview-header-cta">{{ "Contact us"|t('menu-builder') }} <span>&#8594;</span></span>
+                </span>
+            </header>
+
+            {% if isMobile and showHeader %}
+                <span class="menu-builder-preview-mobile-scrim"
+                      data-mb-preview-scrim
+                      aria-hidden="true"
+                      hidden></span>
+            {% endif %}
+
+            {# Representative content gives the navigation real visual
+               context. It is furniture, not menu data, so it stays out of
+               the accessibility tree. #}
+            <main class="menu-builder-preview-canvas" aria-hidden="true">
+                <section class="menu-builder-preview-hero">
+                    <div class="menu-builder-preview-hero-copy">
+                        <span class="menu-builder-preview-eyebrow">{{ "Built for ambitious teams"|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-display">{{ "Turn bold ideas into meaningful progress."|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-lede">{{ "One connected platform to help your organization move faster, serve people better, and grow with confidence."|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-hero-actions">
+                            <span class="menu-builder-preview-primary-action">{{ "Get started"|t('menu-builder') }} <span>&#8594;</span></span>
+                            <span class="menu-builder-preview-secondary-action">{{ "Explore solutions"|t('menu-builder') }}</span>
+                        </span>
+                    </div>
+                    <div class="menu-builder-preview-hero-visual">
+                        <span class="menu-builder-preview-orbit menu-builder-preview-orbit--one"></span>
+                        <span class="menu-builder-preview-orbit menu-builder-preview-orbit--two"></span>
+                        <span class="menu-builder-preview-visual-card menu-builder-preview-visual-card--main">
+                            <span class="menu-builder-preview-visual-kicker"></span>
+                            <span class="menu-builder-preview-visual-number">84%</span>
+                            <span class="menu-builder-preview-visual-bars"><span></span><span></span><span></span><span></span><span></span></span>
+                        </span>
+                        <span class="menu-builder-preview-visual-card menu-builder-preview-visual-card--small">
+                            <span class="menu-builder-preview-avatar-stack"><span></span><span></span><span></span></span>
+                            <span class="menu-builder-preview-visual-lines"><span></span><span></span></span>
+                        </span>
+                    </div>
+                </section>
+
+                <section class="menu-builder-preview-proof">
+                    <span>{{ "Trusted by modern teams worldwide"|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-logo-row"><span>APEX</span><span>NORTH</span><span>VERTEX</span><span>STUDIO</span></span>
+                </section>
+
+                <section class="menu-builder-preview-feature-grid">
+                    {% for feature in [
+                        { number: '01', title: "Strategy"|t('menu-builder') },
+                        { number: '02', title: "Technology"|t('menu-builder') },
+                        { number: '03', title: "Growth"|t('menu-builder') }
+                    ] %}
+                        <span class="menu-builder-preview-feature-card">
+                            <span class="menu-builder-preview-feature-icon">{{ feature.number }}</span>
+                            <span class="menu-builder-preview-feature-title">{{ feature.title }}</span>
+                            <span class="menu-builder-preview-feature-copy">{{ "Clear thinking, connected tools, and practical expertise for the next stage."|t('menu-builder') }}</span>
+                            <span class="menu-builder-preview-feature-link">{{ "Learn more"|t('menu-builder') }} &#8594;</span>
+                        </span>
+                    {% endfor %}
+                </section>
+            </main>
+
+            <footer class="menu-builder-preview-sitefooter">
+                <span class="menu-builder-preview-footer-cta" aria-hidden="true">
+                    <span>
+                        <span class="menu-builder-preview-footer-eyebrow">{{ "Start a conversation"|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-footer-cta-title">{{ "Ready to build what’s next?"|t('menu-builder') }}</span>
+                    </span>
+                    <span class="menu-builder-preview-footer-cta-action">{{ "Talk to our team"|t('menu-builder') }} <span>&#8594;</span></span>
+                </span>
+
+                <span class="menu-builder-preview-footer-intro" aria-hidden="true">
+                    <span class="menu-builder-preview-brand menu-builder-preview-brand--footer">
+                        <span class="menu-builder-preview-brand-mark">{{ siteName|slice(0, 1)|upper }}</span>
+                        <span class="menu-builder-preview-brand-name">{{ siteName }}</span>
+                    </span>
+                    <span class="menu-builder-preview-footer-tagline">{{ "Building better digital experiences for people and business."|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-footer-locale">&#9678; {{ "Global · English"|t('menu-builder') }}</span>
+                </span>
+
+                {% if showFooter %}
+                    {{ stage.nav(
+                        footerPreviewMarkup,
+                        showBoth ? "{label} — footer"|t('menu-builder', { label: navLabel }) : navLabel,
+                        'footer'
+                    ) }}
+                {% else %}
+                    {{ stage.footerPlaceholder() }}
+                {% endif %}
+
+                <span class="menu-builder-preview-footer-follow" aria-hidden="true">
+                    <span class="menu-builder-preview-footer-follow-label">{{ "Follow us"|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-footer-socials"><span>f</span><span>x</span><span>&#9654;</span><span>in</span></span>
+                </span>
+
+                <span class="menu-builder-preview-footer-bottom" aria-hidden="true">
+                    <span>&copy; {{ "Example company"|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-footer-legal">
+                        <span>{{ "Privacy"|t('menu-builder') }}</span>
+                        <span>{{ "Terms"|t('menu-builder') }}</span>
+                        <span>{{ "Accessibility"|t('menu-builder') }}</span>
+                    </span>
+                </span>
+            </footer>
+        </div>
+    </div>
+
+    <p class="menu-builder-preview-hint" data-mb-preview-hint role="status">
+        {{ showBoth
+            ? "Header and footer treatments shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')
+            : (showFooter
+                ? "Footer treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')
+                : "Header treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')) }}
+    </p>
+</div>

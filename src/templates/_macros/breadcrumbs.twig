@@ -1,0 +1,95 @@
+{#
+ # Optional breadcrumb renderer, the counterpart to `_macros/tree.twig`.
+ # Entirely optional — walk the trail yourself for full control. Usage:
+ #
+ #   {% import "menu-builder/_macros/breadcrumbs" as crumbs %}
+ #   {{ crumbs.render(craft.menuBuilder.breadcrumbs('main')) }}
+ #
+ # What it emits, and why each part is there:
+ #
+ #   <nav aria-label="Breadcrumb">  the landmark, named — a page usually has
+ #                                  more than one <nav>, and "Breadcrumb" is
+ #                                  how a screen-reader user tells this one
+ #                                  from the main menu in the landmark list.
+ #                                  It deliberately doesn't say "navigation":
+ #                                  the role is already announced.
+ #   <ol>                           ordered, not <ul>: the whole point of a
+ #                                  trail is that Home comes before Products
+ #                                  comes before Shoes. Assistive technology
+ #                                  reads the position from the list.
+ #   aria-current="page"            on the last crumb only — it is the page
+ #                                  being served. Same rule, and the same one
+ #                                  node, as the menu's own active link.
+ #
+ # **The separator belongs to your CSS, not to this markup.** A literal "›"
+ # or "/" between the items is text, so a screen reader reads it out on every
+ # crumb ("Home slash Products slash Shoes"), and it cannot be restyled or
+ # localized. Draw it with a pseudo-element instead:
+ #
+ #   .menu-builder-breadcrumbs li + li::before { content: "›"; margin: 0 .5em }
+ #
+ # A missing menu (`null`) and a page that isn't in the menu (an empty trail)
+ # both render **nothing at all** — not an empty landmark, which is something
+ # a screen-reader user has to visit to discover was empty. Breadcrumbs are
+ # never invented from the URL, so "nothing" is the honest answer; see
+ # services/MenuBuilderBreadcrumbService.php.
+ #}
+{#
+ # @param trail        MenuBuilderBreadcrumbTrail|null — `craft.menuBuilder.breadcrumbs(...)`
+ # @param label        The landmark's accessible name.
+ # @param linkCurrent  Whether the last crumb is a link to the page you are
+ #                     already on. True (the default) keeps every crumb a
+ #                     consistent target; false renders it as plain text.
+ #                     Either way it carries `aria-current="page"`, which is
+ #                     what identifies it — not whether it happens to be a
+ #                     link.
+ #}
+{% macro render(trail, label = null, linkCurrent = true) %}
+    {% import _self as self %}
+    {% if trail is not empty %}
+        <nav class="menu-builder-breadcrumbs" aria-label="{{ label ?: "Breadcrumb"|t('menu-builder') }}" data-menu-builder-breadcrumbs>
+            <ol class="menu-builder-breadcrumbs-list">
+                {% for crumb in trail %}
+                    {{ self.crumb(crumb, loop.last, linkCurrent) }}
+                {% endfor %}
+            </ol>
+        </nav>
+    {% endif %}
+{% endmacro %}
+
+{#
+ # One crumb.
+ #
+ # A crumb is a real MenuBuilderNode, so it obeys the same rules its menu
+ # entry does: a non-clickable item (a heading, or a link whose element is
+ # gone) is a label and never a fake link, custom attributes go through
+ # `safeHtmlAttributes()`, and an `ariaLabel` set on the item is its
+ # accessible name here too.
+ #
+ # No icon and no badge: a trail is a path, and "Products NEW › Shoes NEW" is
+ # noise in a line whose job is to say where you are. Render `crumb.icon` /
+ # `crumb.badge` yourself if your design wants them.
+ #}
+{% macro crumb(node, isCurrent, linkCurrent = true) %}
+    {# The "opens in a new tab" hint is imported from the tree macros rather
+       than restated here: a crumb that opens a new tab owes a screen-reader
+       user the same warning the menu's own link does, and one definition of
+       that phrase is one place for it to stay correct. #}
+    {% import "menu-builder/_macros/tree" as menuMacros %}
+    <li class="menu-builder-breadcrumb{{ isCurrent ? ' is-current' : '' }}{{ node.cssClass ? ' ' ~ node.cssClass : '' }}">
+        {%- if node.isClickable and (linkCurrent or not isCurrent) -%}
+            <a href="{{ node.url }}"
+               {%- if node.opensInNewTab() %} target="_blank"{% endif %}
+               {%- if node.rel %} rel="{{ node.rel }}"{% endif %}
+               {%- if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}
+               {%- if node.titleAttribute %} title="{{ node.titleAttribute }}"{% endif %}
+               {%- if isCurrent %} aria-current="page"{% endif %}
+               {%- for key, value in node.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>{{ node.title }}{{ menuMacros.newTabHint(node) }}</a>
+        {%- else -%}
+            <span{% if isCurrent %} aria-current="page"{% endif %}
+                 {%- if node.ariaLabel %} aria-label="{{ node.ariaLabel }}"{% endif %}
+                 {%- if node.titleAttribute %} title="{{ node.titleAttribute }}"{% endif %}
+                 {%- for key, value in node.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>{{ node.title }}</span>
+        {%- endif -%}
+    </li>
+{% endmacro %}

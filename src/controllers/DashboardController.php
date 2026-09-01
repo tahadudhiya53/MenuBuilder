@@ -4,29 +4,34 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
-use yii\web\ForbiddenHttpException;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderLinkHealth;
+use yii\base\Action;
 use yii\web\Response;
 
-class DashboardController extends Controller
+class DashboardController extends BaseMenuBuilderController
 {
-    public function beforeAction($action): bool
+    /**
+     * The dashboard is read-only — every action on it renders the tree, so
+     * `view` covers all of them. Exposed as a pure static for the same
+     * reason the other two controllers' mappings are (see
+     * ControllerPermissionTest).
+     */
+    public static function requiredPermissionForAction(string $actionId): string
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
+        return 'menuBuilder:view';
+    }
 
-        $this->requireCpRequest();
-        $currentUser = Craft::$app->getUser()->getIdentity();
+    protected function requiredPermission(Action $action): string
+    {
+        return self::requiredPermissionForAction($action->id);
+    }
 
-        if (!$currentUser || (!$currentUser->admin && !$currentUser->can('menuBuilder:view'))) {
-            throw new ForbiddenHttpException('You are not permitted to view navigation.');
-        }
-
-        return true;
+    protected function permissionDeniedMessage(): string
+    {
+        return 'You are not permitted to view navigation.';
     }
 
     public function actionIndex(string $groupHandle): Response
@@ -40,9 +45,10 @@ class DashboardController extends Controller
             return $this->redirect(UrlHelper::cpUrl('menu-builder'));
         }
 
-        $search = Craft::$app->getRequest()->getQueryParam('search', '');
+        $itemHealth = MenuBuilder::getInstance()->linkHealth->getForGroup($group->id);
+        $search = trim((string)Craft::$app->getRequest()->getQueryParam('search', ''));
         $tree = MenuBuilder::getInstance()->items->getTree($group->id);
-        $items = $search ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
+        $items = $search !== '' ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
 
         // Built from the unfiltered tree so a search never narrows the parents
         // the quick-add form can target.
@@ -56,10 +62,37 @@ class DashboardController extends Controller
             'group' => $group,
             'items' => $items,
             'search' => $search,
+            // The number of rows actually on screen, so an active search can
+            // say "N of M" instead of leaving the header's total looking wrong.
+            'visibleItemCount' => self::countTree($items),
             'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
-            'orphanedItemIds' => MenuBuilder::getInstance()->items->getOrphanedItemIds($group->id),
+            // Link health for every item in the menu, healthy ones included
+            // (see MenuBuilderLinkHealthService) — the tree rows read it by
+            // item id, and the summary counts only what needs attention. Built
+            // from the *unfiltered* menu on purpose: a search must not make
+            // the "3 items need attention" line quietly drop to one.
+            'itemHealth' => $itemHealth,
+            'healthSummary' => MenuBuilderLinkHealth::summarize($itemHealth),
             'parentOptions' => $parentOptions,
-        ]);
+        ] + $this->currentUserAffordances());
+    }
+
+    /**
+     * Total rows in a (possibly filtered) tree, descendants included. Pure and
+     * static so the count the search summary shows is testable without a
+     * booted app.
+     *
+     * @param MenuBuilderItem[] $items
+     */
+    public static function countTree(array $items): int
+    {
+        $count = 0;
+
+        foreach ($items as $item) {
+            $count += 1 + self::countTree($item->children);
+        }
+
+        return $count;
     }
 
     /**

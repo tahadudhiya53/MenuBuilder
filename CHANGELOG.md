@@ -5,167 +5,118 @@ All notable changes to MenuBuilder are documented here. This project follows
 
 ## 1.0.0 - Unreleased
 
-First release. Everything below is new; the "Removed" and "Changed" entries record decisions made
-during 1.0.0 development that affect anyone who tracked the plugin pre-release.
+First release. Everything in the plugin is new, so this entry lists what 1.0.0 ships.
 
-### Added — menus (groups)
+### Menus
 
-- Multiple named menus with unique handles, description, enable/disable, and sort order.
-- Optional maximum nesting depth (1–10), enforced server-side on every move — not just client-side.
-- Per-menu site restriction for multi-site installs; an unavailable menu returns no tree at all
-  rather than an empty one.
-- Menu-level CSS class and custom HTML attributes for the rendered `<nav>`/wrapper.
-- Duplicate a menu from the menus list — settings plus every item, in one transaction, with an auto-uniqued handle.
-- Inline enable/disable toggle from the menus list (previously only possible by opening the edit form).
-- Menus are mirrored into `project.yaml` (`menuBuilder.groups.<uid>`) and applied back to the
-  database when a config change arrives from a deploy. Items stay out of project config on purpose.
+- Any number of named menus, each with a handle, description, enable/disable switch and sort order.
+- Optional max nesting depth (1–10), enforced server-side on every move.
+- Per-menu site restriction, CSS class and validated HTML attributes.
+- Duplicate a menu — settings and every item — in one transaction, with a uniqued handle.
+- Menus and items are database-only (`menubuilder_groups`, `menubuilder_items`); nothing is written
+  to project config.
 
-### Added — menu items
+### Menu items
 
-- Eight item types: `entry`, `category`, `asset`, `url`, `anchor`, `nonclickable` (heading),
-  `separator`, and `dynamic`.
-- Element-backed links (entry/category/asset) are re-resolved live per request and per site — no
-  stored URLs to go stale.
-- Title fallback: leaving the title blank on an element-backed item inherits the linked element's
-  own title. An explicit title is never overwritten.
-- Explicit `clickable` flag, independent of whether a URL or element is set.
-- Per-item fallback behaviour when a linked element is missing/disabled/unpublished: hide the item,
-  keep it but disable the link, or use a fallback URL.
-- `target="_blank"` support with `rel="noopener"` merged in automatically, preserving any editor-set
-  `nofollow`/`sponsored`/custom `rel` values (duplicates collapsed).
-- Appearance and accessibility fields: icon, badge, description, image, featured flag, CSS class,
-  HTML id, ARIA label, `title` attribute, and an arbitrary HTML-attributes bag.
-- Duplicate an item together with its entire subtree, in one transaction.
-- Deleting an item removes its subtree via a database-level cascade.
-- Orphaned-element badge in the tree when a linked element has been hard-deleted, found in at most
-  one query per element type per menu.
+- Eight types: entry, category, asset, custom URL, anchor, non-clickable heading, separator and
+  dynamic navigation.
+- Element links resolved live per request and per site — titles too, with a blank title inheriting
+  the linked element's own.
+- Explicit clickable flag, per-item fallback behaviour (hide, unlink, fallback URL), new-tab target
+  with automatic `rel="noopener"`, `rel` presets and free-form `rel`.
+- Presentation: icon (icon class or Craft asset), badge with five styles, description, image,
+  featured flag, CSS class, HTML id and custom HTML attributes — all validated server-side.
+- Accessibility fields: ARIA label and `title` attribute.
+- Enable/disable and duplicate, both applying to the item's whole subtree.
+- Up to 20 editor-defined custom fields per menu, in seven types (text, textarea, number, boolean,
+  select, URL, asset).
 
-### Added — visibility
+### Visibility
 
-- Per-item visibility rules combined with AND: `always`, `loggedIn`, `loggedOut`, `userGroup`,
-  `site`, `dateRange`, `environment`.
-- Rules evaluate against a plain-scalar context (booleans, ints, a `DateTime`, the app timezone,
-  `CRAFT_ENVIRONMENT`) built once per render, so evaluation stays testable and cheap.
-- Unknown or malformed rules **fail closed** — gated navigation is hidden, never leaked.
-- `dateRange` parses naive `datetime-local` values against the app's configured timezone, so a
-  value means the same instant regardless of server timezone; an unparseable bound, an impossible
-  calendar date (e.g. `2026-02-30`), or a start after its end hides the item.
-- Server-side shape validation of the whole `visibility` array, as defence-in-depth for imports and
-  direct API writes that bypass the control-panel editor.
+- Seven rule types — `loggedIn`, `loggedOut`, `userGroup`, `site`, `dateRange`, `environment`,
+  `always` — combined with AND, evaluated per request and never cached.
+- Unknown, empty or malformed rules fail closed (the item is hidden) and are rejected at save time.
 
-### Added — mega menus
+### Mega menus, mobile and dynamic navigation
 
-- Any item can become a mega-menu parent (1–6 columns) via `metadata['megaMenu']`; each child picks
-  a column via `metadata['megaMenuColumn']`. No second tree and no separate item type.
-- `MenuBuilderNode::megaMenuColumns()` buckets already-resolved children by column (out-of-range or
-  unset collapses into column 1) — pure logic, no queries.
-- Optional accessible mega-menu renderer in `_macros/tree.twig` (`renderMegaMenu()`), called
-  automatically by `render()`.
+- Mega menus: any item, 1–6 columns, children assigned per column, rendered as a native `<details>`
+  disclosure.
+- Mobile: per-item viewport, mobile order, collapsible children and mega-menu behaviour — one menu
+  reshaped, never a second menu. No breakpoint, media query or user-agent sniffing is stored or
+  emitted.
+- Dynamic items: children generated from entries by section, categories by group or assets by
+  volume, with a limit capped at 50 and a whitelisted order.
 
-### Added — dynamic navigation
+### Control panel
 
-- `dynamic` item type whose children are synthesised at resolve time from entries by section,
-  categories by group, or assets by volume.
-- One bounded query per dynamic item (never per child), scoped to the current site and to
-  normally-visible elements only.
-- `limit` hard-clamped to 50 server-side regardless of what's stored, and `orderBy` restricted to a
-  fixed whitelist — never editor-supplied SQL.
-- Malformed dynamic-source config is rejected at save time rather than failing oddly at render time.
+- Drag-and-drop tree with a drop indicator, full keyboard equivalents and server-side depth checks.
+- Slide-out item editor with a full-page fallback, quick-add panel, search/filter, bulk
+  enable/disable/delete, and child/disabled/mega badges.
+- Link-health badges for internal links, with a menu-wide summary and a route into the editor to fix
+  each cause. External URLs are never crawled.
+- Preview screen rendering the saved menu through the production macros for a chosen site, audience,
+  region and device, plus the rendered markup as text.
 
-### Added — control panel
+### Developer surface
 
-- Drag-and-drop tree built on Garnish's `DragSort`: reorder and reparent in one gesture, with a
-  live drop-position indicator and depth limits enforced as you drag and again on the server.
-- Slide-out item editor sharing one field partial with the full-page editor URL, which remains as a
-  deep-link and no-JS fallback.
-- Quick-add panel with a "Nest under" parent picker built from the unfiltered tree (search never
-  narrows your parent choices), skipping separators and any parent that would exceed max depth.
-- Search/filter within a menu that keeps a matching item's ancestors visible.
-- Bulk enable / disable / delete via row checkboxes and a selection toolbar, routed through the same
-  per-item save/delete path (so hierarchy and permission checks are never bypassed) inside one
-  transaction.
-- Child-count, disabled, mega-menu, and orphaned-element badges on tree rows.
+- Twig: `craft.menuBuilder.get()`, `.breadcrumbs()`, `.getGroup()`, `.getItem()`, `.iconAsset()`,
+  `.customAsset()`.
+- `MenuBuilderNode` as the stable public object; breadcrumbs derived from the menu hierarchy, never
+  from URL segments.
+- Optional macros: `_macros/tree.twig`, `_macros/breadcrumbs.twig`, and an optional `NavAsset` script
+  for mega-menu keyboard extras.
+- Navigation field for entries, Matrix blocks, categories and users, storing the menu's UID.
+- GraphQL: `menuBuilder` and `menuBuilderNavigations` queries, read-only, off until a menu is ticked
+  into a schema's scope.
+- REST API: `GET /v1/navigations` and `/v1/navigations/{handle}`, read-only, off until enabled in
+  `config/menu-builder.php`, with ETags, CORS allowlist and rate limiting.
+- Two extension events: register a link type, register a visibility rule.
 
-### Added — developer API
+### Performance and caching
 
-- `craft.menuBuilder.get(handle, currentUri = null)` returning an iterable, countable
-  `MenuBuilderTree` with `.group`, `.items`, and `.flatten()`.
-- `craft.menuBuilder.getGroup(handle)` and `craft.menuBuilder.getItem(id)` as thin read-only
-  accessors.
-- `MenuBuilderNode` as the single stable Twig contract — no database ids, no internal columns;
-  dynamic children merged transparently into `children`.
-- Optional `menu-builder/_macros/tree` render macros, importable from front-end templates.
-- Two extension events: `MenuBuilderLinkResolver::EVENT_REGISTER_LINK_TYPES` and
-  `MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES`.
+- Per menu, per site, per config-version caching of the link-resolution pass only; visibility and
+  active state always run fresh.
+- Targeted invalidation on menu, item, element, container and site changes; draft and revision saves
+  are ignored.
+- Batch-loaded element links and flat tree queries — a cache hit is one query at any menu size, and
+  query-budget tests keep it that way.
 
-### Added — performance
+### Security
 
-- Per-menu, per-site caching of the link-resolution pass only; visibility and active state always
-  run fresh, so nothing user- or time-specific is ever shared between visitors.
-- Targeted invalidation: a menu/item change invalidates that menu; an entry/category/asset
-  save/delete/restore invalidates only the menus that link to it (one indexed lookup) plus menus
-  containing a dynamic item. Draft, revision, and provisional-draft saves are ignored.
-- Tree reads are one flat query per menu, assembled in PHP — never recursive per-node queries.
+- Five permissions (`menuBuilder:view`, `:create`, `:edit`, `:delete`, `:manageSettings`), enforced
+  server-side on every action, on top of Craft's own control-panel permission.
+- Every mutation is a POST behind Craft's CSRF token; every CP action requires a CP request.
+- Attribute, URL, id and class validation rejects event handlers and executing schemes, matched
+  after whitespace and control characters are stripped.
+- GraphQL and REST resolve for the anonymous audience, so a shared cache entry can never carry one
+  caller's visibility decision to another.
 
-### Added — security
+### Accessibility
 
-- Five permissions: `menuBuilder:view`, `:create`, `:edit`, `:delete`, `:manageSettings`, each
-  mapped to actions by a pure static method per controller so the mapping is unit-tested.
-- Every action requires a control-panel request and a permission check before touching a
-  client-supplied ID; every mutation requires POST plus Craft's CSRF token.
-- HTML-attribute validation on both items and menus rejects event-handler-shaped keys (`onclick`)
-  and `javascript:` values as defence-in-depth beyond Twig escaping.
-- URL validation accepts absolute URLs, root-relative paths, fragments, `mailto:`, and `tel:`
-  without forcing a scheme onto internal paths; anchor targets reject whitespace and quote/angle
-  characters.
-- An existing item's `groupId` can no longer be changed, by POST tampering or otherwise — moving an
-  item between menus used to silently orphan its children.
+- Bundled macros emit one named `<nav>` landmark per menu, real lists, `aria-current="page"` on the
+  active link only, `<hr>` separators, a hidden "(opens in a new tab)" hint, and native `<details>`
+  disclosures with no `aria-expanded` to fall out of step.
+- Custom HTML attributes are filtered at render as well as validated on save.
+- Guarantees are summarized in [README.md](README.md#accessibility); the reasoning and the manual
+  release checklist are in [ARCHITECTURE.md](ARCHITECTURE.md#accessibility).
 
-### Added — tests
+### Tests
 
-- 113 PHPUnit unit tests covering link resolvers, visibility rules and context, mega-menu grouping,
-  dynamic-source and mega-menu validation, item/group model validation, cache-key construction,
-  link-attribute helpers, and controller permission mappings — all without booting Craft.
-
-### Changed
-
-- Group mutations are gated by `menuBuilder:manageSettings` instead of `menuBuilder:create`, so
-  editing an existing menu no longer requires a permission labelled "create" and
-  `manageSettings` is no longer dead. `create`/`edit` now mean what their labels say for items:
-  `create` covers new items and duplication, `edit` covers saves/toggles/reorders of existing ones.
-- `MenuBuilderGroup` uses `defineRules()` rather than overriding `rules()`, restoring Craft's
-  `EVENT_DEFINE_RULES` extension point.
-- Element-change cache invalidation replaced a blanket cache flush with a targeted per-menu lookup.
-- The quick-add form's Title field is now optional for element-backed types, matching the full
-  editor and the model, with a hint explaining the fallback.
-- The quick-add form gained a real parent picker; previously new items could only be created at the
-  top level and dragged into place.
-- Group site restrictions are stored inside the existing `settings` JSON bag, so no migration is
-  needed for them.
-
-### Removed
-
-Each of these was a *second* UI or code path to a behaviour that already had one — see
-"Single path per behaviour" in ARCHITECTURE.md.
-
-- Row-menu **Move up / Move down / Indent / Outdent** commands. Drag-and-drop already reparents and
-  reorders through the same persistence call.
-- Row-menu **Add child / Add sibling** commands. The quick-add panel's "Nest under" picker places a
-  new item, and drag adjusts it.
-- The **new-item route** (`menu-builder/<groupHandle>/items/new`) and `ItemsController::actionEdit`'s
-  new-item branch. That action is now edit-only.
-- The **drop-onto-a-row** reparenting gesture (and its hover timer). Horizontal drag movement is now
-  the only reparent gesture; the removed one computed depth admissibility a second, independent way
-  that could disagree with the first.
-- `src/web/assets/cp/menu-builder-cp.js`, replaced by the focused `tree.js`, `slideout.js`,
-  `item-fields.js`, and `menu-builder.js` bundles.
+- 1,138 unit tests (no booted Craft) and 446 integration tests against a real Craft install and
+  database, plus PHPStan level 5 and ECS.
 
 ### Known limitations
 
-- No before/after save/delete events on menus or items yet; the two registration events above are
-  the only extension points.
-- `ElementLinkResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, and the
-  project-config handlers require a booted Craft app/database and are covered by manual
-  verification rather than the unit suite.
-- `composer check-cs` and `composer phpstan` are wired up but have no `ecs.php` / `phpstan.neon`
-  checked in, so neither has an enforced configuration yet.
+- No before/after save/delete events on menus or items; the two registration events are the only
+  extension points.
+- No import/export command or interchange format. Menus move with the database; **Duplicate menu**
+  copies one within an install.
+- Menus can't be reordered from the control panel yet; they list by `sortOrder`, then name.
+- A Navigation field resolves its menu for the current request's site, not the element's.
+- Clock-driven entry status changes (`postDate`/`expiryDate`) have no event; Craft's `cacheDuration`
+  bounds them.
+- Commerce products and other third-party element types are not synced; a link type added through
+  `EVENT_REGISTER_LINK_TYPES` must invalidate menu caches itself.
+- `ElementLinkResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService` and the
+  services' database writes are covered by integration and manual verification rather than the unit
+  suite.

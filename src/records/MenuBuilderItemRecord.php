@@ -42,14 +42,4 @@ class MenuBuilderItemRecord extends ActiveRecord
     {
         return '{{%menubuilder_items}}';
     }
-
-    public function getGroup(): \yii\db\ActiveQuery
-    {
-        return $this->hasOne(MenuBuilderGroupRecord::class, ['id' => 'groupId']);
-    }
-
-    public function getParent(): \yii\db\ActiveQuery
-    {
-        return $this->hasOne(self::class, ['id' => 'parentId']);
-    }
 }

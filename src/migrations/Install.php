@@ -3,7 +3,6 @@
 namespace Tahadudhiya\MenuBuilder\migrations;
 
 use craft\db\Migration;
-use craft\helpers\MigrationHelper;
 
 class Install extends Migration
 {
@@ -91,17 +90,21 @@ class Install extends Migration
         return true;
     }
 
+    /**
+     * `menubuilder_items` owns both foreign keys (its own `groupId` and the
+     * self-referencing `parentId`), so dropping it first leaves nothing
+     * pointing at `menubuilder_groups` — the previous
+     * `MigrationHelper::dropAllForeignKeysOnTable()` calls were both
+     * redundant and deprecated (in Craft 4.0).
+     *
+     * Dropping these two tables is the whole uninstall: group configuration
+     * is database-backed only (see MenuBuilderGroupService), so there is no
+     * project-config path left behind for a reinstall to replay.
+     */
     public function safeDown(): bool
     {
-        if ($this->db->tableExists('{{%menubuilder_items}}')) {
-            MigrationHelper::dropAllForeignKeysOnTable('{{%menubuilder_items}}');
-            $this->dropTableIfExists('{{%menubuilder_items}}');
-        }
-
-        if ($this->db->tableExists('{{%menubuilder_groups}}')) {
-            MigrationHelper::dropAllForeignKeysOnTable('{{%menubuilder_groups}}');
-            $this->dropTableIfExists('{{%menubuilder_groups}}');
-        }
+        $this->dropTableIfExists('{{%menubuilder_items}}');
+        $this->dropTableIfExists('{{%menubuilder_groups}}');
 
         return true;
     }

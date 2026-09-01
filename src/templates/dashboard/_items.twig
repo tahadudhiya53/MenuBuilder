@@ -9,25 +9,79 @@
     dynamic: 'Dynamic'|t('menu-builder'),
 } %}
 
+{% set canSelect = canEdit or canDelete %}
+{% set canReorder = canEdit and not isFiltered %}
+
+{# Ancestor connector columns still open above this level — see the
+   "Hierarchy connector" block in menu-builder-cp.css. A column stays open
+   while the item that owns it still has a sibling further down for its rail
+   to reach, so the rows of an intervening subtree can paint that span; a flat
+   list gives the siblings themselves no way to. MenuBuilderTree.syncRails()
+   recomputes exactly this on init and after every move and is the authority;
+   rendering it here is what avoids an unrailed first paint. #}
+{% set openColumns = openColumns ?? [] %}
+
 {% for item in items %}
-    <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}{{ loop.last ? ' menu-builder-item-last' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" style="--mb-level: {{ level }}">
+    {# The one label every control on this row refers to. An item's title is
+       optional, so falling back here (rather than in each aria-label) keeps
+       "Actions for" from trailing off into nothing on an untitled row. #}
+    {# `is not empty` would call a title of "0" empty, which is a real title. #}
+    {% set itemLabel = (item.title is not null and item.title|trim != '')
+        ? item.title
+        : (item.type in ['entry', 'category', 'asset']
+            ? "(uses linked element's title)"|t('menu-builder')
+            : "(untitled)"|t('menu-builder')) %}
+
+    {# One lookup per row; healthy items are in the map too, so a missing key
+       means "not checked" rather than "fine". #}
+    {% set health = (itemHealth is defined and itemHealth[item.id] is defined) ? itemHealth[item.id] : null %}
+
+    <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" data-title="{{ itemLabel }}" style="--mb-level: {{ level }}">
+        {% if openColumns is not empty %}
+            <span class="menu-builder-item-rails" aria-hidden="true">{% for column in openColumns %}<i style="--mb-rail: {{ column }}"></i>{% endfor %}</span>
+        {% endif %}
+
         <div class="menu-builder-item-row">
-            {% if canEdit %}
+            {% if canSelect %}
                 <label class="menu-builder-bulk-checkbox">
-                    <input type="checkbox" data-mb-bulk-select data-id="{{ item.id }}" aria-label="{{ 'Select {title}'|t('menu-builder', { title: item.title|default('untitled'|t('menu-builder')) }) }}">
+                    <input type="checkbox" data-mb-bulk-select data-id="{{ item.id }}" aria-label="{{ 'Select {title}'|t('menu-builder', { title: itemLabel }) }}">
                 </label>
-                <a class="menu-builder-drag-handle move icon" title="{{ 'Reorder'|t('app') }}" role="button" tabindex="0" aria-label="{{ 'Reorder {title}'|t('menu-builder', { title: item.title }) }}"></a>
+            {% endif %}
+
+            {% if canReorder %}
+                {# Focusable and operable from the keyboard: arrow keys move the
+                   row through the same persistReorder() path a drag uses (see
+                   tree.js), so this isn't a mouse-only control wearing a
+                   button role. #}
+                <a class="menu-builder-drag-handle move icon"
+                   role="button"
+                   tabindex="0"
+                   title="{{ 'Drag to reorder, or use the arrow keys'|t('menu-builder') }}"
+                   aria-label="{{ 'Reorder {title}. Use the arrow keys to move it up, down, or in and out one level.'|t('menu-builder', { title: itemLabel }) }}"
+                   aria-describedby="menu-builder-reorder-help"></a>
+            {% elseif canEdit %}
+                {# Reordering is off while a search filters the tree — the rows
+                   on screen aren't the real sibling set. Keep the column so
+                   rows don't jump sideways when the search is cleared. #}
+                <span class="menu-builder-drag-handle move icon is-disabled" aria-hidden="true" title="{{ 'Clear the search to reorder items.'|t('menu-builder') }}"></span>
             {% endif %}
 
             <span class="menu-builder-item-title">
                 {% if item.title %}
                     {{ item.title }}
-                {% elseif item.type in ['entry', 'category', 'asset'] %}
-                    <em class="light">{{ "(uses linked element's title)"|t('menu-builder') }}</em>
                 {% else %}
-                    <em class="light">{{ "(untitled)"|t('menu-builder') }}</em>
+                    <em class="light">{{ itemLabel }}</em>
                 {% endif %}
             </span>
+
+            {# The editor's own badge, previewed on the row so "does this item
+               have a badge, and which one" is answerable without opening the
+               slide-out. Escaped like anywhere else — the CP is not a place
+               where markup typed into a badge gets a second chance. The style
+               only ever contributes an allowlisted modifier class. #}
+            {% if item.hasBadge() %}
+                <span class="menu-builder-item-badge badge {{ item.badgeStyle() ? 'menu-builder-item-badge--' ~ item.badgeStyle() }}" title="{{ 'Badge'|t('menu-builder') }}">{{ item.badge }}</span>
+            {% endif %}
 
             <span class="menu-builder-item-type badge">{{ typeLabels[item.type] ?? item.type }}</span>
 
@@ -37,46 +91,85 @@
 
             {% if not item.enabled %}
                 {# The `-disabled-flag` class is this badge's own hook: `-item-status`
-                   is shared with the mega-menu and orphaned-element badges, so the
+                   is shared with the mega-menu and link-health badges, so the
                    JS that adds/removes this one on toggle needs a selector that
                    can't collide with them (see tree.js `toggle()`). #}
                 <span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
             {% endif %}
 
-            {% if orphanedItemIds is defined and orphanedItemIds[item.id] is defined %}
-                <span class="menu-builder-item-status badge disabled-badge" title="{{ 'The linked entry/category/asset no longer exists.'|t('menu-builder') }}">
-                    ⚠ {{ "Linked element unavailable"|t('menu-builder') }}
+            {# Link health, from MenuBuilderLinkHealthService — the row says
+               *which* kind of problem it is (missing / disabled / unpublished
+               / not on this site / no URL / invalid link / dead dynamic
+               source) and, in the tooltip, what the front end is doing about
+               it. Every one of those strings comes from the health object,
+               which is built from a status and the item's own fallback
+               setting: nothing read off the linked element (title, URI, ID)
+               reaches this row, so a warning about content the viewer may not
+               be permitted to see discloses nothing about it. #}
+            {% if health and not health.isHealthy() %}
+                <span class="menu-builder-item-status badge disabled-badge menu-builder-item-health-flag menu-builder-item-health--{{ health.status }}"
+                      title="{{ health.message() }} {{ health.consequence() }}">
+                    <span aria-hidden="true">⚠</span> {{ health.label() }}
                 </span>
             {% endif %}
 
             {% if item.hasChildren() %}
+                {# `title` alone is not reliably announced, and a bare number
+                   read out on its own says nothing about what it counts. #}
                 <span class="menu-builder-item-childcount light" title="{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}">
-                    {{ item.children|length }}
+                    <span aria-hidden="true">{{ item.children|length }}</span>
+                    <span class="visually-hidden">{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}</span>
                 </span>
             {% endif %}
 
-            {% if canEdit %}
+            {% if canEdit or canCreate or canDelete %}
                 <div class="menu-builder-item-actions">
-                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {title}'|t('menu-builder', { title: item.title|default('untitled'|t('menu-builder')) }) }}"></button>
+                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {title}'|t('menu-builder', { title: itemLabel }) }}"></button>
                     <div class="menu">
                         <ul>
-                            <li>
-                                <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Edit"|t('app') }}</a>
-                            </li>
-                            <li>
-                                <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a>
-                            </li>
+                            {% if canEdit %}
+                                <li>
+                                    <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Edit"|t('app') }}</a>
+                                </li>
+                            {% endif %}
+                            {% if canCreate %}
+                                <li>
+                                    <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a>
+                                </li>
+                            {% endif %}
                         </ul>
-                        <hr>
+                        {# The recovery route for an item whose linked element
+                           is gone. It opens the editor — where relinking, a
+                           fallback URL, and the enabled toggle all live, and
+                           where the same warning is spelled out in full —
+                           rather than guessing a replacement or quietly
+                           dropping the item. Disable and Delete stay in their
+                           usual places below; deliberately not repeated here,
+                           both because tree.js addresses the toggle entry by
+                           id and because a broken link should not lead with a
+                           destructive suggestion. #}
+                        {% if canEdit and health and health.needsElementRecovery() %}
+                            <hr>
+                            <ul>
+                                <li>
+                                    <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Fix this link…"|t('menu-builder') }}</a>
+                                </li>
+                            </ul>
+                        {% endif %}
+                        {% if (canEdit or canCreate) and (canEdit or canDelete) %}<hr>{% endif %}
                         <ul>
-                            <li>
-                                <a data-mb-action="toggle" data-id="{{ item.id }}" role="button">
-                                    {{ item.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}
-                                </a>
-                            </li>
-                            <li>
-                                <a data-mb-action="delete" data-id="{{ item.id }}" data-title="{{ item.title }}" data-has-children="{{ item.hasChildren() ? '1' : '0' }}" class="error" role="button">{{ "Delete"|t('app') }}</a>
-                            </li>
+                            {% if canEdit %}
+                                <li>
+                                    <a data-mb-action="toggle" data-id="{{ item.id }}" role="button">
+                                        {{ item.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}
+                                    </a>
+                                </li>
+                            {% endif %}
+                            {% if canDelete %}
+                                <li>
+                                    <a data-mb-action="delete" data-id="{{ item.id }}" data-title="{{ itemLabel }}" data-has-children="{{ item.hasChildren() ? '1' : '0' }}" class="error" role="button">{{ "Delete"|t('app') }}</a>
+                                </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -85,6 +178,20 @@
     </li>
 
     {% if item.hasChildren() %}
-        {% include "menu-builder/dashboard/_items" with { items: item.children, level: level + 1, parentId: item.id, group: group, canEdit: canEdit, orphanedItemIds: orphanedItemIds } %}
+        {# This item's own column (level - 1) stays open for its descendants
+           only while it still has a sibling below to reach. Level-1 rows own
+           no column, hence the level check. #}
+        {% include "menu-builder/dashboard/_items" with {
+            items: item.children,
+            level: level + 1,
+            parentId: item.id,
+            openColumns: openColumns|merge(level >= 2 and not loop.last ? [level - 1] : []),
+            group: group,
+            canEdit: canEdit,
+            canCreate: canCreate,
+            canDelete: canDelete,
+            isFiltered: isFiltered,
+            itemHealth: itemHealth,
+        } %}
     {% endif %}
 {% endfor %}

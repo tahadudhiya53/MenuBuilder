@@ -4,30 +4,26 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
+use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use yii\web\ForbiddenHttpException;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use yii\base\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
-class GroupsController extends Controller
+class GroupsController extends BaseMenuBuilderController
 {
-    public function beforeAction($action): bool
+    protected function requiredPermission(Action $action): string
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
+        return self::requiredPermissionForAction($action->id);
+    }
 
-        $this->requireCpRequest();
-        $currentUser = Craft::$app->getUser()->getIdentity();
-        $requiredPermission = self::requiredPermissionForAction($action->id);
-
-        if (!$currentUser || (!$currentUser->admin && !$currentUser->can($requiredPermission))) {
-            throw new ForbiddenHttpException('You are not permitted to manage navigation groups.');
-        }
-
-        return true;
+    protected function permissionDeniedMessage(): string
+    {
+        return 'You are not permitted to manage navigation menus.';
     }
 
     /**
@@ -49,8 +45,8 @@ class GroupsController extends Controller
     }
 
     /**
-     * Quick enable/disable, parity with ItemsController::actionToggle() —
-     * previously a group could only be toggled by opening the full edit form.
+     * Quick enable/disable without opening the full edit form; parity with
+     * ItemsController::actionToggle().
      */
     public function actionToggle(): Response
     {
@@ -60,7 +56,7 @@ class GroupsController extends Controller
         $group = MenuBuilder::getInstance()->groups->getById($id);
 
         if (!$group) {
-            return $this->asFailure(Craft::t('menu-builder', 'Navigation group not found.'));
+            return $this->asFailure(Craft::t('menu-builder', 'That menu no longer exists.'));
         }
 
         $group->enabled = !$group->enabled;
@@ -69,13 +65,15 @@ class GroupsController extends Controller
         if (Craft::$app->getRequest()->getAcceptsJson()) {
             return $success
                 ? $this->asSuccess(data: ['enabled' => $group->enabled])
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that menu.'));
         }
 
         if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group updated.'));
+            Craft::$app->getSession()->setSuccess($group->enabled
+                ? Craft::t('menu-builder', 'Menu enabled.')
+                : Craft::t('menu-builder', 'Menu disabled.'));
         } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that navigation group.'));
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that menu.'));
         }
 
         return $this->redirectToPostedUrl();
@@ -84,7 +82,6 @@ class GroupsController extends Controller
     public function actionIndex(): Response
     {
         $groups = MenuBuilder::getInstance()->groups->getAll();
-        $currentUser = Craft::$app->getUser()->getIdentity();
 
         $rows = array_map(fn(MenuBuilderGroup $group) => [
             'group' => $group,
@@ -93,9 +90,7 @@ class GroupsController extends Controller
 
         return $this->renderTemplate('menu-builder/groups/_index', [
             'rows' => $rows,
-            'canManageSettings' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:manageSettings')),
-            'canDelete' => $currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:delete')),
-        ]);
+        ] + $this->currentUserAffordances());
     }
 
     public function actionEdit(?int $groupId = null, ?MenuBuilderGroup $group = null): Response
@@ -105,17 +100,23 @@ class GroupsController extends Controller
                 $group = MenuBuilder::getInstance()->groups->getById($groupId);
 
                 if (!$group) {
-                    throw new NotFoundHttpException('Navigation group not found.');
+                    throw new NotFoundHttpException('Menu not found.');
                 }
             } else {
                 $group = new MenuBuilderGroup();
             }
         }
 
+        // `edit` only needs `view`, so this form is reachable read-only. The
+        // template hides Save/Delete accordingly rather than offering buttons
+        // the save/delete actions would then refuse.
         return $this->renderTemplate('menu-builder/groups/_edit', [
             'group' => $group,
             'isNew' => $group->id === null,
-        ]);
+            'itemCount' => $group->id !== null
+                ? MenuBuilder::getInstance()->groups->countItems($group->id)
+                : 0,
+        ] + $this->currentUserAffordances());
     }
 
     public function actionSave(): ?Response
@@ -127,7 +128,7 @@ class GroupsController extends Controller
         $group = $groupId ? MenuBuilder::getInstance()->groups->getById($groupId) : new MenuBuilderGroup();
 
         if (!$group) {
-            throw new NotFoundHttpException('Navigation group not found.');
+            throw new NotFoundHttpException('Menu not found.');
         }
 
         $group->name = $this->bodyString('name');
@@ -138,18 +139,71 @@ class GroupsController extends Controller
         $group->cssClass = $this->bodyString('cssClass') ?: null;
         $maxDepth = $request->getBodyParam('maxDepth');
         $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
-        $group->htmlAttributes = $this->parseAttributeLines($this->bodyString('htmlAttributes'));
-        $group->siteIds = $this->postedSiteIds($request->getBodyParam('siteIds'));
+        $group->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
+        $group->siteIds = ConfigHelper::normalizeIdList($request->getBodyParam('siteIds'));
+        $group->customFields = $this->buildCustomFields($this->bodyArray('customFields'));
 
         if (!MenuBuilder::getInstance()->groups->save($group)) {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t save navigation group.'));
-
-            return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save navigation group.'), 'group');
+            // asModelFailure() sets the error flash itself — setting one
+            // here as well surfaced the same message twice in the CP.
+            return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save that menu.'), 'group');
         }
 
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group saved.'));
+        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu saved.'));
 
         return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menu-builder/' . $group->handle));
+    }
+
+    /**
+     * Builds the menu's custom field definitions from the editable table's
+     * posted rows.
+     *
+     * Rows are mapped, never trusted: each becomes a
+     * {@see MenuBuilderCustomField}, which validates itself, and the set is
+     * then checked for duplicate handles and the per-menu ceiling by
+     * MenuBuilderGroup::validateCustomFields(). Completely blank rows are
+     * dropped rather than reported — Craft's editable table always posts a
+     * trailing empty row.
+     *
+     * @param array<mixed,mixed> $rows
+     * @return MenuBuilderCustomField[]
+     */
+    private function buildCustomFields(array $rows): array
+    {
+        $definitions = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $handle = trim((string)($this->scalarOrEmpty($row['handle'] ?? null)));
+            $name = trim((string)($this->scalarOrEmpty($row['name'] ?? null)));
+
+            if ($handle === '' && $name === '') {
+                continue;
+            }
+
+            $field = new MenuBuilderCustomField();
+            $field->handle = $handle;
+            $field->name = $name;
+            $field->type = $this->scalarOrEmpty($row['type'] ?? null);
+            $field->instructions = $this->scalarOrEmpty($row['instructions'] ?? null) ?: null;
+            $field->required = ($row['required'] ?? false) === true || ($row['required'] ?? null) === '1';
+            // One comma-separated cell rather than a nested table: the
+            // options list is a short allowlist, and CustomFieldHelper
+            // trims, de-duplicates and drops the empties.
+            $field->options = CustomFieldHelper::normalizeOptions(explode(',', $this->scalarOrEmpty($row['options'] ?? null)));
+
+            $definitions[] = $field;
+        }
+
+        return $definitions;
+    }
+
+    private function scalarOrEmpty(mixed $value): string
+    {
+        return is_scalar($value) ? (string)$value : '';
     }
 
     public function actionDuplicate(): Response
@@ -160,10 +214,13 @@ class GroupsController extends Controller
         $clone = MenuBuilder::getInstance()->groups->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that navigation group.'));
+            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu.'));
         }
 
-        return $this->asSuccess(data: [
+        // The message matters on the non-JSON path: the edit screen's
+        // Duplicate is a form action now, so it posts and redirects like an
+        // ordinary save and would otherwise land on a generic flash.
+        return $this->asSuccess(Craft::t('menu-builder', 'Menu duplicated.'), data: [
             'id' => $clone->id,
             'url' => UrlHelper::cpUrl('menu-builder/' . $clone->handle),
         ]);
@@ -179,63 +236,15 @@ class GroupsController extends Controller
         if (Craft::$app->getRequest()->getAcceptsJson()) {
             return $success
                 ? $this->asSuccess()
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t delete that navigation group.'));
+                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
         }
 
         if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Navigation group deleted.'));
+            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu deleted.'));
         } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t delete that navigation group.'));
+            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
         }
 
         return $this->redirect(UrlHelper::cpUrl('menu-builder'));
-    }
-
-    /**
-     * Normalizes the posted site restriction into `int[]`. Craft's
-     * checkbox-select posts a zero-value padding field alongside the checked
-     * `[]` entries, and posts a bare string instead of an array when nothing
-     * is checked (same shape ItemsController::buildVisibilityRules() guards
-     * against for the per-item `site` rule) — both collapse to "no
-     * restriction" here.
-     *
-     * @return int[]
-     */
-    private function postedSiteIds(mixed $posted): array
-    {
-        if (!is_array($posted)) {
-            return [];
-        }
-
-        $siteIds = array_filter(array_map('intval', array_filter($posted, 'is_scalar')), fn(int $id) => $id > 0);
-
-        return array_values(array_unique($siteIds));
-    }
-
-    /** Parses `key: value` per-line input into an attributes array. */
-    private function parseAttributeLines(string $input): array
-    {
-        $attributes = [];
-
-        foreach (explode("\n", $input) as $line) {
-            if (!str_contains($line, ':')) {
-                continue;
-            }
-
-            [$key, $value] = array_map('trim', explode(':', $line, 2));
-
-            if ($key !== '') {
-                $attributes[$key] = $value;
-            }
-        }
-
-        return $attributes;
-    }
-
-    private function bodyString(string $name, string $default = ''): string
-    {
-        $value = Craft::$app->getRequest()->getBodyParam($name, $default);
-
-        return is_scalar($value) ? (string)$value : $default;
     }
 }

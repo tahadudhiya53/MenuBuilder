@@ -5,6 +5,7 @@ namespace Tahadudhiya\MenuBuilder\models;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 
 /**
  * The Twig-facing representation of a resolved navigation item — hides the
@@ -75,6 +76,26 @@ class MenuBuilderNode
          * @var array<string,mixed>
          */
         public readonly array $customFields = [],
+        /**
+         * The item's normalized mobile-presentation config — see
+         * {@see MobileHelper}. `[]` means "nothing configured", which is
+         * the state of every item that has never been touched on the
+         * mobile tab, so the common case costs nothing.
+         *
+         * This belongs in the cached node: it is a fact about the *item*,
+         * decided by an editor, and about nothing to do with the visitor,
+         * the request, or the device asking. No user agent is sniffed and
+         * no width is guessed anywhere in this plugin — a viewport is
+         * something the template or the stylesheet chooses, not something
+         * the server detects. That is what keeps one cache entry correct
+         * for both viewports (see ARCHITECTURE.md "Caching").
+         *
+         * Declared last, after the existing defaulted parameters, so every
+         * positional construction of a node keeps working unchanged.
+         *
+         * @var array{visibility?: string, order?: int, collapsible?: bool, megaMenu?: string}
+         */
+        public readonly array $mobile = [],
     ) {
     }
 
@@ -94,13 +115,19 @@ class MenuBuilderNode
      * property ARCHITECTURE.md's cache boundary depends on.
      *
      * @param MenuBuilderNode[] $children
+     * @param bool $preserveActiveState Keep this node's already-marked active state on the copy.
+     *                                  False (the default) for the resolve pipeline, which copies
+     *                                  *before* marking. True for a copy made afterwards — see
+     *                                  {@see MenuBuilderTree::forViewport()}, which re-filters and
+     *                                  re-sorts a tree whose active state is already decided and
+     *                                  must survive.
      */
-    public function withChildren(array $children): self
+    public function withChildren(array $children, bool $preserveActiveState = false): self
     {
         $copy = clone $this;
         $copy->children = $children;
-        $copy->isActive = false;
-        $copy->isActiveAncestor = false;
+        $copy->isActive = $preserveActiveState && $this->isActive;
+        $copy->isActiveAncestor = $preserveActiveState && $this->isActiveAncestor;
 
         foreach ($children as $child) {
             $child->parent = $copy;
@@ -226,6 +253,92 @@ class MenuBuilderNode
     public function isActiveOrAncestor(): bool
     {
         return $this->isActive || $this->isActiveAncestor;
+    }
+
+    /**
+     * The mobile-presentation accessors — derived reads over the single
+     * stored `mobile` bag, in the same shape and for the same reason as
+     * {@see iconClass()} and {@see badgeClass()}: the node is what gets
+     * cached, so a rule tightened in a later release has to apply to trees
+     * cached before it, and a value written straight into the database has
+     * to read back as the default rather than reach a template.
+     *
+     * None of these know what a breakpoint is. `mobileVisibility()` says
+     * which navigations an item belongs to; *when* a navigation is the
+     * mobile one is your stylesheet's decision, or your template's when it
+     * calls {@see MenuBuilderTree::forViewport()}.
+     */
+    public function mobileVisibility(): string
+    {
+        return MobileHelper::visibility($this->mobile['visibility'] ?? null);
+    }
+
+    /**
+     * Whether this item belongs in the given viewport
+     * (`MobileHelper::VIEWPORT_*`). An unknown viewport keeps the item —
+     * see {@see MobileHelper::isVisibleOn()}.
+     */
+    public function isVisibleOn(string $viewport): bool
+    {
+        return MobileHelper::isVisibleOn($viewport, $this->mobile);
+    }
+
+    public function showsOnMobile(): bool
+    {
+        return $this->isVisibleOn(MobileHelper::VIEWPORT_MOBILE);
+    }
+
+    public function showsOnDesktop(): bool
+    {
+        return $this->isVisibleOn(MobileHelper::VIEWPORT_DESKTOP);
+    }
+
+    /**
+     * The item's mobile sort override, or null when it has none.
+     *
+     * Data, never a CSS `order`: applied by re-sorting the tree in
+     * {@see MenuBuilderTree::forViewport()}, so the DOM order and the
+     * visual order stay the same thing. See the {@see MobileHelper} class
+     * docblock for why the CSS route is a WCAG 1.3.2 / 2.4.3 failure.
+     */
+    public function mobileOrder(): ?int
+    {
+        return MobileHelper::order($this->mobile['order'] ?? null);
+    }
+
+    /**
+     * Whether this node's children are a collapsed disclosure on mobile.
+     *
+     * Derived, with the editor's override on top: a branch is a disclosure
+     * and a leaf is not, because a `<details>` around nothing is a control
+     * that opens an empty panel. An editor who turns it off is saying "this
+     * branch stays open on mobile", which is why
+     * {@see MobileHelper::collapsible()} distinguishes stored `false` from
+     * absence.
+     */
+    public function isMobileCollapsible(): bool
+    {
+        if (!$this->hasChildren()) {
+            return false;
+        }
+
+        return MobileHelper::collapsible($this->mobile['collapsible'] ?? null) ?? true;
+    }
+
+    /** How this node's mega-menu panel behaves on mobile — one of `MobileHelper::MEGA_*`. */
+    public function mobileMegaMenuBehavior(): string
+    {
+        return MobileHelper::megaMenuBehavior($this->mobile['megaMenu'] ?? null);
+    }
+
+    /**
+     * The value for `data-mb-viewport`, or null when this item belongs to
+     * both viewports and the attribute would say nothing. The whole of the
+     * CSS contract — see {@see MobileHelper::viewportAttribute()}.
+     */
+    public function viewportAttribute(): ?string
+    {
+        return MobileHelper::viewportAttribute($this->mobile);
     }
 
     /**

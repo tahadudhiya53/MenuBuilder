@@ -8,6 +8,7 @@ use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use yii\base\Action;
@@ -492,6 +493,21 @@ class ItemsController extends BaseMenuBuilderController
         $column = $request->getBodyParam('megaMenuColumn');
         if ($column !== null && $column !== '') {
             $metadata['megaMenuColumn'] = max(1, min(6, (int)$column));
+        }
+
+        // Four discrete fields, one bag key, and nothing stored when they
+        // are all at their defaults — see MobileHelper::fromForm(). An item
+        // nobody has configured for mobile therefore carries no `mobile`
+        // key at all, which is what keeps "empty means unconfigured" true.
+        $mobile = MobileHelper::fromForm(
+            $this->bodyString('mobileVisibility'),
+            $request->getBodyParam('mobileOrder'),
+            $request->getBodyParam('mobileCollapsible'),
+            $this->bodyString('mobileMegaMenu'),
+        );
+
+        if ($mobile !== []) {
+            $metadata[MobileHelper::METADATA_KEY] = $mobile;
         }
 
         if ($itemType === MenuBuilderItem::TYPE_DYNAMIC) {

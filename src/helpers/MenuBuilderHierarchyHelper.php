@@ -224,7 +224,11 @@ class MenuBuilderHierarchyHelper
      */
     public static function subtreeHeight(array $childMap, int $itemId, array $seen = []): int
     {
-        if (isset($seen[$itemId])) {
+        // 0 is `childMap`'s key for the root set, never a real item ID, so
+        // "the height below item 0" is not a question about any item — see
+        // {@see deepestLevelAfterMove()}, which is where asking it by
+        // accident used to reject legitimate inserts.
+        if ($itemId === 0 || isset($seen[$itemId])) {
             return 0;
         }
 
@@ -274,14 +278,21 @@ class MenuBuilderHierarchyHelper
      * move carries the item's descendants with it. A leaf moved to the root
      * is level 1; the same item with grandchildren is level 3.
      *
+     * `$itemId` is null for an item that doesn't exist yet (an insert): it
+     * has no descendants to carry, so only the parent's level counts. It
+     * must NOT be passed as `0` for that case — 0 is `childMap`'s key for
+     * the **root set** (see {@see childMap()}), so a subtree height read
+     * under it is the height of the whole root forest, and an insert would
+     * be measured against unrelated branches.
+     *
      * @param array<int,int|null> $parentMap
      * @param array<int|string,int[]> $childMap
      */
-    public static function deepestLevelAfterMove(array $parentMap, array $childMap, int $itemId, ?int $newParentId): int
+    public static function deepestLevelAfterMove(array $parentMap, array $childMap, ?int $itemId, ?int $newParentId): int
     {
         $parentLevel = $newParentId === null ? 0 : count(self::ancestorIds($parentMap, $newParentId)) + 1;
 
-        return $parentLevel + 1 + self::subtreeHeight($childMap, $itemId);
+        return $parentLevel + 1 + ($itemId === null ? 0 : self::subtreeHeight($childMap, $itemId));
     }
 
     /**

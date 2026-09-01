@@ -13,7 +13,7 @@
  # being served, and — for a mega menu — no ARIA disclosure state at all,
  # because the state belongs to a native `<details>` element that the browser
  # keeps true whether or not any JavaScript runs. Nothing here announces a
- # widget that isn't there — see ACCESSIBILITY.md.
+ # widget that isn't there — see README.md → Accessibility.
  #
  # All three macros take an optional `disclosure` mode, threaded down the
  # whole tree:
@@ -23,6 +23,38 @@
  #   'none'               no disclosure at all: the columns render in flow as
  #                        an ordinary group, for a theme that provides its own
  #                        opening behaviour and wants no state claimed here
+ #
+ # …and an optional `viewport`, threaded the same way:
+ #
+ #   'both' (default)  one navigation for every screen. Items an editor
+ #                     restricted to one viewport still render, carrying
+ #                     `data-mb-viewport="desktop|mobile"` — your media query
+ #                     decides the width at which each is `display:none`.
+ #                     MenuBuilder stores no breakpoint and emits no media
+ #                     query, ever.
+ #   'desktop'         for a tree already narrowed with
+ #                     `menu.forViewport('desktop')`: no viewport attributes,
+ #                     because the tree is the desktop one.
+ #   'mobile'          for `menu.forViewport('mobile')`: no viewport
+ #                     attributes, mobile order already applied, submenus of
+ #                     collapsible branches rendered as native <details>, and
+ #                     mega-menu panels rendered the way each parent's mobile
+ #                     behaviour says (stack / columns / hide).
+ #
+ # Rendering both navigations on one page is the usual pattern and is what
+ # `idPrefix` is for — pass a different one to each so two copies of an item
+ # never share an HTML id:
+ #
+ #   {% set menu = craft.menuBuilder.get('main') %}
+ #   {{ menuMacros.renderNav(menu.forViewport('desktop'), null, 'details', 'desktop', 'desktop') }}
+ #   {{ menuMacros.renderNav(menu.forViewport('mobile'), 'Menu'|t, 'details', 'mobile', 'mobile') }}
+ #
+ # Two navigations means the same link is in the page twice, so exactly one
+ # of them must be `display:none` at any width — that is the one thing your
+ # CSS *must* do. `display:none` removes it from the accessibility tree and
+ # from the Tab order together; `visibility`, `opacity: 0` and off-screen
+ # positioning do not, and leave a screen-reader user walking a navigation
+ # nobody can see. See README.md → Accessibility.
  #}
 {#
  # The navigation landmark: one `<nav>` per menu, named after the menu, with
@@ -41,14 +73,15 @@
  # An empty or missing menu renders nothing at all — an empty landmark is
  # something a screen-reader user has to visit to discover it was empty.
  #}
-{% macro renderNav(menu, label = null, disclosure = 'details', idPrefix = '') %}
+{% macro renderNav(menu, label = null, disclosure = 'details', idPrefix = '', viewport = 'both') %}
     {% import _self as self %}
     {% if menu is not empty %}
         <nav class="{{ menu.group.cssClass }}"
              aria-label="{{ label ?: menu.group.name }}"
              data-menu-builder-nav
+             {%- if viewport != 'both' %} data-mb-viewport="{{ viewport }}"{% endif %}
              {%- for key, value in menu.group.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>
-            {{ self.render(menu.items, disclosure, idPrefix) }}
+            {{ self.render(menu.items, disclosure, idPrefix, viewport) }}
         </nav>
     {% endif %}
 {% endmacro %}
@@ -97,19 +130,89 @@
  #   {{ menuMacros.renderMegaMenu(node) }}
  #   {{ menuMacros.renderMegaMenu(node, 'none') }}
  #}
-{% macro renderMegaMenu(node, disclosure = 'details', idPrefix = '') %}
+{% macro renderMegaMenu(node, disclosure = 'details', idPrefix = '', viewport = 'both') %}
     {% import _self as self %}
-    {% if disclosure == 'none' %}
-        {{ self.megaMenuPanel(node, disclosure, idPrefix) }}
+    {# On mobile a mega menu is not a mega menu: a multi-column panel on a
+       390px screen is one column with a horizontal scrollbar. Each parent
+       says what its panel does there (`node.mobileMegaMenuBehavior()`):
+
+         'stack' (default)  the columns collapse into one ordinary nested
+                            list — every link still present, still in DOM
+                            order, just not in columns
+         'columns'          keep the grouping, for a theme whose columns are
+                            narrow enough to survive
+         'hide'             render no panel at all
+
+       'hide' is a real editorial decision and a sharp one: those links then
+       exist in no navigation a phone has. It is offered because a "shop by
+       department" grid genuinely does not belong in a drawer, and the
+       alternative editors reach for otherwise is a second mobile menu. Make
+       sure the parent itself links somewhere that reaches them. #}
+    {% set megaBehavior = viewport == 'mobile' ? node.mobileMegaMenuBehavior() : 'columns' %}
+    {# Nothing to disclose, nothing to render. A mega-menu parent can end up
+       with no children at all — the config was set before the children were
+       added, or every child is hidden from *this* visitor by a visibility
+       rule (visibility is filtered before the tree ever reaches a macro).
+       Emitting the <details> anyway would put a focusable control in the
+       Tab order that opens an empty `role="group"`: a promise of a panel
+       with no panel behind it. #}
+    {% if not node.hasChildren() or megaBehavior == 'hide' %}
+    {% elseif viewport == 'mobile' and disclosure != 'none' %}
+        {# In the mobile navigation a mega menu is one more collapsible
+           branch, disclosed exactly like any other — same <details>, same
+           summary naming, so a drawer has one interaction and not two. #}
+        {{ self.mobileSubmenu(node, megaBehavior == 'columns' ? self.megaMenuPanel(node, disclosure, idPrefix, viewport) : self.render(node.children, disclosure, idPrefix, viewport)) }}
+    {% elseif viewport == 'mobile' %}
+        {# `disclosure: 'none'` still means what it says on mobile: no state
+           claimed, panel in flow. The behaviour (stack vs columns) is a
+           separate question from who owns the opening, so it still applies. #}
+        {% if megaBehavior == 'columns' %}{{ self.megaMenuPanel(node, disclosure, idPrefix, viewport) }}{% else %}{{ self.render(node.children, disclosure, idPrefix, viewport) }}{% endif %}
+    {% elseif disclosure == 'none' %}
+        {{ self.megaMenuPanel(node, disclosure, idPrefix, viewport) }}
     {% else %}
         <details class="menu-builder-megamenu" data-mb-disclosure>
             <summary class="menu-builder-megamenu-trigger"
                      aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
                 <span class="menu-builder-megamenu-caret" aria-hidden="true">&#9662;</span>
             </summary>
-            {{ self.megaMenuPanel(node, disclosure, idPrefix) }}
+            {{ self.megaMenuPanel(node, disclosure, idPrefix, viewport) }}
         </details>
     {% endif %}
+{% endmacro %}
+
+{#
+ # One collapsible branch in the mobile navigation: the children, behind a
+ # native `<details>`.
+ #
+ # Same reasoning as the mega menu's disclosure, and deliberately the same
+ # element. `open` is simultaneously what renders the panel, what a tap,
+ # Enter or Space toggles, and what a screen reader announces — one
+ # attribute, owned by the browser, with nothing to keep in step. A drawer
+ # accordion built from `<button aria-expanded>` and a `.is-open` class is
+ # the single commonest place mobile navigation lies to assistive technology,
+ # and there is no version of that bug available here.
+ #
+ # Marked `data-mb-submenu`, *not* `data-mb-disclosure`: the optional
+ # NavAsset script deliberately leaves these alone. Its behaviour — open one,
+ # close the siblings; close on focusout — is right for a desktop flyout and
+ # wrong for a drawer, where several sections open at once and closing one
+ # because focus moved is how you lose your place mid-scroll. `<details>`
+ # already gives the keyboard and the screen reader everything they need, so
+ # no script is involved at all.
+ #
+ # The parent's own label is already rendered above this, as a link or a
+ # heading, so the summary carries a decorative caret and a name that says
+ # what it does — the same rule, and the same reason, as the mega menu's
+ # trigger.
+ #}
+{% macro mobileSubmenu(node, children) %}
+    <details class="menu-builder-submenu" data-mb-submenu>
+        <summary class="menu-builder-submenu-trigger"
+                 aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
+            <span class="menu-builder-submenu-caret" aria-hidden="true">&#9662;</span>
+        </summary>
+        {{ children }}
+    </details>
 {% endmacro %}
 
 {#
@@ -117,7 +220,7 @@
  # item. Split out so the two disclosure modes render the *same* panel and
  # cannot drift into two different groupings.
  #}
-{% macro megaMenuPanel(node, disclosure, idPrefix = '') %}
+{% macro megaMenuPanel(node, disclosure, idPrefix = '', viewport = 'both') %}
     {% import _self as self %}
     <div id="menu-builder-megamenu-{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.id }}"
          class="menu-builder-megamenu-panel{{ disclosure == 'none' ? ' menu-builder-megamenu-panel--static' : '' }}"
@@ -125,7 +228,7 @@
          aria-label="{{ node.ariaLabel ?: node.title }}">
         {% for column, columnNodes in node.megaMenuColumns() %}
             <div class="menu-builder-megamenu-column">
-                {{ self.render(columnNodes, disclosure, idPrefix) }}
+                {{ self.render(columnNodes, disclosure, idPrefix, viewport) }}
             </div>
         {% endfor %}
     </div>
@@ -196,19 +299,39 @@
     {%- if node.opensInNewTab() %} <span class="menu-builder-visually-hidden" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0">{{ "(opens in a new tab)"|t('menu-builder') }}</span>{% endif -%}
 {% endmacro %}
 
-{% macro render(nodes, disclosure = 'details', idPrefix = '') %}
+{% macro render(nodes, disclosure = 'details', idPrefix = '', viewport = 'both') %}
     {% import _self as self %}
     <ul>
         {% for node in nodes %}
+            {# The entire CSS contract for a single shared navigation: one
+               attribute, one of two values, emitted only on items an editor
+               actually restricted. No breakpoint, no media query, no
+               framework class — where "mobile" begins is a decision only
+               your stylesheet is in a position to make.
+
+                   @media (max-width: 48em) { [data-mb-viewport="desktop"] { display: none } }
+                   @media (min-width: 48.001em) { [data-mb-viewport="mobile"] { display: none } }
+
+               `display:none` and nothing else: it takes the item out of the
+               accessibility tree and out of the Tab order in one move, which
+               is exactly what "this item is not part of this navigation"
+               has to mean. Hiding it with `visibility`, `opacity` or an
+               off-screen position leaves a screen-reader and keyboard user
+               walking links that aren't there.
+
+               Suppressed for 'desktop'/'mobile', where the tree has already
+               been narrowed by `menu.forViewport()` and every item in it
+               belongs. #}
+            {% set viewportAttribute = viewport == 'both' ? node.viewportAttribute() : null %}
             {% if node.type == 'separator' %}
                 {# The `<hr>` is the separator — that is its native role. The
                    `<li>` around it stays an ordinary list item: moving the
                    role up onto it would take a non-`listitem` child into a
                    list and state the same thing twice. #}
-                <li{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}><hr></li>
+                <li{% if node.cssClass %} class="{{ node.cssClass }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}{% if viewportAttribute %} data-mb-viewport="{{ viewportAttribute }}"{% endif %}><hr></li>
             {% else %}
                 {% set liClasses = (node.cssClass ? node.cssClass ~ ' ' : '') ~ (node.isActiveOrAncestor() ? 'is-active' : '') %}
-                <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}>
+                <li{% if liClasses|trim %} class="{{ liClasses|trim }}"{% endif %}{% if node.htmlId %} id="{{ idPrefix ? idPrefix ~ '-' : '' }}{{ node.htmlId }}"{% endif %}{% if viewportAttribute %} data-mb-viewport="{{ viewportAttribute }}"{% endif %}>
                     {% if node.isClickable %}
                         {# `aria-current="page"` is `isActive` only — the one
                            node whose URL *is* the page being served. An
@@ -237,8 +360,18 @@
                               {%- for key, value in node.safeHtmlAttributes() %} {{ key }}="{{ value }}"{% endfor %}>{{ self.icon(node) }}{{ node.title }}{{ self.badge(node) }}</span>
                     {% endif %}
 
-                    {% if node.megaMenu %}
-                        {{ self.renderMegaMenu(node, disclosure, idPrefix) }}
+                    {% if node.megaMenu and node.hasChildren() %}
+                        {{ self.renderMegaMenu(node, disclosure, idPrefix, viewport) }}
+                    {% elseif node.hasChildren() and viewport == 'mobile' and disclosure != 'none' and node.isMobileCollapsible() %}
+                        {# A drawer that renders every level open is a drawer
+                           nobody can scroll. In the mobile navigation a
+                           branch is a real disclosure — a native <details>,
+                           the same one the mega menu uses, with the same
+                           guarantee that what the markup says and what is on
+                           screen cannot disagree. An editor can turn this
+                           off per item ("Children" → "Always expanded") for a
+                           short branch that reads better open. #}
+                        {{ self.mobileSubmenu(node, self.render(node.children, disclosure, idPrefix, viewport)) }}
                     {% elseif node.hasChildren() %}
                         {# A plain submenu is a nested list of ordinary links,
                            with nothing hiding them from the keyboard: every
@@ -248,8 +381,8 @@
                            `:focus-within` too — or turn the parent into a real
                            disclosure the way renderMegaMenu() does, with a
                            <details> whose `open` the browser owns. See
-                           ACCESSIBILITY.md. #}
-                        {{ self.render(node.children, disclosure, idPrefix) }}
+                           README.md → Accessibility. #}
+                        {{ self.render(node.children, disclosure, idPrefix, viewport) }}
                     {% endif %}
                 </li>
             {% endif %}

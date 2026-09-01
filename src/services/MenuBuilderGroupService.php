@@ -76,17 +76,55 @@ class MenuBuilderGroupService extends Component
         return array_values(array_filter($this->allCache, fn(MenuBuilderGroup $group) => $group->enabled));
     }
 
+    /**
+     * Served from the same memoized `getAll()` list as {@see getByHandle()}
+     * and {@see getByUid()}, and consistent for the same reason: every write
+     * path in this class clears `$allCache`, so the memo can never outlive
+     * the state it describes within a request.
+     *
+     * It reads from the memo rather than the database because the write path
+     * asks for the same menu more than once per saved item — once for its
+     * custom field definitions, once for its `maxDepth`
+     * ({@see \Tahadudhiya\MenuBuilder\services\MenuBuilderItemService::save()})
+     * — which made a 100-item bulk save cost 200 menu queries.
+     */
     public function getById(int $id): ?MenuBuilderGroup
     {
-        $record = MenuBuilderGroupRecord::findOne($id);
+        foreach ($this->getAll() as $group) {
+            if ((int)$group->id === $id) {
+                return $group;
+            }
+        }
 
-        return $record ? $this->recordToModel($record) : null;
+        return null;
     }
 
     public function getByHandle(string $handle): ?MenuBuilderGroup
     {
         foreach ($this->getAll() as $group) {
             if ($group->handle === $handle) {
+                return $group;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * A menu by its UID — the identity {@see \Tahadudhiya\MenuBuilder\fields\MenuBuilderField}
+     * persists, because a field value has to survive a handle rename, and
+     * because a row ID identifies a menu only within the database that
+     * assigned it. Menus remain database-only either way (see this class's
+     * docblock): a UID is a stable reference, not a menu that travels.
+     *
+     * Served from the same memoized `getAll()` list `getByHandle()` uses, so
+     * an element index normalizing a hundred field values costs one query,
+     * not a hundred.
+     */
+    public function getByUid(string $uid): ?MenuBuilderGroup
+    {
+        foreach ($this->getAll() as $group) {
+            if ($group->uid === $uid) {
                 return $group;
             }
         }

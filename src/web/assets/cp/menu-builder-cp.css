@@ -1183,7 +1183,7 @@ li.menu-builder-item.menu-builder-item-added {
    usual "link plus disclosure" pattern. */
 /* A mega menu is a native <details>: `open` is the state, the visibility and
    the accessible state all at once, so nothing here may show a panel whose
-   <details> is closed (see the ARIA-truth rule in ACCESSIBILITY.md). The
+   <details> is closed (see the ARIA-truth rule in README.md → Accessibility). The
    summary is the control; its native marker is replaced by the macro's own
    caret. */
 .menu-builder-preview-nav .menu-builder-megamenu {

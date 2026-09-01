@@ -8,6 +8,7 @@ use craft\base\ElementInterface;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -69,12 +70,13 @@ class MenuBuilderResolver extends Component
             fn() => $this->buildResolvedNodes($group->id, $group->customFields)
         );
 
-        $itemsById = [];
-        foreach (MenuBuilder::getInstance()->items->getFlatForGroup($group->id, includeDisabled: false) as $item) {
-            $itemsById[$item->id] = $item;
-        }
+        // Two columns per row, not a hydrated MenuBuilderItem per row: the
+        // per-request pass below reads nothing else from the persisted item,
+        // and this is the one query every cache *hit* still pays for. See
+        // MenuBuilderItemService::getVisibilityRulesForGroup().
+        $visibilityById = MenuBuilder::getInstance()->items->getVisibilityRulesForGroup($group->id, includeDisabled: false);
 
-        $filtered = $this->filterVisible($resolvedNodes, $itemsById, $visibilityService, $context);
+        $filtered = $this->filterVisible($resolvedNodes, $visibilityById, $visibilityService, $context);
 
         if ($markActive) {
             $request = Craft::$app->getRequest();
@@ -153,8 +155,19 @@ class MenuBuilderResolver extends Component
     private function buildResolvedNodes(int $groupId, array $customFields = []): array
     {
         $items = MenuBuilder::getInstance()->items->getTree($groupId, includeDisabled: false);
+        $linkResolver = MenuBuilder::getInstance()->linkResolver;
 
-        return $this->convert($items, 1, null, $customFields);
+        // One query for every entry/category/asset the menu links to, before
+        // convert() starts asking for them one at a time. Released in the
+        // `finally` because the resolvers outlive this build (they're
+        // memoized per request) but the elements shouldn't.
+        $linkResolver->preload($items);
+
+        try {
+            return $this->convert($items, 1, null, $customFields);
+        } finally {
+            $linkResolver->releasePreloaded();
+        }
     }
 
     /**
@@ -208,6 +221,14 @@ class MenuBuilderResolver extends Component
                 // straight into the database, is dropped here rather than
                 // reaching a template.
                 customFields: CustomFieldHelper::valuesForOutput($customFields, $item->metadata[CustomFieldHelper::VALUES_KEY] ?? null),
+                // Cacheable for the same reason the mega-menu config is: it
+                // is a property of the item, not of the visitor or the
+                // device asking. Nothing here is a breakpoint and nothing
+                // sniffs a user agent — MenuBuilderTree::forViewport() and
+                // the `data-mb-viewport` attribute are where a viewport is
+                // *chosen*, by the template or the stylesheet. One cache
+                // entry therefore serves both viewports.
+                mobile: MobileHelper::config($item->metadata),
             );
 
             $node->parent = $parent;
@@ -302,15 +323,15 @@ class MenuBuilderResolver extends Component
     }
 
     /**
-     * Visibility rules live on the persisted MenuBuilderItem, not the cached
-     * MenuBuilderNode, so re-check against the current raw items — passed in
-     * by getTree() rather than re-queried per node.
+     * Visibility rules live on the persisted item, not the cached
+     * MenuBuilderNode, so re-check against the current rules — read once by
+     * getTree() rather than re-queried per node.
      *
      * @param MenuBuilderNode[] $nodes
-     * @param array<int,MenuBuilderItem> $itemsById
+     * @param array<int,array> $visibilityById Visibility rule bags, keyed by item ID.
      * @return MenuBuilderNode[]
      */
-    private function filterVisible(array $nodes, array $itemsById, MenuBuilderVisibilityService $visibilityService, VisibilityContext $context): array
+    private function filterVisible(array $nodes, array $visibilityById, MenuBuilderVisibilityService $visibilityService, VisibilityContext $context): array
     {
         $filtered = [];
 
@@ -323,11 +344,7 @@ class MenuBuilderResolver extends Component
             // their own (see MenuBuilderResolver::buildDynamicChildren()),
             // so they're always visible here — they're already
             // site/status-scoped by the query that produced them.
-            if ($node->isDynamic) {
-                $item = null;
-            } else {
-                $item = $itemsById[$node->id] ?? null;
-
+            if (!$node->isDynamic) {
                 // A cached node whose persisted item is gone from the fresh
                 // read — deleted, or disabled since the tree was cached —
                 // is hidden rather than passed through unchecked: its
@@ -335,13 +352,17 @@ class MenuBuilderResolver extends Component
                 // more. Invalidation should already have prevented this
                 // (MenuBuilderCacheService), so this is the fail-closed
                 // backstop for a stale entry that outlived its item.
-                if ($item === null) {
+                //
+                // array_key_exists(), not `?? null`: an item with no rules
+                // at all is a present key holding an empty bag, and must not
+                // read as a missing row.
+                if (!array_key_exists($node->id, $visibilityById)) {
                     continue;
                 }
-            }
 
-            if ($item !== null && !$visibilityService->isVisible($item, $context)) {
-                continue;
+                if (!$visibilityService->passes($visibilityById[$node->id], $context, $node->id)) {
+                    continue;
+                }
             }
 
             // withChildren() rather than `$node->children = ...`: these
@@ -350,7 +371,7 @@ class MenuBuilderResolver extends Component
             // put per-request state on shared objects. See
             // MenuBuilderNode::withChildren().
             $filtered[] = $node->withChildren(
-                $this->filterVisible($node->children, $itemsById, $visibilityService, $context)
+                $this->filterVisible($node->children, $visibilityById, $visibilityService, $context)
             );
         }
 

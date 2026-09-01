@@ -9,6 +9,7 @@
     { label: "Critical"|t('menu-builder'), value: 'critical' },
 ] %}
 {% set dynamicSource = item.metadata.dynamicSource ?? [] %}
+{% set mobileConfig = item.mobileConfig() %}
 
 {% set loggedInRule = item.visibility|filter(r => r.type == 'loggedIn')|first ?: null %}
 {% set loggedOutRule = item.visibility|filter(r => r.type == 'loggedOut')|first ?: null %}
@@ -246,7 +247,7 @@
     <input type="hidden" name="clickable" id="clickableField" value="{{ item.type not in ['nonclickable', 'separator'] ? '1' : '' }}">
 
     {% if isNew %}
-        <p class="light">{{ "Behavior, appearance, accessibility, visibility, and advanced settings become available once this menu item is saved."|t('menu-builder') }}</p>
+        <p class="light">{{ "Behavior, appearance, accessibility, visibility, mobile, and advanced settings become available once this menu item is saved."|t('menu-builder') }}</p>
     {% endif %}
 </div>
 
@@ -444,13 +445,63 @@
     }) }}
     {{ forms.textField({
         label: "This item's column (under its parent's mega menu)"|t('menu-builder'),
-        instructions: "Only meaningful when the parent item above has mega menu enabled."|t('menu-builder'),
+        instructions: "Only meaningful when this item's own parent has mega menu enabled. Columns beyond that parent's column count fall back to the first column."|t('menu-builder'),
         id: 'megaMenuColumn',
         name: 'megaMenuColumn',
         type: 'number',
         min: 1,
         max: 6,
         value: item.metadata.megaMenuColumn ?? '',
+    }) }}
+</div>
+
+<div data-mb-section="mobile">
+    <h2>{{ "Mobile"|t('menu-builder') }}</h2>
+    <p class="light">{{ "How this item behaves in a small-screen navigation. MenuBuilder decides which items belong to which navigation, in what order, and which branches collapse — your front-end templates decide the breakpoint. No menu is duplicated: this is the same item, presented differently."|t('menu-builder') }}</p>
+    {{ forms.selectField({
+        label: "Shown on"|t('menu-builder'),
+        instructions: "Restrict this item to one navigation. “Desktop only” and “Mobile only” hide it from the other — the item, its link and its children all go with it."|t('menu-builder'),
+        id: 'mobileVisibility',
+        name: 'mobileVisibility',
+        options: [
+            { label: "Desktop and mobile"|t('menu-builder'), value: 'both' },
+            { label: "Desktop only"|t('menu-builder'), value: 'desktopOnly' },
+            { label: "Mobile only"|t('menu-builder'), value: 'mobileOnly' },
+        ],
+        value: item.mobileVisibility(),
+    }) }}
+    {{ forms.textField({
+        label: "Mobile order"|t('menu-builder'),
+        instructions: "Optional. Items with a number are placed in that order among their siblings on mobile; items without one keep the order you dragged them into and follow after. Only applies where the mobile navigation is rendered separately."|t('menu-builder'),
+        id: 'mobileOrder',
+        name: 'mobileOrder',
+        type: 'number',
+        min: 0,
+        max: 9999,
+        value: mobileConfig.order ?? '',
+    }) }}
+    {{ forms.selectField({
+        label: "Children on mobile"|t('menu-builder'),
+        instructions: "By default a branch collapses behind a disclosure on mobile, so a deep menu still fits a phone. “Always expanded” renders its children in place instead. Items with no children are unaffected."|t('menu-builder'),
+        id: 'mobileCollapsible',
+        name: 'mobileCollapsible',
+        options: [
+            { label: "Collapsed by default"|t('menu-builder'), value: '' },
+            { label: "Always expanded"|t('menu-builder'), value: '0' },
+        ],
+        value: (mobileConfig.collapsible ?? null) is same as(false) ? '0' : '',
+    }) }}
+    {{ forms.selectField({
+        label: "Mega menu on mobile"|t('menu-builder'),
+        instructions: "Only meaningful when this item has mega menu enabled above. Stacking is almost always right on a phone; hiding removes those links from the mobile navigation entirely, so make sure this item links somewhere that reaches them."|t('menu-builder'),
+        id: 'mobileMegaMenu',
+        name: 'mobileMegaMenu',
+        options: [
+            { label: "Stack the columns"|t('menu-builder'), value: 'stack' },
+            { label: "Keep the columns"|t('menu-builder'), value: 'columns' },
+            { label: "Hide the panel"|t('menu-builder'), value: 'hide' },
+        ],
+        value: item.mobileMegaMenuBehavior(),
     }) }}
 </div>
 

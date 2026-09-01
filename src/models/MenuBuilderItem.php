@@ -10,6 +10,7 @@ use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
 
 /**
@@ -183,6 +184,7 @@ class MenuBuilderItem extends Model
             [['metadata'], 'validateMegaMenu', 'skipOnEmpty' => false],
             [['metadata'], 'validateDynamicSource', 'skipOnEmpty' => false],
             [['metadata'], 'validateCustomFields', 'skipOnEmpty' => false],
+            [['metadata'], 'validateMobile', 'skipOnEmpty' => false],
             [['htmlAttributes', 'metadata'], 'safe'],
         ];
     }
@@ -222,6 +224,79 @@ class MenuBuilderItem extends Model
         if ($column !== null && (!is_int($column) || $column < 1 || $column > 6)) {
             $this->addError('metadata', Craft::t('menu-builder', 'Mega menu column must be an integer between 1 and 6.'));
         }
+    }
+
+    /**
+     * Validates `metadata['mobile']` — the item's mobile-presentation
+     * config (see {@see MobileHelper}).
+     *
+     * Validated even though every reader of it fails closed, for the same
+     * reason `megaMenu` is: a value the editor typed and that silently
+     * becomes something else is a bug report, not a safe default. The
+     * fail-closed reads stay as the backstop for rows this validator never
+     * saw — an import, a direct database write, an older release.
+     *
+     * The order is deliberately *not* rejected for being out of range —
+     * {@see MobileHelper::order()} clamps it. A sequence hint is not worth
+     * refusing to save an item over; a value of the wrong *kind* is, because
+     * it means the form sent something nobody meant.
+     */
+    public function validateMobile(): void
+    {
+        if (!is_array($this->metadata)) {
+            return;
+        }
+
+        $mobile = $this->metadata[MobileHelper::METADATA_KEY] ?? null;
+
+        if ($mobile === null) {
+            return;
+        }
+
+        if (!is_array($mobile)) {
+            $this->addError('metadata', Craft::t('menu-builder', 'Mobile configuration must be an object.'));
+
+            return;
+        }
+
+        if (!MobileHelper::isValidVisibility($mobile['visibility'] ?? null)) {
+            $this->addError('metadata', Craft::t('menu-builder', 'Mobile visibility must be one of: {values}.', ['values' => implode(', ', MobileHelper::VISIBILITIES)]));
+        }
+
+        if (!MobileHelper::isValidOrder($mobile['order'] ?? null)) {
+            $this->addError('metadata', Craft::t('menu-builder', 'Mobile order must be a whole number.'));
+        }
+
+        if (array_key_exists('collapsible', $mobile) && MobileHelper::collapsible($mobile['collapsible']) === null && $mobile['collapsible'] !== null && $mobile['collapsible'] !== '') {
+            $this->addError('metadata', Craft::t('menu-builder', 'Mobile "collapsible" must be a boolean.'));
+        }
+
+        if (!MobileHelper::isValidMegaMenuBehavior($mobile['megaMenu'] ?? null)) {
+            $this->addError('metadata', Craft::t('menu-builder', 'Mobile mega menu behaviour must be one of: {values}.', ['values' => implode(', ', MobileHelper::MEGA_BEHAVIORS)]));
+        }
+    }
+
+    /**
+     * The item's normalized mobile config, as the CP form and the resolver
+     * both read it — `[]` when nothing is configured.
+     *
+     * @return array{visibility?: string, order?: int, collapsible?: bool, megaMenu?: string}
+     */
+    public function mobileConfig(): array
+    {
+        return MobileHelper::config($this->metadata);
+    }
+
+    /** The stored mobile visibility, defaulted — what the CP select shows. */
+    public function mobileVisibility(): string
+    {
+        return MobileHelper::visibility($this->mobileConfig()['visibility'] ?? null);
+    }
+
+    /** The stored mobile mega-menu behaviour, defaulted — what the CP select shows. */
+    public function mobileMegaMenuBehavior(): string
+    {
+        return MobileHelper::megaMenuBehavior($this->mobileConfig()['megaMenu'] ?? null);
     }
 
     /**

@@ -47,13 +47,32 @@ class MenuBuilderVisibilityService extends Component
      */
     public function isVisible(MenuBuilderItem $item, VisibilityContext $context): bool
     {
-        if (empty($item->visibility)) {
+        return $this->passes($item->visibility ?? [], $context, $item->id);
+    }
+
+    /**
+     * The same decision as {@see isVisible()}, over a raw rule bag rather
+     * than a hydrated MenuBuilderItem.
+     *
+     * The resolve pipeline re-checks visibility on every request against a
+     * cached node tree, and the *only* thing it needs from the persisted row
+     * is this bag — so it reads the bag alone
+     * ({@see MenuBuilderItemService::getVisibilityRulesForGroup()}) rather
+     * than hydrating a model per node. `$itemId` is carried purely so a
+     * third-party rule that throws still names the item it threw on in the
+     * warning log.
+     *
+     * @param array $visibility The item's `visibility` bag, as persisted.
+     */
+    public function passes(array $visibility, VisibilityContext $context, ?int $itemId = null): bool
+    {
+        if (empty($visibility)) {
             return true;
         }
 
         $rules = $this->getRules();
 
-        foreach ($item->visibility as $ruleConfig) {
+        foreach ($visibility as $ruleConfig) {
             // Guarded rather than assumed: `visibility` is persisted as free-form
             // JSON, so a directly-posted or imported bag can hold a scalar here,
             // and `$ruleConfig['type']` on a string is a TypeError in PHP 8 — an
@@ -86,7 +105,7 @@ class MenuBuilderVisibilityService extends Component
                 }
             } catch (\Throwable $e) {
                 Craft::warning(
-                    "MenuBuilder visibility rule \"{$type}\" threw while evaluating item {$item->id}; failing closed: " . $e->getMessage(),
+                    "MenuBuilder visibility rule \"{$type}\" threw while evaluating item {$itemId}; failing closed: " . $e->getMessage(),
                     __METHOD__
                 );
 

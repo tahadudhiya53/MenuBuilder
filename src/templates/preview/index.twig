@@ -10,7 +10,6 @@
 {% import "menu-builder/_macros/tree" as menuMacros %}
 
 {% set title = "Preview: {name}"|t('menu-builder', { name: group.name }) %}
-{% set selectedSubnavItem = 'dashboard' %}
 {% set crumbs = [
     { label: "Menus"|t('menu-builder'), url: url('menu-builder') },
     { label: group.name, url: url('menu-builder/' ~ group.handle) },

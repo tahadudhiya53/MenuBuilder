@@ -67,7 +67,7 @@
     </div>
 {% endif %}
 
-<div data-mb-section="basic">
+<div data-mb-section="basic" data-mb-description="{{ "Choose what this item links to and the label shown in the menu."|t('menu-builder') }}">
     <h2>{{ "Basic"|t('menu-builder') }}</h2>
 
     {{ forms.selectField({
@@ -252,7 +252,7 @@
 </div>
 
 {% if not isNew %}
-<div data-mb-section="behavior">
+<div data-mb-section="behavior" data-mb-description="{{ "Control availability, link destination, and broken-link fallback."|t('menu-builder') }}">
     <h2>{{ "Behavior"|t('menu-builder') }}</h2>
 
     {{ forms.lightswitchField({
@@ -313,7 +313,7 @@
     </div>
 </div>
 
-<div data-mb-section="appearance">
+<div data-mb-section="appearance" data-mb-description="{{ "Add icons, badges, imagery, and styling hooks."|t('menu-builder') }}">
     <h2>{{ "Appearance"|t('menu-builder') }}</h2>
     {{ forms.selectField({
         label: "Icon"|t('menu-builder'),
@@ -386,13 +386,13 @@
     {{ forms.textField({ label: "CSS class"|t('menu-builder'), id: 'cssClass', name: 'cssClass', value: item.cssClass }) }}
 </div>
 
-<div data-mb-section="accessibility">
+<div data-mb-section="accessibility" data-mb-description="{{ "Provide clearer labels and helpful browser text."|t('menu-builder') }}">
     <h2>{{ "Accessibility"|t('menu-builder') }}</h2>
     {{ forms.textField({ label: "ARIA label"|t('menu-builder'), id: 'ariaLabel', name: 'ariaLabel', value: item.ariaLabel }) }}
     {{ forms.textField({ label: "Title attribute"|t('menu-builder'), id: 'titleAttribute', name: 'titleAttribute', value: item.titleAttribute }) }}
 </div>
 
-<div data-mb-section="visibility">
+<div data-mb-section="visibility" data-mb-description="{{ "Choose who can see this item, where, and when."|t('menu-builder') }}">
     <h2>{{ "Visibility"|t('menu-builder') }}</h2>
     <p class="light">{{ "This menu item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it. Ticking both logged-in and logged-out can never be satisfied, so the item would be hidden for everyone."|t('menu-builder') }}</p>
 
@@ -425,7 +425,7 @@
     {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT). An unrecognized environment hides the item."|t('menu-builder'), id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule is not null ? envRule.environments|join(', ') : '' }) }}
 </div>
 
-<div data-mb-section="megaMenu">
+<div data-mb-section="megaMenu" data-mb-description="{{ "Arrange this item's children in a multi-column panel."|t('menu-builder') }}">
     <h2>{{ "Mega Menu"|t('menu-builder') }}</h2>
     <p class="light">{{ "Enable to present this item's children as a mega-menu panel grouped into columns. Each child picks its own column below."|t('menu-builder') }}</p>
     {{ forms.lightswitchField({
@@ -455,7 +455,7 @@
     }) }}
 </div>
 
-<div data-mb-section="mobile">
+<div data-mb-section="mobile" data-mb-description="{{ "Fine-tune how this item appears on smaller screens."|t('menu-builder') }}">
     <h2>{{ "Mobile"|t('menu-builder') }}</h2>
     <p class="light">{{ "How this item behaves in a small-screen navigation. MenuBuilder decides which items belong to which navigation, in what order, and which branches collapse — your front-end templates decide the breakpoint. No menu is duplicated: this is the same item, presented differently."|t('menu-builder') }}</p>
     {{ forms.selectField({
@@ -512,7 +512,7 @@
    definitions (ItemsController::buildMetadata()), never from what was
    posted. Values live in the item's `metadata['custom']` bag — see
    helpers/CustomFieldHelper. #}
-<div data-mb-section="customFields">
+<div data-mb-section="customFields" data-mb-description="{{ "Set the extra content fields configured for this menu."|t('menu-builder') }}">
     <h2>{{ "Custom fields"|t('menu-builder') }}</h2>
 
     {% set customValues = item.customFieldValues() %}
@@ -563,7 +563,7 @@
 </div>
 {% endif %}
 
-<div data-mb-section="advanced">
+<div data-mb-section="advanced" data-mb-description="{{ "Set technical identifiers and custom HTML attributes."|t('menu-builder') }}">
     <h2>{{ "Advanced"|t('menu-builder') }}</h2>
     {{ forms.textField({ label: "Handle"|t('menu-builder'), instructions: "Used for anchor links and CSS targeting.", id: 'handle', name: 'handle', value: item.handle, errors: item.getErrors('handle') }) }}
     {{ forms.textField({ label: "HTML id"|t('menu-builder'), id: 'htmlId', name: 'htmlId', value: item.htmlId }) }}

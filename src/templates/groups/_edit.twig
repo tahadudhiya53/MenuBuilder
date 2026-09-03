@@ -63,6 +63,7 @@
     id: 'name',
     name: 'name',
     value: group.name,
+    autofocus: true,
     required: true,
     errors: group.getErrors('name'),
 }) }}
@@ -72,10 +73,21 @@
     instructions: "Referenced from Twig as `craft.menuBuilder.get('{handle}')`."|t('menu-builder'),
     id: 'handle',
     name: 'handle',
+    class: 'code',
     value: group.handle,
     placeholder: 'e.g. main',
     errors: group.getErrors('handle'),
 }) }}
+
+{# Craft's own handle behaviour: typing a name fills the handle in, and the
+   generator backs off as soon as the handle is edited by hand. Only wired up
+   for new menus — an existing handle is referenced from Twig, GraphQL and the
+   REST route, so renaming a saved menu must never silently rewrite it. #}
+{% if canManageSettings and isNew %}
+    {% js %}
+        new Craft.HandleGenerator('#{{ 'name'|namespaceInputId }}', '#{{ 'handle'|namespaceInputId }}');
+    {% endjs %}
+{% endif %}
 
 {{ forms.textareaField({
     label: "Description"|t('menu-builder'),

@@ -476,6 +476,39 @@ class MenuBuilderGroupTest extends TestCase
         );
     }
 
+    // ---------------------------------------------------------------------
+    // The CP edit form's handle behaviour
+    // ---------------------------------------------------------------------
+
+    /**
+     * Typing a name fills the handle in, the way every other Craft settings
+     * screen behaves, via Craft's own generator rather than a hand-rolled
+     * slugifier that would disagree with server-side handle validation.
+     */
+    public function testTheNewMenuFormGeneratesTheHandleFromTheName(): void
+    {
+        $form = $this->templateSource('src/templates/groups/_edit.twig');
+
+        $this->assertStringContainsString('new Craft.HandleGenerator(', $form);
+        $this->assertStringContainsString("'#{{ 'name'|namespaceInputId }}'", $form);
+        $this->assertStringContainsString("'#{{ 'handle'|namespaceInputId }}'", $form);
+    }
+
+    /**
+     * Only on new menus. A saved handle is the public key used by Twig,
+     * GraphQL and the REST route, so renaming an existing menu must not
+     * rewrite it underneath the templates that reference it.
+     */
+    public function testTheHandleGeneratorIsWiredUpForNewMenusOnly(): void
+    {
+        $form = $this->templateSource('src/templates/groups/_edit.twig');
+
+        $this->assertMatchesRegularExpression(
+            '/\{%\s*if\s+canManageSettings\s+and\s+isNew\s*%\}\s*\{%\s*js\s*%\}\s*new Craft\.HandleGenerator\(/',
+            $form
+        );
+    }
+
     /** @return array<string,array{string}> */
     public static function mutatingActionProvider(): array
     {
@@ -493,6 +526,11 @@ class MenuBuilderGroupTest extends TestCase
     private function callPrivate(string $method, array $args): mixed
     {
         return (new ReflectionMethod(MenuBuilderGroupService::class, $method))->invokeArgs(null, $args);
+    }
+
+    private function templateSource(string $path): string
+    {
+        return (string)file_get_contents(dirname(__DIR__, 2) . '/' . $path);
     }
 
     /** @param class-string $class */

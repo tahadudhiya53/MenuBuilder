@@ -2,7 +2,6 @@
 {% import "_includes/forms" as forms %}
 
 {% set title = group.name %}
-{% set selectedSubnavItem = 'dashboard' %}
 {% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
 
 {# Every affordance flag comes from BaseMenuBuilderController::cpAffordances(),

@@ -254,16 +254,40 @@ class MenuBuilder extends Plugin
     public function getCpNavItem(): ?array
     {
         $item = parent::getCpNavItem();
+
+        if ($item === null) {
+            return null;
+        }
+
         $item['label'] = Craft::t('menu-builder', 'MenuBuilder');
 
         $currentUser = Craft::$app->getUser()->getIdentity();
-        $subnav = [];
+        $canView = $currentUser !== null
+            && ((bool)$currentUser->admin || $currentUser->can('menuBuilder:view'));
 
-        if ($currentUser && ($currentUser->admin || $currentUser->can('menuBuilder:view'))) {
-            $subnav['dashboard'] = ['label' => Craft::t('menu-builder', 'Menus'), 'url' => 'menu-builder'];
+        return self::shapeCpNavItem($item, $canView);
+    }
+
+    /**
+     * Shapes the control-panel nav item, factored out of getCpNavItem() as pure
+     * logic so it can be checked without a booted Craft app.
+     *
+     * The plugin has a single CP destination, so the item carries **no** subnav:
+     * a one-entry subnav turns the top-level item into a disclosure toggle that
+     * has to be expanded before the menus index can be reached. Without it, one
+     * click on "MenuBuilder" opens the index in place.
+     *
+     * @param array<string,mixed> $item
+     * @return array<string,mixed>|null Null when the user may not view menus.
+     */
+    public static function shapeCpNavItem(array $item, bool $canView): ?array
+    {
+        if (!$canView) {
+            return null;
         }
 
-        $item['subnav'] = $subnav;
+        $item['url'] = 'menu-builder';
+        unset($item['subnav']);
 
         return $item;
     }

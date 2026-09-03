@@ -169,6 +169,7 @@
     }
 
     function initStage(stage) {
+        var isMobile = stage.classList.contains('menu-builder-preview-stage--mobile');
         var burger = stage.querySelector('[data-mb-preview-burger]');
         var scrim = stage.querySelector('[data-mb-preview-scrim]');
         var nav = burger
@@ -219,7 +220,13 @@
             if (item) {
                 var open = isOpen(item);
 
-                closeOthers(stage, open ? null : item);
+                // A desktop masthead behaves like a single flyout surface.
+                // A mobile drawer is different: editors may expand several
+                // branches and compare them without losing their place.
+                if (!isMobile) {
+                    closeOthers(stage, open ? null : item);
+                }
+
                 setOpen(item, !open);
                 event.preventDefault();
 
@@ -245,7 +252,9 @@
                 return;
             }
 
-            closeOthers(stage, null);
+            if (!isMobile) {
+                closeOthers(stage, null);
+            }
         });
 
         // Hover and keyboard focus open a desktop dropdown. For a plain
@@ -258,6 +267,13 @@
         // groups are permanently visible columns at every viewport, so hover
         // must never manufacture a footer disclosure state.
         stage.querySelectorAll('.menu-builder-preview-siteheader li:has(> details)').forEach(function(item) {
+            // Touch taps already toggle the disclosure. Installing desktop
+            // focus/hover handlers here would open it on focus immediately
+            // before the same tap's click event, causing it to close again.
+            if (isMobile) {
+                return;
+            }
+
             var details = disclosure(item);
             var closeTimer = null;
 
@@ -296,6 +312,10 @@
         // nested lists otherwise start collapsed. Non-clickable parents stay
         // expanded through CSS, so their child links are never unreachable.
         stage.querySelectorAll('.menu-builder-preview-siteheader li:has(> ul)').forEach(function(item) {
+            if (isMobile) {
+                return;
+            }
+
             item.addEventListener('focusin', function(event) {
                 if (event.target.closest('li') !== item) {
                     return;
@@ -318,7 +338,7 @@
         stage.addEventListener('toggle', function(event) {
             var details = event.target;
 
-            if (details.open && details.parentElement) {
+            if (!isMobile && details.open && details.parentElement) {
                 closeOthers(stage, details.parentElement);
             }
         }, true);
@@ -355,7 +375,11 @@
         // behaves.
         document.addEventListener('click', function(event) {
             if (!stage.contains(event.target)) {
-                closeOthers(stage, null);
+                if (isMobile && burger && burger.getAttribute('aria-expanded') === 'true') {
+                    setMobileNavigation(false);
+                } else if (!isMobile) {
+                    closeOthers(stage, null);
+                }
             }
         });
     }

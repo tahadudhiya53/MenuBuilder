@@ -50,11 +50,80 @@
         });
     };
 
+    /**
+     * Turns the editor's long stack of settings into scannable, independently
+     * collapsible cards. The original headings and content remain in the DOM,
+     * so the form is still completely usable if this enhancement never runs.
+     */
+    function initSectionCards(root) {
+        root.querySelectorAll('.menu-builder-fieldset > [data-mb-section]').forEach(function(section, index) {
+            if (section.dataset.mbSectionInitialized) {
+                return;
+            }
+
+            var heading = section.querySelector(':scope > h2');
+            if (!heading) {
+                return;
+            }
+
+            section.dataset.mbSectionInitialized = '1';
+            section.classList.add('menu-builder-editor-section');
+
+            var title = heading.textContent.trim();
+            var body = document.createElement('div');
+            var bodyId = 'menu-builder-section-' + section.dataset.mbSection + '-' + index + '-' + Math.random().toString(36).slice(2, 8);
+            body.className = 'menu-builder-section-body';
+            body.id = bodyId;
+
+            while (heading.nextSibling) {
+                body.appendChild(heading.nextSibling);
+            }
+            section.appendChild(body);
+
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'menu-builder-section-toggle';
+            button.setAttribute('aria-controls', bodyId);
+            button.innerHTML =
+                '<span class="menu-builder-section-heading">' +
+                    '<span class="menu-builder-section-title"></span>' +
+                    '<span class="menu-builder-section-description"></span>' +
+                '</span>' +
+                '<span class="menu-builder-section-chevron" aria-hidden="true"></span>';
+
+            button.querySelector('.menu-builder-section-title').textContent = title;
+            button.querySelector('.menu-builder-section-description').textContent = section.dataset.mbDescription || '';
+            heading.textContent = '';
+            heading.appendChild(button);
+
+            // Start with the essential link settings open. Any section with a
+            // server-side validation error also opens so the error isn't hidden.
+            var fieldset = section.closest('.menu-builder-fieldset');
+            var expanded = section.dataset.mbSection === 'basic' ||
+                !!section.querySelector('.errors, .error') ||
+                !!(fieldset && fieldset.disabled);
+
+            function setExpanded(nextExpanded) {
+                section.classList.toggle('is-expanded', nextExpanded);
+                button.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+                body.hidden = !nextExpanded;
+            }
+
+            button.addEventListener('click', function() {
+                setExpanded(button.getAttribute('aria-expanded') !== 'true');
+            });
+
+            setExpanded(expanded);
+        });
+    }
+
     window.MenuBuilder.initItemFields = function(root) {
         if (!root || root.dataset.mbFieldsInitialized) {
             return;
         }
         root.dataset.mbFieldsInitialized = '1';
+
+        initSectionCards(root);
 
         var typeField = root.querySelector('#type');
         var sections = root.querySelectorAll('[data-link-section]');

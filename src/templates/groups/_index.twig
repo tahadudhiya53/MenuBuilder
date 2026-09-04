@@ -4,11 +4,56 @@
 
 {% block actionButton %}
     {% if canManageSettings %}
-        <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
+        {% if edition.canCreate %}
+            <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
+        {% else %}
+            {# The button stays, and answers. Hiding it would leave "why can't
+               I add a menu?" unanswered; the click explains the limit and
+               offers the upgrade, and `groups/new` redirects here with the
+               same message for anyone who types the URL. #}
+            <button type="button" class="btn add icon" data-mb-action="upgrade-required">{{ "New menu"|t('menu-builder') }}</button>
+        {% endif %}
     {% endif %}
 {% endblock %}
 
 {% block content %}
+    {# Edition status. This index is the plugin's only CP destination — the
+       nav item has no subnav and the plugin has no settings screen — so the
+       edition, the menu count against its ceiling, and the upgrade link
+       belong here. Everything in `edition` comes from one call:
+       MenuBuilderMenuLimitService::cpSummary(). #}
+    <div class="menu-builder-edition">
+        <div class="menu-builder-edition-facts">
+            <div class="menu-builder-edition-fact">
+                <span class="menu-builder-edition-label">{{ "Edition"|t('menu-builder') }}</span>
+                <span class="menu-builder-edition-value">{{ edition.editionName }}</span>
+            </div>
+            <div class="menu-builder-edition-fact">
+                <span class="menu-builder-edition-label">{{ "Menus"|t('menu-builder') }}</span>
+                <span class="menu-builder-edition-value">
+                    {%- if edition.maxMenus is null -%}
+                        {{ "Unlimited"|t('menu-builder') }}
+                    {%- else -%}
+                        {{ "{count} / {max}"|t('menu-builder', { count: edition.menuCount, max: edition.maxMenus }) }}
+                    {%- endif -%}
+                </span>
+            </div>
+            {% if edition.isPro and edition.licenseActive %}
+                <div class="menu-builder-edition-fact">
+                    <span class="menu-builder-edition-label">{{ "License"|t('menu-builder') }}</span>
+                    <span class="menu-builder-edition-value"><span class="status green"></span>{{ "Active"|t('menu-builder') }}</span>
+                </div>
+            {% endif %}
+        </div>
+        {% if not edition.isPro and edition.upgradeUrl %}
+            <a href="{{ edition.upgradeUrl }}" class="btn menu-builder-edition-upgrade">{{ "Upgrade to Pro"|t('menu-builder') }}</a>
+        {% endif %}
+    </div>
+
+    {% if not edition.canCreate and canManageSettings %}
+        <p class="menu-builder-edition-notice light">{{ edition.limitMessage }}</p>
+    {% endif %}
+
     {% if rows|length %}
         <div class="tablepane">
             <table class="data fullwidth" id="menu-builder-groups">
@@ -68,8 +113,10 @@
         <div class="zilch">
             <p>{{ "No menus yet"|t('menu-builder') }}</p>
             <p class="light">{{ "A menu holds the items your templates render as navigation."|t('menu-builder') }}</p>
-            {% if canManageSettings %}
+            {% if canManageSettings and edition.canCreate %}
                 <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a></p>
+            {% elseif canManageSettings %}
+                <p class="light">{{ edition.limitMessage }}</p>
             {% else %}
                 <p class="light">{{ "You don’t have permission to create menus."|t('menu-builder') }}</p>
             {% endif %}
@@ -112,6 +159,28 @@
                 window.MenuBuilder.displayError(error, failureMessage);
             });
     }
+
+    // The [ Upgrade to Pro ] / [ Cancel ] prompt. window.confirm is what
+    // this screen already uses for its one other "are you sure?" (delete),
+    // so the limit doesn't introduce a second dialog mechanism.
+    var upgradeUrl = {{ (edition.upgradeUrl ?? '')|json_encode|raw }};
+
+    document.querySelectorAll('[data-mb-action="upgrade-required"]').forEach(function(button) {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+
+            var message = {{ edition.limitMessage|json_encode|raw }};
+
+            if (!upgradeUrl) {
+                window.alert(message);
+                return;
+            }
+
+            if (window.confirm(message + '\n\n' + Craft.t('menu-builder', 'Upgrade to Pro?'))) {
+                window.location.href = upgradeUrl;
+            }
+        });
+    });
 
     document.querySelectorAll('[data-mb-action="duplicate-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {

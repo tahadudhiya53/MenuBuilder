@@ -132,9 +132,28 @@ class MenuBuilderGroupService extends Component
         return null;
     }
 
+    /**
+     * The edition ceiling is enforced here rather than in the controller,
+     * and only for a *new* menu: this is the one path a menu can be created
+     * through (see {@see MenuBuilderMenuLimitService}), so a direct POST to
+     * `menu-builder/groups/save`, a console command or third-party code all
+     * meet the same refusal. Editing, disabling, reordering or deleting an
+     * existing menu is never limited — including on an install that is over
+     * the limit because its edition changed.
+     *
+     * The refusal is reported as a model error rather than an exception so
+     * it travels the same way a validation failure does, through
+     * `asModelFailure()` to the form the user is looking at.
+     */
     public function save(MenuBuilderGroup $group, bool $runValidation = true): bool
     {
         if ($runValidation && !$group->validate()) {
+            return false;
+        }
+
+        if ($group->id === null && !MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
+            $group->addError('name', MenuBuilderMenuLimitService::limitMessage());
+
             return false;
         }
 
@@ -200,13 +219,21 @@ class MenuBuilderGroupService extends Component
 
     /**
      * Clones a group (name + " Copy", handle uniquified with a numeric
-     * suffix) and every item in it, preserving hierarchy.
+     * suffix) and every item in it, preserving hierarchy. Refused, like any
+     * other menu creation, when the install is at its edition's ceiling.
      */
     public function duplicate(int $id): ?MenuBuilderGroup
     {
         $original = MenuBuilderGroupRecord::findOne($id);
 
         if (!$original) {
+            return null;
+        }
+
+        // A duplicate is a new menu, so it meets the same edition ceiling
+        // {@see save()} does — this is the second (and last) way a row can
+        // reach `menubuilder_groups`.
+        if (!MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
             return null;
         }
 

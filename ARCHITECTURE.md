@@ -19,7 +19,7 @@ Twig render → MenuBuilderVariable → MenuBuilderResolver → cache / links / 
 | Layer | Classes | Rules it obeys |
 |---|---|---|
 | Controllers | `BaseMenuBuilderController` + `GroupsController`, `ItemsController`, `DashboardController`, `PreviewController`; `ApiController` stands apart | The **only** classes that touch `craft\web\Request` or the session. The CP permission check itself lives once, in the base class's `beforeAction()`; subclasses only declare *which* permission an action needs. `ApiController` deliberately does **not** extend that base: it is a front-end endpoint with no CP request, no session and no MenuBuilder permissions — its gate is a GraphQL schema, not a user (see "REST API"). |
-| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderScopeService`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
+| Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderScopeService`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService`, `MenuBuilderLicenseService`, `MenuBuilderMenuLimitService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
 | Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `MenuBuilderBreadcrumbTrail`, `ResolvedLink`, `MenuBuilderMegaMenuConfig`, `MenuBuilderApiConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
 | Records | `MenuBuilderGroupRecord`, `MenuBuilderItemRecord` | Thin `ActiveRecord`: `tableName()` and nothing else. No business logic, and deliberately **no AR relations** — every join this plugin needs is an explicit service query, so there is no lazy-load path that could silently become an N+1. Never visible to controllers or Twig. |
 | Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper`, `MenuBuilderGqlHelper`, `MenuBuilderApiHelper` | Pure static functions, no Craft app required. Where logic that two layers both need lives, so there is one implementation rather than a copy per caller. |
@@ -906,6 +906,90 @@ Concretely, that means:
 
 Menu **items** were never in project config either, for the same reason Craft entries aren't:
 they're per-environment content, not structure.
+
+---
+
+## Editions and the menu limit
+
+MenuBuilder ships two editions — `free` and `pro` (`MenuBuilder::editions()`, Free first because
+Craft installs the first edition when none is named and `Plugin::is()` compares editions by index).
+They are one implementation. There is no Pro build, no Pro subclass, no feature flag beyond the one
+below, and no license check anywhere in the resolve pipeline.
+
+**The whole product rule:**
+
+| | Menus | Everything else |
+|---|---|---|
+| Free | 1 | all of it |
+| Pro | unlimited | all of it |
+
+### Two services, one question each
+
+| Class | Answers | Notes |
+|---|---|---|
+| `MenuBuilderLicenseService` | "Which edition is running?" | Compares editions with Craft's documented `Plugin::is($edition, '>=')`, guarded by a declared-edition check because `is()` throws on an edition it doesn't know and the value comes from project config. Reads `Plugin::$edition`, which Craft sets from project config (`plugins.menu-builder.edition`) and changes via `Plugins::switchEdition()`. Adds no second mechanism, stores nothing, and never reads the license *key*. Also derives the upgrade URL — Craft's in-CP `plugin-store/buy/<handle>/pro` for an admin who may change things, the public plugin listing otherwise, both the way `craft\helpers\App::licenseInfo()` derives them |
+| `MenuBuilderMenuLimitService` | "May this install have another menu?" | Owns `FREE_MAX_MENUS = 1` — the only place the number appears — plus the count, the refusal wording and the CP summary |
+
+**An install that predates editions.** Craft stores `edition: standard` for a plugin that declares
+none. If such an install upgrades into a version that does declare editions, Craft normalizes the
+unrecognized value to the *first* declared edition at boot (`Plugins::createPlugin()`), so it comes
+up on Free without a migration and without a fatal — and `Plugins::switchEdition()` overwrites the
+stale value the first time the edition is set. `MenuBuilderLicenseService::isKnownEdition()` is the
+same guard applied a second time, for the window in which project config holds something Craft
+hasn't normalized.
+
+`isPro()` gates on the **edition only**, never on the license key status. An unpaid, expired or
+mismatched key is Craft's business: it produces a loud CP warning and a Plugin Store prompt, and
+does not silently downgrade a running site. A plugin that took that into its own hands would turn a
+lapsed invoice — or a failed license *check*, which is what `unknown` means on a site with no
+outbound network — into an editor who suddenly can't manage their navigation. The key status is
+shown on the menus index as information, and is not a gate.
+
+### One enforcement point
+
+```
+GroupsController::actionSave()/actionEdit()/actionDuplicate()   ← says why (UX)
+        │
+        ▼
+MenuBuilderGroupService::save()  (new menus only) / duplicate()  ← refuses (the boundary)
+        │
+        ▼
+menubuilder_groups
+```
+
+The service is where it holds, because the service is the only way a row reaches
+`menubuilder_groups` (see "Group persistence — database only"): a hand-written POST, a console
+command and third-party code all arrive there. `save()` checks it *after* validation and only when
+`$group->id === null`, so editing, renaming, toggling, reordering and deleting an existing menu are
+never limited — including on an install that is over the limit. The controller asks the same
+question a moment earlier for one reason only: so the interface can state the limit and offer the
+upgrade instead of rendering a button whose request would be refused. Hiding the button is not the
+boundary, and `MenuBuilderMenuLimitTest` posts straight at both actions to prove it.
+
+### Non-destructive by construction
+
+Nothing about editions reads, writes, hides or deletes menu data:
+
+- No column, flag or migration records which edition created a menu. A menu doesn't know.
+- `canCreate()` is `$count < $max`, so an install holding five menus on Free is refused a sixth and
+  asked for nothing. Drop to Free and all five stay, stay editable, and keep resolving; restore Pro
+  and creation resumes. `MenuBuilderMenuLimitTest` runs exactly that sequence, and
+  `MenuBuilderEditionSwitchTest` runs it again through Craft's own `Plugins::switchEdition()` while
+  *fingerprinting every menu row* before and after — a row count alone would pass a downgrade that
+  silently rewrote a column.
+- Switching the edition writes exactly one project-config value (`plugins.menu-builder.edition`) and
+  touches nothing else, in either direction; a `project-config/apply` therefore carries no menu data
+  and can neither create nor delete a menu, however the editions differ between environments.
+- The resolve pipeline (`MenuBuilderResolver`, the cache, the Twig API, GraphQL, the REST API, the
+  Navigation field) contains no edition check at all. Front-end rendering cannot be affected by a
+  license state because it never asks about one.
+
+### Multi-site
+
+The limit counts menus per **install**. A menu is a single global row in `menubuilder_groups` that
+may optionally be restricted to a set of sites (`MenuBuilderGroup::$siteIds`, stored in the
+`settings` bag); it is not a per-site entity and has no per-site copies. "One menu per site" would
+therefore not describe anything in the data model — there is one menu list, whatever the site count.
 
 ---
 
@@ -2000,10 +2084,10 @@ same moment. Don't collapse them.
 
 Two suites, with different bootstraps and different jobs.
 
-**`composer test`** — 1,138 unit tests in 23 files (`tests/Unit`), no booted Craft app. Fast, and covers the
+**`composer test`** — 1,160 unit tests in 24 files (`tests/Unit`), no booted Craft app. Fast, and covers the
 pure logic every layer is factored into.
 
-**`composer test-integration`** — 446 integration tests in 13 files (`tests/Integration`) against a **real booted
+**`composer test-integration`** — 464 integration tests in 15 files (`tests/Integration`) against a **real booted
 Craft 5 application and a real database**. `tests/integration-bootstrap.php` stands up a throwaway
 install: its own database (`MENUBUILDER_TEST_DB_DATABASE`, default `menubuilder_test`), its own
 `config`/`storage` under `tests/_craft`, and the plugin's own `vendor/` — which registers MenuBuilder
@@ -2049,6 +2133,9 @@ per-field-handle magic query methods (`->navigation()`) it cannot see. Covered:
 | REST API surface: the master switch (only a literal `true` turns it on), base-path and origin-allowlist normalization, exact origin matching and the wildcard, query-parameter validation and the allowlisted argument set, the JSON shapes (grouped presentation, native custom-field types, `{}` for an empty bag, no row IDs, no install structure), the envelope and error envelope, ETag / `If-None-Match` / `Cache-Control` (`private` for a token), and the rate limiter's key and window arithmetic | `MenuBuilderApiTest` (unit) |
 | **Integration** — the REST API through the real controller, with real `craft\web\Request`s, real GraphQL tokens and real menus: a valid request and its headers, hierarchy and URLs, the list endpoint returning only in-scope menus, the five-way indistinguishable 404 (including path traversal and injection attempts) as JSON rather than Craft's HTML, an invalid / expired / missing token, `lastUsed` bookkeeping, a token reaching past its schema's sites, site selection and disagreement, the anonymous audience, malformed parameters naming themselves, active state with and without `currentUri`, ETag stability and `304`, `private` vs `public` caching, write methods refused before CSRF validation can pre-empt them, `HEAD`, CORS (absent, allowlisted, unlisted, preflight without credentials), the disabled API, and the rate limiter | `MenuBuilderApiTest` (integration) |
 | Attribute parsing, title fallback, rel merging, JSON bags, ID lists, calendar dates | `MenuBuilderHelpersTest` |
+| Editions: the edition list and its order, an unrecognized edition being recognized as such and falling back to Free, the Free ceiling, the create/refuse arithmetic (including an install already over the limit), and the refusal wording | `MenuBuilderLicensingTest` |
+| **Integration** — the limit enforced for real: Free creating its first menu and being refused a second, a refused duplicate, one Free menu taking 50 items nested ten deep, Pro creating twelve menus and duplicating one, a Pro install dropping to Free keeping all five menus, their items and their rendering — then regaining creation when Pro returns — direct POSTs to `groups/save` and `groups/duplicate` creating nothing, a fully configured Free menu (depth cap, CSS class, attributes, site restriction, visibility rules) resolving, and the ceiling counting per install rather than per site | `MenuBuilderMenuLimitTest` |
+| **Integration** — the edition switched through Craft's own `Plugins::switchEdition()`: the edition landing in project config and nowhere else, a Pro→Free downgrade leaving every menu row byte-for-byte identical (fingerprinted, not counted) with its items and its rendering intact, Free→Pro restoring creation without touching what was there, a project-config apply changing no menu data, and the plugin's per-request memos still agreeing afterwards | `MenuBuilderEditionSwitchTest` |
 | Link health: the element-status → health mapping (live, no URL, disabled, pending/expired, archived, unknown), agreement with the resolver's availability rule, custom-URL / anchor / structural / dynamic-source checks, the front-end consequence per `fallbackBehavior`, the summary, which statuses offer recovery actions, and the no-disclosure guarantee | `MenuBuilderLinkHealthTest` |
 
 The pattern this suite relies on: anything worth asserting is factored into a **pure static or

@@ -3904,3 +3904,59 @@ li.menu-builder-item.menu-builder-item-added {
     padding-top: 20px;
     color: rgba(255, 255, 255, 0.56);
 }
+
+/* ---------------------------------------------------------------------------
+   Edition status (menus index)
+
+   States the active edition, the menu count against its ceiling and — on
+   Free — the upgrade link. Built from the same tokens and the same 8/14px
+   rhythm as .menu-builder-notice above rather than as a Craft `.pane`: a
+   pane reads as a content container, and this is a one-line status strip
+   that sits above the actual content.
+   --------------------------------------------------------------------------- */
+.menu-builder-edition {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--hairline-color);
+    border-radius: 4px;
+    background: var(--gray-050, #f9fafb);
+}
+
+.menu-builder-edition-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    align-items: center;
+}
+
+.menu-builder-edition-fact {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.menu-builder-edition-label {
+    color: var(--gray-600, #596673);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+}
+
+.menu-builder-edition-value {
+    font-weight: 600;
+}
+
+.menu-builder-edition-upgrade {
+    flex: 0 0 auto;
+}
+
+/* The limit explanation, directly under the strip it belongs to, so the
+   count and the reason read as one statement. */
+.menu-builder-edition-notice {
+    margin: -6px 0 30px;
+}

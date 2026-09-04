@@ -3,13 +3,16 @@
 Advanced navigation management for Craft CMS 5 — multiple menus, drag-and-drop hierarchy, eight link
 types, mega menus, dynamic navigation, per-item visibility rules, and a small, stable Twig API.
 
-- **Requires:** Craft CMS ^5.0, PHP >= 8.2 · **License:** MIT · **Handle:** `menu-builder`
+- **Requires:** Craft CMS ^5.0, PHP >= 8.2 · **License:** [The Craft License](LICENSE.md) ·
+  **Handle:** `menu-builder`
+- **Editions:** Free (1 menu) · Pro (unlimited menus) — [what's the difference?](#free-vs-pro)
 - Internals and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)** · Release history:
   **[CHANGELOG.md](CHANGELOG.md)**
 
 ## Contents
 
-**Using it** — [Install](#install) · [Quick start](#quick-start) · [Features](#features) ·
+**Using it** — [Install](#install) · [Free vs Pro](#free-vs-pro) · [Quick start](#quick-start) ·
+[Features](#features) ·
 [Menus](#menus) · [Menu items](#menu-items) · [Visibility rules](#visibility-rules) ·
 [Mega menus](#mega-menus) · [Mobile](#mobile) · [Dynamic navigation](#dynamic-navigation) ·
 [Link health](#link-health) · [Preview](#preview) · [Permissions](#permissions)
@@ -22,7 +25,7 @@ types, mega menus, dynamic navigation, per-item visibility rules, and a small, s
 **Headless & developer** — [Navigation field](#the-navigation-field) · [GraphQL](#graphql) ·
 [REST API](#rest-api) · [Extending](#extending) · [Caching](#caching) ·
 [Storage & upgrading](#storage-and-upgrading) · [Troubleshooting](#troubleshooting) ·
-[Development](#development)
+[Development](#development) · [Support](#support) · [License](#license)
 
 ---
 
@@ -34,7 +37,64 @@ php craft plugin/install menu-builder
 ```
 
 Or install **MenuBuilder** from the Plugin Store. Installing creates `menubuilder_groups` and
-`menubuilder_items`; uninstalling drops them.
+`menubuilder_items`; uninstalling drops them. It installs on the **Free** edition — see below.
+
+## Free vs Pro
+
+MenuBuilder has two editions. They are the same plugin: there is no Pro-only feature, no Pro-only
+code path, and nothing is disabled, degraded or watermarked in Free. The **only** difference is how
+many menus an install may have.
+
+### Free
+
+The full menu-building experience, in **one menu**.
+
+- Unlimited menu items in that menu
+- Unlimited nesting
+- Drag & drop hierarchy, keyboard reordering
+- All eight link types — entry, category, asset, custom URL, anchor, heading, separator, dynamic
+- Mega menus, mobile navigation, icons, badges, custom fields
+- Visibility rules, including date scheduling
+- Active state, breadcrumbs, preview, link health
+- Twig API, macros, GraphQL, the REST API and the Navigation field
+- Multi-site, permissions and caching
+
+### Pro
+
+Everything in Free, plus:
+
+- **Unlimited menus**
+- Commercial support
+- New releases for as long as the updates renewal is current
+
+**$19** to buy, then **$5/year** to keep receiving updates and support — Craft's standard commercial
+plugin model. The renewal buys *updates*, not the right to keep using Pro: let it lapse and the Pro
+you have keeps running unchanged, you just stop getting new releases until you renew. See
+[License](#license).
+
+Prices are set and charged by the Craft Plugin Store. They appear nowhere in this plugin's code,
+which only ever asks Craft which edition is active.
+
+Upgrade from **MenuBuilder → Menus**, or from **Settings → Plugins**; both take you to Craft's
+Plugin Store checkout for this plugin.
+
+> **All MenuBuilder features are available in Free. Upgrade to Pro when you need more than one
+> menu.**
+
+### What the limit does and doesn't do
+
+- The limit counts **menus per install**, not per site. A menu is one global row that can be
+  restricted to a set of sites (see [Menus](#menus)), so an install has one menu list, whatever its
+  site count.
+- It applies to **creating** a menu — including duplicating one, and including a direct POST to the
+  controller. It is enforced in `MenuBuilderGroupService`, not in the UI.
+- It never applies to items. Fill the Free menu with as many items, nested as deeply, as you like.
+- It never touches your data. If an install goes back to Free with several menus in it, every one of
+  them stays in the database, stays editable, and keeps rendering on the front end — you simply
+  can't add another until you are back under the limit. Restore Pro and menu creation comes straight
+  back. (A lapsed *renewal* doesn't do this at all: it stops new releases, not Pro itself.)
+- It is never applied to the front end. `craft.menuBuilder.get()`, the macros, GraphQL and the REST
+  API don't ask which edition is active; the check lives on the create path and nowhere else.
 
 ## Quick start
 
@@ -57,7 +117,7 @@ The resolved tree is plain data — see [Resolving a menu](#resolving-a-menu).
 
 | | |
 |---|---|
-| Menus | Any number, each with a handle, enable/disable, optional 1–10 max depth, site restriction, CSS class and HTML attributes. Duplicate copies settings and items |
+| Menus | One on [Free](#free-vs-pro), any number on Pro — each with a handle, enable/disable, optional 1–10 max depth, site restriction, CSS class and HTML attributes. Duplicate copies settings and items |
 | Link types | 8: entry, category, asset, custom URL, anchor, non-clickable heading, separator, dynamic |
 | Element links | Resolved live per request and per site — never a stored URL. Per-item fallback when the target is gone |
 | Visibility | 7 rule types, combined with AND, failing closed |
@@ -94,6 +154,11 @@ Not included: import/export (menus move with the database), and menu reordering 
 | Custom fields | Extra editor-defined fields offered to every item in this menu (max 20) |
 
 **Duplicate** clones a menu's settings *and* all its items in one transaction, with a unique handle.
+
+The menus list states the active edition and the menu count against its ceiling — `Menus 1 / 1` on
+[Free](#free-vs-pro), `Unlimited` on Pro. On Free, **New menu** and **Duplicate** explain the limit
+and offer the upgrade instead of creating a second menu; both refusals come from the server, not
+from a hidden button.
 
 ## Menu items
 
@@ -803,8 +868,8 @@ classes' shape, is hashed into every cache key, so an upgrade reads fresh keys.
 ## Development
 
 ```sh
-composer test              # PHPUnit — 1,138 unit tests, no booted Craft
-composer test-integration  # PHPUnit — 446 integration tests, real Craft + real database
+composer test              # PHPUnit — 1,160 unit tests, no booted Craft
+composer test-integration  # PHPUnit — 464 integration tests, real Craft + real database
 composer check-cs          # ECS
 composer phpstan           # PHPStan (level 5)
 ```
@@ -824,3 +889,28 @@ MENUBUILDER_TEST_DB_SERVER=127.0.0.1 MENUBUILDER_TEST_DB_PORT=55012 composer tes
 ```
 
 Internals, invariants and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+## Support
+
+- **Bugs and feature requests:** [GitHub issues](https://github.com/tahadudhiya53/MenuBuilder/issues)
+- **Source and releases:** [github.com/tahadudhiya53/MenuBuilder](https://github.com/tahadudhiya53/MenuBuilder)
+- **Troubleshooting first:** most reports resolve at [Troubleshooting](#troubleshooting) above.
+
+Pro includes commercial support. Free is supported through GitHub issues on a best-effort basis.
+
+## License
+
+MenuBuilder is a **commercial plugin**, licensed under [The Craft License](LICENSE.md) —
+`composer.json` declares `proprietary`. One licensed copy runs in one production environment at a
+time; development, staging and local installs don't need their own license.
+
+Licensing, payment and license validation are Craft's, not this plugin's: the Free and Pro editions
+are Craft [plugin editions](#free-vs-pro), the active edition lives in project config where Craft's
+Plugin Store puts it, and MenuBuilder only ever asks Craft which edition is active. There is no
+license server, no phone-home and no license key stored by this plugin.
+
+**Renewal.** The $5/year renewal is Craft's standard commercial-plugin model: it buys continued
+updates and support, not continued *use*. If a renewal lapses, the Pro edition you already have
+keeps running — you simply stop receiving new releases until you renew. Letting a license lapse
+never deletes, hides or disables a menu; see [What the limit does and doesn't
+do](#what-the-limit-does-and-doesnt-do).

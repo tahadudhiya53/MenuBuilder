@@ -10,6 +10,7 @@ use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderMenuLimitService;
 use yii\base\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -90,6 +91,10 @@ class GroupsController extends BaseMenuBuilderController
 
         return $this->renderTemplate('menu-builder/groups/_index', [
             'rows' => $rows,
+            // One call, one shape — see MenuBuilderMenuLimitService::cpSummary().
+            // The index is the plugin's only CP destination (the nav item has
+            // no subnav), so this is where the edition is stated.
+            'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
         ] + $this->currentUserAffordances());
     }
 
@@ -103,6 +108,16 @@ class GroupsController extends BaseMenuBuilderController
                     throw new NotFoundHttpException('Menu not found.');
                 }
             } else {
+                // A new menu the edition can't hold: say so where the count
+                // and the upgrade link already are, rather than rendering a
+                // form whose save the service would refuse. This is a
+                // courtesy, not the gate — see MenuBuilderGroupService::save().
+                if (!MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
+                    Craft::$app->getSession()->setError(MenuBuilderMenuLimitService::limitMessage());
+
+                    return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+                }
+
                 $group = new MenuBuilderGroup();
             }
         }
@@ -129,6 +144,15 @@ class GroupsController extends BaseMenuBuilderController
 
         if (!$group) {
             throw new NotFoundHttpException('Menu not found.');
+        }
+
+        // Asked before the posted values are mapped so the answer is the
+        // upgrade message rather than "couldn’t save that menu" with a
+        // field error attached to a name that isn’t the problem. The save
+        // itself is refused by the service either way, including for a
+        // request that never came through this action.
+        if ($group->id === null && !MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
+            return $this->asFailure(MenuBuilderMenuLimitService::limitMessage());
         }
 
         $group->name = $this->bodyString('name');
@@ -211,6 +235,13 @@ class GroupsController extends BaseMenuBuilderController
         $this->requirePostRequest();
 
         $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
+        // Duplicating creates a menu, so it meets the same ceiling. Asked
+        // here as well as in the service so the answer can be the reason
+        // rather than a generic "couldn’t duplicate".
+        if (!MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
+            return $this->asFailure(MenuBuilderMenuLimitService::limitMessage());
+        }
+
         $clone = MenuBuilder::getInstance()->groups->duplicate($id);
 
         if ($clone === null) {

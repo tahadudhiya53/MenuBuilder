@@ -36,6 +36,7 @@
 use craft\db\Connection;
 use craft\migrations\Install;
 use craft\models\Site;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 define('CRAFT_BASE_PATH', __DIR__ . '/_craft');
 define('CRAFT_VENDOR_PATH', dirname(__DIR__) . '/vendor');
@@ -144,8 +145,14 @@ if (!$installed) {
 
 $app->setIsInstalled(true);
 
+// Installed as **Pro**, because the shared fixture this suite is built on
+// (see CraftIntegrationTestCase) needs five menus, and the Free edition
+// allows one. Free is not left untested by that: MenuBuilderMenuLimitTest
+// switches the running plugin's edition per test — that is the whole
+// mechanism Craft uses, so switching it is exactly what a license change
+// does — and puts it back afterwards.
 ob_start();
-$pluginInstalled = $app->getPlugins()->installPlugin('menu-builder');
+$pluginInstalled = $app->getPlugins()->installPlugin('menu-builder', MenuBuilder::EDITION_PRO);
 $pluginOutput = (string)ob_get_clean();
 
 if (!$pluginInstalled) {

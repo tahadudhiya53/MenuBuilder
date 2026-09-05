@@ -7,9 +7,28 @@ All notable changes to MenuBuilder are documented here. This project follows
 
 First release. Everything in the plugin is new, so this entry lists what 1.0.0 ships.
 
+### Editions
+
+- Two editions, one implementation: **Free** (1 menu) and **Pro** (unlimited menus). Every other
+  feature is available in both — items, nesting, mega menus, dynamic navigation, visibility rules,
+  scheduling, preview, the Twig API, GraphQL, the REST API, the Navigation field, multi-site,
+  permissions and caching.
+- Edition detection uses Craft's own commercial-plugin mechanism (`Plugin::editions()` and the
+  project-config edition Craft's Plugin Store sets); the plugin stores no license data of its own.
+- The limit is enforced in `MenuBuilderGroupService` — the only path a menu can be created through
+  — so it holds for direct POSTs, console callers and duplicates alike, and never applies to
+  editing, items or rendering.
+- Non-destructive by design: a lapsed Pro license removes no menus and changes no data. Existing
+  menus keep working; only creating another is refused until Pro returns.
+- The menus index states the edition, the menu count against its ceiling, and — on Free — an
+  upgrade link into Craft's Plugin Store.
+- Licensed under [The Craft License](LICENSE.md); `composer.json` declares `proprietary`, as Craft
+  requires for a commercial plugin.
+
 ### Menus
 
-- Any number of named menus, each with a handle, description, enable/disable switch and sort order.
+- One menu on Free, any number on Pro. Named menus, each with a handle, description,
+  enable/disable switch and sort order.
 - Optional max nesting depth (1–10), enforced server-side on every move.
 - Per-menu site restriction, CSS class and validated HTML attributes.
 - Duplicate a menu — settings and every item — in one transaction, with a uniqued handle.
@@ -102,7 +121,7 @@ First release. Everything in the plugin is new, so this entry lists what 1.0.0 s
 
 ### Tests
 
-- 1,138 unit tests (no booted Craft) and 446 integration tests against a real Craft install and
+- 1,160 unit tests (no booted Craft) and 464 integration tests against a real Craft install and
   database, plus PHPStan level 5 and ECS.
 
 ### Known limitations

@@ -26,8 +26,10 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderLicenseService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkHealthService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderMenuLimitService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderPreviewService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderResolver;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderScopeService;
@@ -49,9 +51,40 @@ use yii\base\Event;
  * @property-read MenuBuilderDynamicNavigationService $dynamicNavigation
  * @property-read MenuBuilderPreviewService $preview
  * @property-read MenuBuilderBreadcrumbService $breadcrumbs
+ * @property-read MenuBuilderLicenseService $license
+ * @property-read MenuBuilderMenuLimitService $menuLimit
  */
 class MenuBuilder extends Plugin
 {
+    /**
+     * The free edition: every feature the plugin has, inside one menu.
+     * First in {@see editions()}, so it is what Craft installs by default
+     * and what an unrecognized edition falls back to.
+     */
+    public const EDITION_FREE = 'free';
+
+    /**
+     * The commercial edition: the same plugin, without the menu ceiling.
+     * There is no separate Pro implementation of anything — see
+     * {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderMenuLimitService}.
+     */
+    public const EDITION_PRO = 'pro';
+
+    /**
+     * @inheritdoc
+     *
+     * Order matters twice over: Craft installs the *first* edition when none
+     * is named, and `Plugin::is()` compares editions by their index here, so
+     * Free must stay first and Pro last.
+     */
+    public static function editions(): array
+    {
+        return [
+            self::EDITION_FREE,
+            self::EDITION_PRO,
+        ];
+    }
+
     public string $schemaVersion = '1.0.0';
 
     /**
@@ -101,6 +134,8 @@ class MenuBuilder extends Plugin
                 'dynamicNavigation' => MenuBuilderDynamicNavigationService::class,
                 'preview' => MenuBuilderPreviewService::class,
                 'breadcrumbs' => MenuBuilderBreadcrumbService::class,
+                'license' => MenuBuilderLicenseService::class,
+                'menuLimit' => MenuBuilderMenuLimitService::class,
             ],
         ];
     }

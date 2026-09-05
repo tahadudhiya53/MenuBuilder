@@ -3,7 +3,7 @@
     "description": "Advanced, flexible navigation management for Craft CMS — multiple menus, drag-and-drop hierarchy, mixed link types, non-clickable headings, mega menus, dynamic navigation, per-item visibility rules, and a clean Twig API.",
     "type": "craft-plugin",
     "version": "1.0.0",
-    "license": "MIT",
+    "license": "proprietary",
     "keywords": [
         "craft",
         "craftcms",
@@ -19,10 +19,10 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/tahadudhiya/craft-menu-builder/issues?state=open",
-        "source": "https://github.com/tahadudhiya/craft-menu-builder",
-        "docs": "https://github.com/tahadudhiya/craft-menu-builder",
-        "rss": "https://github.com/tahadudhiya/craft-menu-builder/releases.atom"
+        "issues": "https://github.com/tahadudhiya53/MenuBuilder/issues?state=open",
+        "source": "https://github.com/tahadudhiya53/MenuBuilder",
+        "docs": "https://github.com/tahadudhiya53/MenuBuilder",
+        "rss": "https://github.com/tahadudhiya53/MenuBuilder/releases.atom"
     },
     "require": {
         "php": ">=8.2.0",
@@ -48,8 +48,8 @@
         "handle": "menu-builder",
         "name": "MenuBuilder",
         "developer": "Tahadudhiya",
-        "documentationUrl": "https://github.com/tahadudhiya/craft-menu-builder",
-        "changelogUrl": "https://raw.githubusercontent.com/tahadudhiya/craft-menu-builder/main/CHANGELOG.md"
+        "documentationUrl": "https://github.com/tahadudhiya53/MenuBuilder",
+        "changelogUrl": "https://raw.githubusercontent.com/tahadudhiya53/MenuBuilder/main/CHANGELOG.md"
     },
     "scripts": {
         "check-cs": "@php -d error_reporting=6143 vendor/bin/ecs check --ansi",

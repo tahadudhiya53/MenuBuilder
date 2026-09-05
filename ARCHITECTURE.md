@@ -882,8 +882,8 @@ to the database, and no `ProjectConfig::EVENT_REBUILD` participation.
 
 **One read per request.** `getAll()` memoizes the menu list, and `getById()`, `getByHandle()` and
 `getByUid()` all answer from that memo rather than issuing their own query. The write path is why:
-saving one item asks for its menu twice — once for its custom field definitions, once for its
-`maxDepth` — so a 100-item bulk edit was costing 200 menu queries. The memo is safe because every
+saving one item asks for its menu more than once — for its field layout, and for its `maxDepth` —
+so a 100-item bulk edit was costing hundreds of menu queries. The memo is safe because every
 mutator in the service (`save()`, `duplicate()`, `deleteById()`, `reorder()`) clears `$allCache`,
 so it can never outlive the state it describes; `MenuBuilderPerformanceTest` pins both halves of
 that. Callers therefore share model instances within a request — the pre-existing behaviour of
@@ -1362,7 +1362,7 @@ templates never recurse to find the active node). `getGroup()`/`getItem()` are t
 service passthroughs with no logic of their own.
 
 `MenuBuilderVariable` is six methods and nothing else: `get()`, `breadcrumbs()`, `getGroup()`,
-`getItem()`, `iconAsset()` and `customAsset()`. There is no HTML-rendering entry point — the macros
+`getItem()` and `iconAsset()`. There is no HTML-rendering entry point — the macros
 are templates, not API — so the variable's whole contract is "hand back resolved data".
 
 `breadcrumbs()` → `MenuBuilderBreadcrumbService` → `MenuBuilderBreadcrumbTrail`, iterable and
@@ -1448,65 +1448,110 @@ itself, because `payloadVersion()` digests that property list (see the caching s
 
 Icon, badge, description, image, `featured` and the CSS/attribute fields are **built-in**
 presentation, each with its own column. Custom fields are the extension point for everything a
-particular site needs on top of those, defined by the editor rather than by the plugin — and they
-are two things, stored in two places that already existed:
+particular site needs on top of those — and they are Craft's own fields, on a Craft field layout,
+edited in Craft's own field layout designer. A menu can therefore use *any* installed field type,
+Matrix and relational fields included, arranged into tabs with Craft's conditions and instructions.
 
 | | Where | Read back by |
 |---|---|---|
-| **Definition** — handle, name, type, options, required | the menu's `settings` bag, under `MenuBuilderGroupService::CUSTOM_FIELDS_KEY` | `MenuBuilderGroup::$customFields` |
-| **Value** — one scalar per handle | the item's `metadata` bag, under `CustomFieldHelper::VALUES_KEY` (`custom`) | `MenuBuilderNode::$customFields` |
+| **Layout** — the fields a menu offers, per menu | `menubuilder_groups.fieldLayoutId` → a `fieldlayouts` row | `MenuBuilderGroup::getFieldLayout()` (via `FieldLayoutBehavior`) |
+| **Content** — the values, per item | `menubuilder_items.contentId` → a `MenuBuilderItemContent` element, whose values live in `elements_sites.content` | `MenuBuilderNode::custom()`, via `MenuBuilderItemContentService` |
 
-Neither is a new store, and there is deliberately no second metadata/settings system: `settings`
-already carries the menu's site restriction the same way (lifted out on read so `$group->settings`
-stays a plain user bag), and `metadata` already carries the badge style, the mega-menu config and
-the dynamic source. So custom fields need **no migration**, duplicate for free (both bags are copied
-verbatim by `duplicateRecord()` and `duplicate()`), delete with the item row, and export as ordinary
-JSON.
+#### Why the item is not itself the element
 
-Definitions belong to the menu, not the item — every item in a menu is offered the same set, the way
-every entry in a section shares a field layout. `MenuBuilderItem::$customFieldDefinitions` is
-injected, never persisted, so the model keeps validating without a database;
-`MenuBuilderItemService::save()` fills it in for every write path that doesn't, so a save is always
-definition-aware.
+Craft 5 stores field content on elements, and every relational field hangs its rows off an **owner
+element id**. So real custom fields mean a row in `elements` — but not necessarily *the item's* row,
+and deliberately not:
 
-Three decisions are load-bearing:
+- `menubuilder_items.parentId` carries a self-referencing `ON DELETE CASCADE`. Deleting an item
+  deletes its whole subtree in one statement, with no PHP-side sweep — see the hierarchy section.
+  If `menubuilder_items.id` were an FK to `elements.id`, that cascade would delete item rows behind
+  Craft's back and strand their `elements` rows, along with every Matrix block owned by them: an
+  element is only ever torn down through `Elements::deleteElement()`.
+- Every write path in `MenuBuilderItemService` is raw ActiveRecord inside a row-locked transaction
+  (`applySortOrders()`, `bulkSetEnabled()`, `duplicateRecord()`). Element saves cannot run inside
+  those without re-deriving the locking and hierarchy invariants documented here.
 
-- **The type list is closed and has no markup member.** `text | textarea | number | boolean |
-  select | url | asset` — every storable value is a scalar that templates emit through Twig's
-  autoescaping. There is no path from a custom field to raw markup, to a `class` attribute, or to a
-  URL scheme that executes: the `url` type validates through
-  `MenuBuilderItem::isPermissiveUrl()`, the same reader the item's own URL fields use. Text is text
-  and is never sanitized, exactly as for the badge above — the safety is the escaping at the
-  boundary, proven by rendering in `MenuBuilderCustomFieldTest`, not by a denylist.
-- **Reads fail closed against the definitions of the day.**
-  `CustomFieldHelper::valuesForOutput()` is the only way a stored value reaches a node, and it
-  re-checks every one: a field since deleted or retyped, a `select` value whose option is gone, or
-  anything written straight into the database is dropped rather than rendered. Deleting a
-  definition therefore takes effect immediately without rewriting a single item row. Writes are
-  validated too (`MenuBuilderItem::validateCustomFields()`, with a shape check that runs even when
-  no definitions are known) — this is defence in depth, not the only line.
-- **Values are item data, so they belong in the cached payload.** They are a function of the item
-  and the menu, and of nothing about the visitor — unlike visibility and active state. An `asset`
-  field stores the **ID**, never the URL, resolved per request by
-  `craft.menuBuilder.customAsset(node, 'handle')` and memoized alongside icon assets, for the same
-  reason the icon model gives. Changing a menu's definitions moves `dateUpdated`, which is already
-  in the cache key, and `customFields` being a new `MenuBuilderNode` property rotates
-  `payloadVersion()` by itself.
+So the item keeps its table, its cascade and its hierarchy logic, and points at a content element
+beside it — the same split Craft itself uses for `craft\elements\Address`: an element that exists to
+carry a field layout on someone else's behalf. `MenuBuilderItemContent` has no table of its own, no
+element index, no sources, no URLs, no statuses and no search index; its layout comes from
+`elements.fieldLayoutId`, which Craft already selects and already resolves.
 
-Both bags are bounded — at most 20 definitions per menu, 255 characters for a `text` value and 2000
-for a `textarea` — so an over-long value is a field error rather than a silent database error on a
-shared TEXT column.
+#### Lifecycle
 
-Templates read values by handle:
+- **Created lazily.** An item gets a content element on the first save *after* its menu has a
+  layout holding at least one field (`MenuBuilderGroup::hasCustomFields()`). An install that uses
+  no custom fields never writes a row to `elements`.
+- **Saved in the item's transaction.** `MenuBuilderItemService::save()` writes the element before
+  the row that points at it, inside one transaction, so neither can survive the other's rollback.
+  Validation runs first, so a bad Matrix block is refused before the item row is written.
+- **Copied, never shared.** Duplicating an item duplicates its content through
+  `Elements::duplicateElement()` (which knows to re-own nested elements); duplicating a *menu*
+  copies its field layout with fresh UIDs. Two menus sharing one layout, or two items sharing one
+  content element, would mean editing either silently rewrote the other.
+- **Emptied means deleted.** A layout with no fields left in it is deleted rather than kept as an
+  empty row, so `hasCustomFields()` never has to distinguish "has a layout" from "has fields".
+- **Swept when stranded.** The `parentId` cascade is the one deletion path PHP cannot see, so
+  `MenuBuilder::collectGarbage()` runs on Craft's own GC and deletes content elements no item points
+  at. Every other path deletes content up front: `deleteById()` collects the subtree's `contentId`s
+  before the cascade fires, and `MenuBuilderGroupService::deleteById()` calls
+  `deleteContentForGroup()` before the `groupId` cascade does.
+
+#### Reads are batched, and never cached
+
+The cached node carries `MenuBuilderNode::$contentId` — an **ID**, not the values. A Craft field's
+value can be a live element query, which has no meaning once serialised and no way to know when the
+elements behind it changed; caching one would mean this plugin owning an invalidation problem Craft
+has already solved. Same reasoning as `iconAssetId` and `imageId` one level up, and it means a
+menu's cache entry stays valid while its items' field content is always read fresh.
+
+That would be an N+1 — one element query per node — so `MenuBuilderResolver::getTree()` hands the
+whole tree's content IDs to `MenuBuilderItemContentService::preload()` on **both** cache paths, and
+the first `custom()` call fetches all of them in one query. Absence is recorded, exactly as in the
+link resolver's element preloading, so a stale ID is not re-queried per node. `preload([])` does not
+query at all, so a menu with no custom fields pays nothing.
+
+`MenuBuilderNode::custom()` short-circuits on a null `contentId` rather than delegating, which is
+what keeps a plain node readable without a booted plugin.
+
+#### What changed, and what didn't
+
+The plugin's own custom field system — `MenuBuilderCustomField`, `CustomFieldHelper`, definitions in
+`settings['customFields']`, values in `metadata['custom']`, seven closed types — is **gone**. There
+was no shipped release to owe an upgrade path to, and a bespoke definition has no Craft field to
+become without inventing global fields on the install's behalf.
+
+There is deliberately **no upgrade migration** for it either. The plugin is pre-release, so
+`src/migrations/Install.php` stays the single source of the schema (see "Install and uninstall"):
+the two new columns are declared there, and an existing dev install is uninstalled and reinstalled
+rather than migrated. `safeDown()` hands Craft's rows back before dropping the tables that name
+them — content elements first (their nested Matrix entries are then swept by Craft's own GC), then
+the field layouts — and is guarded on the columns existing, so it also runs cleanly against an
+install whose tables predate them.
+
+The Twig entry point is unchanged, but the values it returns are now whatever the field returns:
 
 ```twig
 {{ node.custom('subtitle') }}
 
-{# customAsset() is null for an empty field, a non-asset field, *and* an asset that has since been
-   deleted — so test the resolved asset, not just hasCustom(). #}
-{% set image = craft.menuBuilder.customAsset(node, 'image') %}
+{# An Assets field is Craft's own element query — chain it like any other. #}
+{% set image = node.custom('promoImage').one() %}
 {% if image %}<img src="{{ image.url }}" alt="">{% endif %}
+
+{% for block in node.custom('promoBlocks').all() %}{{ block.heading }}{% endfor %}
 ```
+
+`craft.menuBuilder.customAsset()` is gone with it: an Assets field is read the way an Assets field is
+read anywhere else in Craft, and a lookup helper here would only be a second, worse element cache in
+front of Craft's own. `iconAsset()` stays, because an icon really is a bare ID on the node.
+
+Over the wire, both surfaces speak each field's **serialized** form
+(`MenuBuilderItemContentService::serializedValuesFor()`) — a relation field is a list of element IDs
+a client feeds back into Craft's own queries, not resolved elements, for the same reason `imageId` is
+an ID. GraphQL's `customFields` keeps its typed accessors for scalars and adds `jsonValue`, which is
+the only one populated for a field whose value isn't a scalar: flattening a Matrix field into a
+string, or picking one of its IDs to stand for it, would be a guess at a shape only the field knows.
 
 The bundled `_macros/tree.twig` renders none of them: custom fields are for the consumer's own
 templates, so nothing about them leaks into the shipped markup by default.
@@ -1915,8 +1960,9 @@ IDs, editor-only configuration, the menu's site-restriction list, resolved asset
 value reads through the node's own fail-closed accessors.
 
 Where JSON has a better representation it is used rather than transcribed: `htmlAttributes` and
-`customFields` are **objects** (GraphQL has no map type, so it needs `{name, value}` pairs and four
-typed accessors); related fields are grouped into `icon`, `badge`, `megaMenu` and `mobile`. An empty
+`customFields` are **objects** (GraphQL has no map type, so it needs `{name, value}` pairs and its
+typed accessors); related fields are grouped into `icon`, `badge`, `megaMenu` and `mobile`. Both
+surfaces carry each custom field's *serialized* value — see "Custom fields". An empty
 bag is serialized through `stdClass` so it encodes as `{}` — a bag whose JSON *type* changed with its
 contents is what breaks a typed consumer.
 
@@ -2012,7 +2058,8 @@ Fixed costs, deliberately not per-item:
 
 - **Sites** — Craft memoizes the current site; nothing here re-queries it.
 - **Menus** — one memoized list per request (see "Group persistence — database only").
-- **Custom field definitions** — read once per tree from the menu, passed down, never per item.
+- **Custom field content** — every node's content element fetched in one batched query per tree
+  (`MenuBuilderItemContentService::preload()`), never one per node.
 - **Link-type and visibility-rule registries** — built once per request behind their events.
 
 What is *not* optimised, on purpose:
@@ -2212,8 +2259,8 @@ defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explic
    This is **pinned by a regression test** (`MenuBuilderFieldMultiSiteTest::testATreeResolvesForTheRequestsSiteNotTheElementsSite`)
    rather than left implicit, so changing the behaviour has to be a deliberate decision that
    updates the test, not an accident nobody notices.
-9. **`MenuBuilderGroup::$settings` is still open-ended.** Two keys live in it —
-   `siteIds` (`MenuBuilderGroupService::SITE_IDS_KEY`) and `customFields`
-   (`CUSTOM_FIELDS_KEY`), both lifted back out on read so `$settings` stays a plain bag. Whoever
-   adds the next per-menu frontend setting should decide whether it deserves a validated sub-model
-   rather than another loose key.
+9. **`MenuBuilderGroup::$settings` is still open-ended.** One key lives in it — `siteIds`
+   (`MenuBuilderGroupService::SITE_IDS_KEY`), lifted back out on read so `$settings` stays a plain
+   bag. (`customFields` used to be the second, until custom fields became a real Craft field
+   layout with a column of its own.) Whoever adds the next per-menu frontend setting should decide
+   whether it deserves a validated sub-model rather than another loose key.

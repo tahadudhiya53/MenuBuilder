@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\helpers;
 
 use stdClass;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderApiConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
@@ -269,10 +270,13 @@ class MenuBuilderApiHelper
             'mobile' => self::mobile($node),
 
             // --- custom fields ----------------------------------------
-            // Already checked against the menu's current definitions by
-            // CustomFieldHelper::valuesForOutput(); JSON can carry their
-            // native types, so it does.
-            'customFields' => self::bag($node->customFields),
+            // The menu's Craft field layout, in each field's own serialized
+            // form — a relation field is a list of element IDs, not resolved
+            // elements, for the same reason `imageId` above is an ID: an
+            // element can change without the menu changing, so resolving one
+            // here would be a value this menu's cache has no reason to
+            // invalidate. Feed the IDs back into Craft's own queries.
+            'customFields' => self::bag(self::customFields($node)),
 
             // --- hierarchy --------------------------------------------
             'hasChildren' => $node->hasChildren(),
@@ -437,5 +441,21 @@ class MenuBuilderApiHelper
     public static function rateLimitResetsIn(int $timestamp): int
     {
         return self::RATE_WINDOW - ($timestamp % self::RATE_WINDOW);
+    }
+
+    /**
+     * A node's custom field values in their serialized form.
+     *
+     * Short-circuited on a node with no content for the same reason
+     * {@see MenuBuilderNode::custom()} is: nothing to look up, and no plugin
+     * instance needed to say so.
+     *
+     * @return array<string,mixed>
+     */
+    private static function customFields(MenuBuilderNode $node): array
+    {
+        return $node->contentId === null
+            ? []
+            : MenuBuilder::getInstance()->itemContent->serializedValuesFor($node->contentId);
     }
 }

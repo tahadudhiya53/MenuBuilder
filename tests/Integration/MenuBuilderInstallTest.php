@@ -123,7 +123,8 @@ class MenuBuilderInstallTest extends TestCase
     {
         $columns = [
             'id', 'name', 'handle', 'description', 'enabled', 'sortOrder', 'maxDepth',
-            'cssClass', 'htmlAttributes', 'settings', 'dateCreated', 'dateUpdated', 'uid',
+            'cssClass', 'htmlAttributes', 'settings', 'fieldLayoutId',
+            'dateCreated', 'dateUpdated', 'uid',
         ];
 
         return array_combine($columns, array_map(fn(string $c) => [$c], $columns));
@@ -180,7 +181,7 @@ class MenuBuilderInstallTest extends TestCase
             'clickable', 'elementId', 'customUrl', 'target', 'rel', 'cssClass', 'htmlId',
             'htmlAttributes', 'ariaLabel', 'titleAttribute', 'icon', 'badge', 'description',
             'image', 'featured', 'fallbackBehavior', 'fallbackUrl', 'visibility', 'metadata',
-            'dateCreated', 'dateUpdated', 'uid',
+            'contentId', 'dateCreated', 'dateUpdated', 'uid',
         ];
 
         return array_combine($columns, array_map(fn(string $c) => [$c], $columns));
@@ -224,6 +225,9 @@ class MenuBuilderInstallTest extends TestCase
             'item hierarchy' => [self::ITEMS, ['groupId', 'parentId', 'sortOrder']],
             'item handle' => [self::ITEMS, ['groupId', 'handle']],
             'item element' => [self::ITEMS, ['elementId']],
+            // Unique: a content element belongs to exactly one item, so two
+            // items sharing one would mean two items sharing field values.
+            'item content' => [self::ITEMS, ['contentId']],
         ];
     }
 

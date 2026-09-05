@@ -5,10 +5,11 @@ namespace Tahadudhiya\MenuBuilder\services;
 use Craft;
 use craft\base\Component;
 use craft\helpers\Json;
+use craft\helpers\StringHelper;
+use craft\models\FieldLayout;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\records\MenuBuilderGroupRecord;
 
@@ -36,16 +37,6 @@ class MenuBuilderGroupService extends Component
      * user-facing bag.
      */
     public const SITE_IDS_KEY = 'siteIds';
-
-    /**
-     * Key the menu's custom field *definitions* live under inside the same
-     * `settings` bag — see MenuBuilderGroup::$customFields and
-     * {@see CustomFieldHelper}. Same reasoning as {@see SITE_IDS_KEY}: an
-     * existing open-ended bag rather than a new column or a second settings
-     * system, lifted back out on read so `$group->settings` stays a plain
-     * user-facing bag.
-     */
-    public const CUSTOM_FIELDS_KEY = 'customFields';
 
     /**
      * Length of the `name`/`handle`/`cssClass` columns (see the Install
@@ -188,10 +179,9 @@ class MenuBuilderGroupService extends Component
         $record->maxDepth = $group->maxDepth;
         $record->cssClass = $group->cssClass;
         $record->htmlAttributes = Json::encode($group->htmlAttributes);
-        $record->settings = Json::encode($this->settingsWithCustomFields(
-            $this->settingsWithSiteIds($group->settings, $group->siteIds),
-            $group->customFields
-        ));
+        $record->settings = Json::encode($this->settingsWithSiteIds($group->settings, $group->siteIds));
+
+        $record->fieldLayoutId = $this->saveFieldLayout($group);
 
         if (!$record->save()) {
             $group->addErrors($record->getErrors());
@@ -250,6 +240,12 @@ class MenuBuilderGroupService extends Component
             $clone->cssClass = $original->cssClass;
             $clone->htmlAttributes = $original->htmlAttributes;
             $clone->settings = $original->settings;
+            // A *copy* of the layout, never a shared id: two menus pointing
+            // at one `fieldlayouts` row would mean editing either menu's
+            // fields silently rewrote the other's. `saveLayout()` with the
+            // id cleared writes a new row; the tabs and their field
+            // configuration are carried over as-is.
+            $clone->fieldLayoutId = $this->duplicateFieldLayout($original->fieldLayoutId);
 
             if (!$clone->save()) {
                 $transaction->rollBack();
@@ -320,9 +316,26 @@ class MenuBuilderGroupService extends Component
             return false;
         }
 
+        // The items' content elements first, while the item rows that name
+        // them still exist: the cascading FK below removes those rows
+        // without passing through PHP, and an `elements` row is Craft's to
+        // delete, not something a foreign key may strand. (The garbage
+        // collector sweeps whatever a crash between the two leaves behind.)
+        MenuBuilder::getInstance()->items->deleteContentForGroup($id);
+
+        $fieldLayoutId = $record->fieldLayoutId;
+
         // Cascading FK on menubuilder_items.groupId removes every item in the
         // group, so no orphans are left behind and no PHP-side sweep is needed.
         $result = (bool)$record->delete();
+
+        if ($result && $fieldLayoutId !== null) {
+            // Nothing else can be pointing at it — a layout belongs to
+            // exactly one menu (see duplicate()) — so deleting the menu
+            // deletes its layout rather than leaving an unreachable row
+            // behind for every menu ever deleted.
+            Craft::$app->getFields()->deleteLayoutById((int)$fieldLayoutId);
+        }
         $this->allCache = null;
         // The deleted menu's entries only. They are already unreachable by
         // key — nothing resolves the handle any more — but the handle is now
@@ -380,13 +393,9 @@ class MenuBuilderGroupService extends Component
         $group->htmlAttributes = ConfigHelper::decodeJsonBag($record->htmlAttributes);
         $settings = ConfigHelper::decodeJsonBag($record->settings);
         $group->siteIds = ConfigHelper::normalizeIdList($settings[self::SITE_IDS_KEY] ?? null);
-        // Fail-closed: a malformed definition (an import, a hand-written
-        // row) is dropped here rather than reaching the item editor or a
-        // template as a field with a guessed type.
-        $group->customFields = CustomFieldHelper::definitionsFromConfig($settings[self::CUSTOM_FIELDS_KEY] ?? null);
         unset($settings[self::SITE_IDS_KEY]);
-        unset($settings[self::CUSTOM_FIELDS_KEY]);
         $group->settings = $settings;
+        $group->fieldLayoutId = $record->fieldLayoutId !== null ? (int)$record->fieldLayoutId : null;
         $group->uid = $record->uid;
         $group->dateCreated = $record->dateCreated;
         $group->dateUpdated = $record->dateUpdated;
@@ -415,28 +424,106 @@ class MenuBuilderGroupService extends Component
     }
 
     /**
-     * The custom field half of the same fold, kept separate from
-     * {@see settingsWithSiteIds()} so each reserved key is one small pure
-     * function. Removed when the menu defines none, rather than written as
-     * `[]`, so a menu that uses no custom fields stores exactly the bag the
-     * user sees.
+     * A new `fieldlayouts` row with the same tabs and field configuration as
+     * `$sourceId`, or null when there is nothing to copy.
      *
-     * @param array<string,mixed> $settings
-     * @param MenuBuilderCustomField[] $customFields
-     * @return array<string,mixed>
+     * Round-tripped through the layout's own config array rather than
+     * cloned object-by-object: that array is the shape
+     * `Fields::saveLayout()` reads back, so a layout element type this
+     * plugin has never heard of (a third-party field, a future Craft one)
+     * copies correctly without this method knowing anything about it.
      */
-    private function settingsWithCustomFields(array $settings, array $customFields): array
+    /**
+     * Persists a menu's field layout and returns the id to store, or null
+     * when the menu has no fields.
+     *
+     * Craft's row, not this plugin's, so it has to be written before the
+     * menu that points at it — `saveLayout()` is what assigns the id. It
+     * reuses the existing id when the menu already has a layout, so editing
+     * one never orphans the content already stored against it.
+     *
+     * An **empty** layout is not saved at all, and an existing one that has
+     * just been emptied is deleted. Otherwise every menu ever created would
+     * carry a `fieldlayouts` row holding nothing, `hasCustomFields()` would
+     * have to distinguish "has a layout" from "has fields" everywhere, and
+     * `getConfig()` — which returns null for a layout with no tabs — would
+     * hand {@see duplicateFieldLayout()} nothing to copy.
+     */
+    private function saveFieldLayout(MenuBuilderGroup $group): ?int
     {
-        $config = CustomFieldHelper::definitionsToConfig($customFields);
+        $fieldLayout = $group->getFieldLayout();
+        $fieldLayout->id = $group->fieldLayoutId;
+        $fieldLayout->type = MenuBuilderItemContent::class;
 
-        if (empty($config)) {
-            unset($settings[self::CUSTOM_FIELDS_KEY]);
+        if ($fieldLayout->getCustomFields() === []) {
+            if ($group->fieldLayoutId !== null) {
+                Craft::$app->getFields()->deleteLayoutById($group->fieldLayoutId);
+            }
 
-            return $settings;
+            $group->fieldLayoutId = null;
+            $group->setFieldLayout(new FieldLayout(['type' => MenuBuilderItemContent::class]));
+
+            return null;
         }
 
-        $settings[self::CUSTOM_FIELDS_KEY] = $config;
+        Craft::$app->getFields()->saveLayout($fieldLayout);
+        $group->fieldLayoutId = $fieldLayout->id;
 
-        return $settings;
+        return $fieldLayout->id;
+    }
+
+    private function duplicateFieldLayout(?int $sourceId): ?int
+    {
+        if ($sourceId === null) {
+            return null;
+        }
+
+        $source = Craft::$app->getFields()->getLayoutById((int)$sourceId);
+        $config = $source?->getConfig();
+
+        if ($config === null) {
+            // Either the layout is gone, or it holds no tabs — `getConfig()`
+            // returns null for an empty one. Nothing to copy either way, and
+            // a menu with no fields is a valid menu.
+            return null;
+        }
+
+        // Fresh UIDs throughout. A layout, its tabs and its layout elements
+        // are all identified by UID, and Craft treats a matching one as the
+        // *same* component — so copying them verbatim would either collide
+        // on save or quietly re-point the original menu's layout at the
+        // clone. Only the identifiers change; every field, condition and
+        // setting inside the config is carried over untouched.
+        // No `id` is assigned: `createFromConfig()` builds an unsaved
+        // layout, and saveLayout() is what gives the copy its own row.
+        $clone = FieldLayout::createFromConfig(self::withFreshUids($config));
+        $clone->uid = StringHelper::UUID();
+        $clone->type = MenuBuilderItemContent::class;
+
+        return Craft::$app->getFields()->saveLayout($clone) ? $clone->id : null;
+    }
+
+    /**
+     * `$config` with every `uid` replaced by a new one, at any depth.
+     *
+     * Recursive and key-driven rather than shaped: a layout element's config
+     * is whatever that element type defines, so a nested UID belonging to a
+     * third-party layout element has to be renewed without this method
+     * knowing the element exists.
+     *
+     * @param array<mixed,mixed> $config
+     * @return array<mixed,mixed>
+     */
+    private static function withFreshUids(array $config): array
+    {
+        foreach ($config as $key => $value) {
+            if ($key === 'uid' && is_string($value)) {
+                $config[$key] = StringHelper::UUID();
+            } elseif (is_array($value)) {
+                $config[$key] = self::withFreshUids($value);
+            }
+        }
+
+        return $config;
     }
 }

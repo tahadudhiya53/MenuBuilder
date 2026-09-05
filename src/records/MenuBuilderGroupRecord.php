@@ -15,6 +15,7 @@ use craft\db\ActiveRecord;
  * @property string|null $cssClass
  * @property string $htmlAttributes JSON-encoded.
  * @property string $settings JSON-encoded.
+ * @property int|null $fieldLayoutId
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

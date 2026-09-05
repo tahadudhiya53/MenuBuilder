@@ -5,7 +5,6 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 use Craft;
 use craft\helpers\UrlHelper;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
@@ -193,13 +192,22 @@ class ItemsController extends BaseMenuBuilderController
         $item->fallbackUrl = $this->bodyString('fallbackUrl') ?: null;
 
         $item->visibility = $this->buildVisibilityRules($this->bodyArray('visibility'));
-        // The menu's custom field definitions are read once and used twice:
-        // to decide which posted `customFields[...]` keys may be stored at
-        // all, and (on the item) to validate the values against their
-        // types. Passing them along means the save doesn't look them up a
-        // second time — see MenuBuilderItemService::save().
-        $item->customFieldDefinitions = MenuBuilder::getInstance()->groups->getById((int)$item->groupId)?->customFields ?? [];
-        $item->metadata = $this->buildMetadata($request, $item->type, $item->customFieldDefinitions);
+        $item->metadata = $this->buildMetadata($request, $item->type);
+
+        // Custom field content is Craft's to read off the request: the
+        // fields in the menu's layout own their own input names, their own
+        // normalization and their own validation, so there is no allowlist
+        // for this plugin to keep — which is precisely why an arbitrary
+        // `fields[...]` key can't inject anything. A field the layout does
+        // not contain is ignored by setFieldValuesFromRequest(), and the
+        // element then validates every value it did accept
+        // (MenuBuilderItemContentService::validate()).
+        $content = $item->getContent();
+
+        if ($content !== null) {
+            $content->setFieldValuesFromRequest('fields');
+            $item->setContent($content);
+        }
 
         if (!MenuBuilder::getInstance()->items->save($item)) {
             // asModelFailure() sets the error flash itself (and returns the
@@ -462,19 +470,9 @@ class ItemsController extends BaseMenuBuilderController
      * rendered/read by Twig. `MenuBuilderItem::validate*()` re-validates all
      * of this server-side regardless.
      */
-    private function buildMetadata(\craft\web\Request $request, string $itemType, array $customFieldDefinitions = []): array
+    private function buildMetadata(\craft\web\Request $request, string $itemType): array
     {
         $metadata = [];
-
-        // Same rule as the rest of this method, applied to a bag whose keys
-        // *are* editor-defined: the definitions decide which handles exist,
-        // so a posted `customFields[whatever]` for a handle this menu
-        // doesn't define is dropped rather than written into metadata.
-        $customValues = CustomFieldHelper::valuesForStorage($customFieldDefinitions, $this->bodyArray('customFields'));
-
-        if ($customValues !== []) {
-            $metadata[CustomFieldHelper::VALUES_KEY] = $customValues;
-        }
 
         if ((bool)$request->getBodyParam('megaMenuEnabled', false)) {
             $columns = (int)$request->getBodyParam('megaMenuColumns', 1);

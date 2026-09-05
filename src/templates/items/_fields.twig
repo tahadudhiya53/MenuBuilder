@@ -505,62 +505,61 @@
     }) }}
 </div>
 
-{% if group.customFields|length %}
-{# Editor-defined fields for this menu (Menus → this menu → Custom fields).
-   One control per definition, all posting under `customFields[<handle>]`;
-   which handles may be stored at all is decided server-side from the same
-   definitions (ItemsController::buildMetadata()), never from what was
-   posted. Values live in the item's `metadata['custom']` bag — see
-   helpers/CustomFieldHelper. #}
-<div data-mb-section="customFields" data-mb-description="{{ "Set the extra content fields configured for this menu."|t('menu-builder') }}">
-    <h2>{{ "Custom fields"|t('menu-builder') }}</h2>
+{% if group.hasCustomFields() and item.content is not null %}
+{# This menu's Craft field layout, rendered by Craft itself.
 
-    {% set customValues = item.customFieldValues() %}
+   `createForm()` builds the real inputs for whatever the layout holds —
+   Matrix, relations, third-party fields, conditions and all — namespaced
+   under `fields[...]`, which is exactly what ItemsController hands back to
+   `setFieldValuesFromRequest('fields')` on save. Nothing here knows what any
+   individual field is, which is the point: adding a field type to the site
+   adds it to menus with no change to this plugin.
 
-    {% for field in group.customFields %}
-        {% set value = customValues[field.handle] ?? null %}
-        {% set customAssetElement = field.type == 'asset' and value ? craft.assets.id(value).one() : null %}
-        {% set base = {
-            label: field.name,
-            instructions: field.instructions,
-            id: 'customField-' ~ field.handle,
-            name: 'customFields[' ~ field.handle ~ ']',
-            required: field.required,
-        } %}
+   One collapsible card per layout tab rather than `form.render()`, so a
+   menu's fields sit alongside the item's built-in sections instead of
+   introducing a second tab strip inside a slide-out. #}
+{% set fieldLayoutForm = item.content.fieldLayout.createForm(item.content, not canEdit) %}
 
-        {% if field.type == 'textarea' %}
-            {{ forms.textareaField(base|merge({ value: value, rows: 3, maxlength: 2000 })) }}
-        {% elseif field.type == 'boolean' %}
-            {{ forms.lightswitchField(base|merge({ on: value ? true : false })) }}
-        {% elseif field.type == 'number' %}
-            {{ forms.textField(base|merge({ value: value, type: 'number', step: 'any' })) }}
-        {% elseif field.type == 'select' %}
-            {{ forms.selectField(base|merge({
-                value: value,
-                options: [{ label: "None"|t('menu-builder'), value: '' }]
-                    |merge(field.options|map(option => { label: option, value: option })|values),
-            })) }}
-        {% elseif field.type == 'asset' %}
-            {{ forms.elementSelectField(base|merge({
-                elementType: 'craft\\elements\\Asset',
-                sources: '*',
-                single: true,
-                limit: 1,
-                elements: customAssetElement ? [customAssetElement] : [],
-            })) }}
-        {% elseif field.type == 'url' %}
-            {{ forms.textField(base|merge({ value: value, maxlength: 2000 })) }}
-        {% else %}
-            {{ forms.textField(base|merge({ value: value, maxlength: 255 })) }}
-        {% endif %}
-    {% endfor %}
+{% for tab in fieldLayoutForm.tabs %}
+    {# Two nested elements on purpose.
 
-    {# Custom field values share the `metadata` attribute with the mega-menu
-       and dynamic-source config, so their validation errors land there. #}
-    {% for error in item.getErrors('metadata') %}
-        <p class="error">{{ error }}</p>
-    {% endfor %}
-</div>
+       The outer one is this page's own collapsible card, so a menu's fields
+       sit alongside the item's built-in sections.
+
+       The inner one is Craft's: `flex-fields` is what gives its field
+       markup its layout, and `data-layout-tab` is what its conditional-fields
+       JS looks for when it re-evaluates which fields belong on screen. Both
+       are copied from FieldLayoutForm::render(), which is bypassed here
+       because it hides every tab but the first — right for a tab strip,
+       wrong for a stack of cards.
+
+       Every tab in `fieldLayoutForm.tabs` is shown: createForm() has already
+       dropped the tabs whose conditions don't match the item, and it never
+       sets `FieldLayoutFormTab::$visible` at all — that property is only
+       initialized on Craft's own element-editor path, so reading it here is
+       an "accessed before initialization" fatal. #}
+    <div data-mb-section="fields-{{ loop.index }}" data-mb-description="{{ "Set the custom fields configured for this menu."|t('menu-builder') }}">
+        <h2>{{ tab.name }}</h2>
+        <div id="{{ tab.getId() }}"
+             class="flex-fields"
+             data-id="{{ tab.getId() }}"
+             data-layout-tab="{{ tab.getUid() ?? 1 }}">
+            {{ tab.content|raw }}
+        </div>
+    </div>
+{% endfor %}
+
+{# Errors raised against the content element as a whole. Per-field errors are
+   rendered by Craft beside their own inputs; these are the ones
+   MenuBuilderItemContentService copied onto the item under `fields.*` that
+   have no input to sit beside. #}
+{% for attribute, errors in item.getErrors() %}
+    {% if attribute starts with 'fields.' %}
+        {% for error in errors %}
+            <p class="error">{{ error }}</p>
+        {% endfor %}
+    {% endif %}
+{% endfor %}
 {% endif %}
 
 <div data-mb-section="advanced" data-mb-description="{{ "Set technical identifiers and custom HTML attributes."|t('menu-builder') }}">

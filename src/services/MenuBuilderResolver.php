@@ -6,11 +6,9 @@ use Craft;
 use craft\base\Component;
 use craft\base\ElementInterface;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
@@ -67,8 +65,16 @@ class MenuBuilderResolver extends Component
 
         $resolvedNodes = MenuBuilder::getInstance()->cache->getOrSet(
             $group,
-            fn() => $this->buildResolvedNodes($group->id, $group->customFields)
+            fn() => $this->buildResolvedNodes($group->id)
         );
+
+        // One query for every custom field value the menu is about to
+        // render, before any template asks for the first one. Registered on
+        // both cache paths, because the cached payload carries content IDs
+        // rather than values (see MenuBuilderNode::$contentId) — a warm
+        // menu still has to read its fields. Costs nothing for a menu whose
+        // items have no content: preload([]) does not query.
+        MenuBuilder::getInstance()->itemContent->preload($this->contentIds($resolvedNodes));
 
         // Two columns per row, not a hydrated MenuBuilderItem per row: the
         // per-request pass below reads nothing else from the persisted item,
@@ -143,16 +149,15 @@ class MenuBuilderResolver extends Component
      * intentionally NOT applied here — it depends on the current user/date
      * and must never be baked into a shared cache entry.
      *
-     * Custom field *values*, by contrast, belong in the cached payload:
-     * they are a function of the item and the menu's definitions, and of
-     * nothing about the visitor or the request. The definitions are read
-     * once here and passed down rather than looked up per item — they
-     * belong to the menu, so one read covers the whole tree.
+     * Custom field *values* are not cached either, and for a sharper
+     * reason: a Craft field's value can be a live element query, which has
+     * no meaning once serialised. Each node carries the ID of its content
+     * element instead, and getTree() batches those into one read per
+     * request — see MenuBuilderNode::$contentId.
      *
-     * @param MenuBuilderCustomField[] $customFields
      * @return MenuBuilderNode[]
      */
-    private function buildResolvedNodes(int $groupId, array $customFields = []): array
+    private function buildResolvedNodes(int $groupId): array
     {
         $items = MenuBuilder::getInstance()->items->getTree($groupId, includeDisabled: false);
         $linkResolver = MenuBuilder::getInstance()->linkResolver;
@@ -164,7 +169,7 @@ class MenuBuilderResolver extends Component
         $linkResolver->preload($items);
 
         try {
-            return $this->convert($items, 1, null, $customFields);
+            return $this->convert($items, 1, null);
         } finally {
             $linkResolver->releasePreloaded();
         }
@@ -172,10 +177,9 @@ class MenuBuilderResolver extends Component
 
     /**
      * @param MenuBuilderItem[] $items
-     * @param MenuBuilderCustomField[] $customFields
      * @return MenuBuilderNode[]
      */
-    private function convert(array $items, int $level, ?MenuBuilderNode $parent, array $customFields = []): array
+    private function convert(array $items, int $level, ?MenuBuilderNode $parent): array
     {
         $nodes = [];
 
@@ -216,11 +220,11 @@ class MenuBuilderResolver extends Component
                 megaMenu: $megaMenuConfig,
                 megaMenuColumn: $this->intOrNull($item->metadata['megaMenuColumn'] ?? null),
                 badgeStyle: BadgeHelper::style($item->metadata['badgeStyle'] ?? null),
-                // Fail-closed against the menu's *current* definitions: a
-                // field since deleted or retyped, or a value written
-                // straight into the database, is dropped here rather than
-                // reaching a template.
-                customFields: CustomFieldHelper::valuesForOutput($customFields, $item->metadata[CustomFieldHelper::VALUES_KEY] ?? null),
+                // The ID only. Values are read per request through
+                // MenuBuilderItemContentService, so a cached menu never
+                // serves stale field content and never has to serialise an
+                // element query into a cache entry.
+                contentId: $item->contentId,
                 // Cacheable for the same reason the mega-menu config is: it
                 // is a property of the item, not of the visitor or the
                 // device asking. Nothing here is a breakpoint and nothing
@@ -232,7 +236,7 @@ class MenuBuilderResolver extends Component
             );
 
             $node->parent = $parent;
-            $node->children = $this->convert($item->children, $level + 1, $node, $customFields);
+            $node->children = $this->convert($item->children, $level + 1, $node);
 
             if ($item->type === MenuBuilderItem::TYPE_DYNAMIC && $item->enabled) {
                 $node->children = array_merge($node->children, $this->buildDynamicChildren($item, $level + 1, $node));
@@ -376,5 +380,32 @@ class MenuBuilderResolver extends Component
         }
 
         return $filtered;
+    }
+
+    /**
+     * Every content element ID in a node tree, for one batched read.
+     *
+     * Walks the resolved nodes rather than the items because it runs on
+     * cache hits too, where the items were never loaded — the cached
+     * payload is the only thing that knows which content the menu needs.
+     *
+     * @param MenuBuilderNode[] $nodes
+     * @return int[]
+     */
+    private function contentIds(array $nodes): array
+    {
+        $ids = [];
+
+        foreach ($nodes as $node) {
+            if ($node->contentId !== null) {
+                $ids[] = $node->contentId;
+            }
+
+            if ($node->children !== []) {
+                $ids = array_merge($ids, $this->contentIds($node->children));
+            }
+        }
+
+        return $ids;
     }
 }

@@ -4,18 +4,23 @@ namespace Tahadudhiya\MenuBuilder;
 
 use Craft;
 use craft\base\Plugin;
+use craft\db\Query;
+use craft\db\Table;
 use craft\events\RegisterComponentTypesEvent;
 use craft\events\RegisterGqlQueriesEvent;
 use craft\events\RegisterGqlSchemaComponentsEvent;
 use craft\events\RegisterTemplateRootsEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
+use craft\services\Elements;
 use craft\services\Fields;
+use craft\services\Gc;
 use craft\services\Gql;
 use craft\services\UserPermissions;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\fields\MenuBuilderField;
 use Tahadudhiya\MenuBuilder\gql\MenuBuilderNavigationQuery;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderApiConfig;
@@ -25,6 +30,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderCacheService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderElementService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
+use Tahadudhiya\MenuBuilder\services\MenuBuilderItemContentService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLicenseService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkHealthService;
@@ -40,6 +46,7 @@ use yii\base\Event;
 /**
  * @property-read MenuBuilderGroupService $groups
  * @property-read MenuBuilderItemService $items
+ * @property-read MenuBuilderItemContentService $itemContent
  * @property-read MenuBuilderLinkResolver $linkResolver
  * @property-read MenuBuilderLinkHealthService $linkHealth
  * @property-read MenuBuilderVisibilityService $visibility
@@ -123,6 +130,7 @@ class MenuBuilder extends Plugin
             'components' => [
                 'groups' => MenuBuilderGroupService::class,
                 'items' => MenuBuilderItemService::class,
+                'itemContent' => MenuBuilderItemContentService::class,
                 'linkResolver' => MenuBuilderLinkResolver::class,
                 'linkHealth' => MenuBuilderLinkHealthService::class,
                 'visibility' => MenuBuilderVisibilityService::class,
@@ -245,6 +253,27 @@ class MenuBuilder extends Plugin
             }
         );
 
+        // The content element behind menu items' custom fields. Registered
+        // so Craft can resolve the class from `elements.type` when it loads
+        // one, and so field settings screens can name the element type a
+        // menu's field layout belongs to. It has no element index and no
+        // sources — see MenuBuilderItemContent.
+        Event::on(
+            Elements::class,
+            Elements::EVENT_REGISTER_ELEMENT_TYPES,
+            function(RegisterComponentTypesEvent $event) {
+                $event->types[] = MenuBuilderItemContent::class;
+            }
+        );
+
+        Event::on(
+            Gc::class,
+            Gc::EVENT_RUN,
+            function() {
+                $this->collectGarbage();
+            }
+        );
+
         Event::on(
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
@@ -271,6 +300,46 @@ class MenuBuilder extends Plugin
                 ];
             }
         );
+    }
+
+    /**
+     * Deletes content elements no navigation item points at any more.
+     *
+     * `menubuilder_items.parentId` carries an `ON DELETE CASCADE`, so
+     * deleting a parent removes its whole subtree inside the database with
+     * no PHP involved (see migrations/Install.php — it is what makes a
+     * subtree delete one statement instead of a recursive sweep). The rows
+     * are gone before this plugin can collect their `contentId`s, so those
+     * elements are stranded by design and swept here instead, on Craft's own
+     * garbage collection run.
+     *
+     * MenuBuilderItemService deletes content up front on every path it
+     * controls; this is the backstop for the one it cannot, plus any row a
+     * crash mid-transaction left behind.
+     */
+    private function collectGarbage(): void
+    {
+        $orphanIds = (new Query())
+            ->select(['e.id'])
+            ->from(['e' => Table::ELEMENTS])
+            ->leftJoin(
+                ['i' => '{{%menubuilder_items}}'],
+                '[[i.contentId]] = [[e.id]]'
+            )
+            ->where([
+                'e.type' => MenuBuilderItemContent::class,
+                'i.id' => null,
+            ])
+            ->column();
+
+        if ($orphanIds === []) {
+            return;
+        }
+
+        // Deleted through Craft rather than with a DELETE: a content element
+        // can own Matrix blocks, and those are elements of their own that
+        // only Elements::deleteElement() knows to take down with it.
+        $this->itemContent->deleteByIds(array_map('intval', $orphanIds));
     }
 
     private function registerVariable(): void

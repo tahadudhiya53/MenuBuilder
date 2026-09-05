@@ -3,10 +3,13 @@
 namespace Tahadudhiya\MenuBuilder\Tests\Integration;
 
 use Craft;
+use craft\fieldlayoutelements\CustomField;
+use craft\fields\PlainText;
+use craft\models\FieldLayout;
+use craft\models\FieldLayoutTab;
 use PHPUnit\Framework\TestCase;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
@@ -98,9 +101,9 @@ class MenuBuilderGroupCrudTest extends TestCase
 
     /**
      * Every attribute the editor can set has to survive the trip through the
-     * columns and the settings bag — including the two that live *inside*
-     * `settings` (site restrictions and custom field definitions) rather than
-     * in a column of their own.
+     * columns and the settings bag — including the site restriction, which
+     * lives *inside* `settings` rather than in a column of its own, and the
+     * field layout, which is a row of Craft's that this menu only points at.
      */
     public function testEveryEditableAttributeRoundTripsThroughTheDatabase(): void
     {
@@ -114,13 +117,7 @@ class MenuBuilderGroupCrudTest extends TestCase
             $group->cssClass = 'site-nav primary';
             $group->htmlAttributes = ['data-menu' => 'full'];
             $group->siteIds = [$secondSite];
-            $group->customFields = [
-                new MenuBuilderCustomField([
-                    'handle' => 'subtitle',
-                    'name' => 'Subtitle',
-                    'type' => CustomFieldHelper::TYPE_TEXT,
-                ]),
-            ];
+            $group->setFieldLayout($this->layoutWithField('subtitle'));
         });
 
         $reloaded = $this->menus()->getById((int)$menu->id);
@@ -132,7 +129,92 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame('site-nav primary', $reloaded->cssClass);
         $this->assertSame(['data-menu' => 'full'], $reloaded->htmlAttributes);
         $this->assertSame([$secondSite], $reloaded->siteIds);
-        $this->assertSame(['subtitle'], array_map(fn($f) => $f->handle, $reloaded->customFields));
+        $this->assertNotNull($reloaded->fieldLayoutId);
+        $this->assertTrue($reloaded->hasCustomFields());
+        $this->assertSame(
+            ['subtitle'],
+            array_map(fn($field) => $field->handle, $reloaded->getFieldLayout()->getCustomFields()),
+        );
+    }
+
+    /**
+     * A duplicated menu gets its **own** field layout row. Sharing one would
+     * mean editing either menu's fields silently rewrote the other's, and
+     * deleting either menu would take both layouts down.
+     */
+    public function testDuplicatingAMenuCopiesItsFieldLayoutRatherThanSharingIt(): void
+    {
+        $original = $this->makeMenu($this->handle('fl'), function(MenuBuilderGroup $group) {
+            $group->setFieldLayout($this->layoutWithField('subtitle'));
+        });
+
+        $clone = $this->menus()->duplicate((int)$original->id);
+        $this->created[] = (int)$clone->id;
+
+        $this->assertNotNull($clone->fieldLayoutId);
+        $this->assertNotSame($original->fieldLayoutId, $clone->fieldLayoutId);
+        $this->assertSame(
+            ['subtitle'],
+            array_map(fn($field) => $field->handle, $clone->getFieldLayout()->getCustomFields()),
+        );
+    }
+
+    /**
+     * Deleting a menu takes its field layout with it. A layout belongs to
+     * exactly one menu, so leaving it behind would mean an unreachable
+     * `fieldlayouts` row for every menu ever deleted.
+     */
+    public function testDeletingAMenuDeletesItsFieldLayout(): void
+    {
+        $menu = $this->makeMenu($this->handle('fld'), function(MenuBuilderGroup $group) {
+            $group->setFieldLayout($this->layoutWithField('subtitle'));
+        });
+
+        $fieldLayoutId = (int)$menu->fieldLayoutId;
+        $this->assertTrue($this->fieldLayoutExists($fieldLayoutId));
+
+        $this->assertTrue($this->menus()->deleteById((int)$menu->id));
+        $this->created = array_values(array_diff($this->created, [(int)$menu->id]));
+
+        // Asked of the table, not of `Fields::getLayoutById()`: that
+        // memoizes, so a layout deleted in this request still comes back
+        // from it. Craft soft-deletes layouts, so "gone" means `dateDeleted`
+        // is set.
+        $this->assertFalse($this->fieldLayoutExists($fieldLayoutId));
+    }
+
+    /**
+     * A one-field layout on the content element, built the way the CP's
+     * designer posts one: a tab holding a CustomField layout element that
+     * points at a real, saved Craft field.
+     */
+    private function fieldLayoutExists(int $fieldLayoutId): bool
+    {
+        return (new \craft\db\Query())
+            ->from(\craft\db\Table::FIELDLAYOUTS)
+            ->where(['id' => $fieldLayoutId, 'dateDeleted' => null])
+            ->exists();
+    }
+
+    private function layoutWithField(string $handle): FieldLayout
+    {
+        $field = Craft::$app->getFields()->getFieldByHandle($handle);
+
+        if ($field === null) {
+            $field = new PlainText([
+                'name' => ucfirst($handle),
+                'handle' => $handle,
+            ]);
+
+            $this->assertTrue(Craft::$app->getFields()->saveField($field), 'Could not create the test field.');
+        }
+
+        $layout = new FieldLayout(['type' => MenuBuilderItemContent::class]);
+        $tab = new FieldLayoutTab(['name' => 'Content', 'layout' => $layout]);
+        $tab->setElements([new CustomField($field)]);
+        $layout->setTabs([$tab]);
+
+        return $layout;
     }
 
     public function testANewMenuIsAppendedToTheEndOfTheOrder(): void

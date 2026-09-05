@@ -153,18 +153,17 @@ class MenuBuilderItemService extends Component
 
     public function save(MenuBuilderItem $item, bool $runValidation = true): bool
     {
-        // Custom field values are validated against the *menu's* definitions
-        // (MenuBuilderGroup::$customFields), which the model can't look up
-        // itself without a database. Resolving them here means every write
-        // path is definition-aware — the CP editor, a console script, an
-        // import — not just the one that happens to set them. An already-set
-        // list is honoured, so a caller that has the menu in hand doesn't
-        // pay for a second query.
-        if ($item->customFieldDefinitions === null && $item->groupId !== null) {
-            $item->customFieldDefinitions = MenuBuilder::getInstance()->groups->getById($item->groupId)?->customFields ?? [];
+        // Custom field content is a Craft element beside the item row, so it
+        // validates through Craft rather than through defineRules(). Doing
+        // it here rather than in the controller means every write path is
+        // field-aware — the CP editor, a console script, an import — and
+        // that a bad Matrix block is refused *before* the item row is
+        // written, not after.
+        if ($runValidation && !$item->validate()) {
+            return false;
         }
 
-        if ($runValidation && !$item->validate()) {
+        if ($runValidation && !MenuBuilder::getInstance()->itemContent->validateContent($item)) {
             return false;
         }
 
@@ -200,23 +199,35 @@ class MenuBuilderItemService extends Component
         // each validates against the other's pre-commit state. Field-only
         // edits (a title, a URL, an enabled toggle) touch no structure and
         // stay lock-free.
+        //
+        // The content element is written inside the same transaction as the
+        // row that points at it, whether or not this save needed a lock —
+        // otherwise a failed row save leaves an `elements` row nothing
+        // references, and a failed content save leaves an item claiming a
+        // `contentId` that was rolled back.
         $needsLock = $isNew || $isReparent;
-        $transaction = $needsLock ? Craft::$app->getDb()->beginTransaction() : null;
+        $transaction = Craft::$app->getDb()->beginTransaction();
 
         try {
             if ($needsLock) {
                 $this->lockGroup($item->groupId);
             }
 
-            if (!$this->saveRecord($record, $item, $isNew, $isReparent)) {
-                $transaction?->rollBack();
+            if (!MenuBuilder::getInstance()->itemContent->save($item)) {
+                $transaction->rollBack();
 
                 return false;
             }
 
-            $transaction?->commit();
+            if (!$this->saveRecord($record, $item, $isNew, $isReparent)) {
+                $transaction->rollBack();
+
+                return false;
+            }
+
+            $transaction->commit();
         } catch (Throwable $exception) {
-            $transaction?->rollBack();
+            $transaction->rollBack();
             Craft::warning('Failed to save navigation item: ' . $exception->getMessage(), __METHOD__);
 
             return false;
@@ -284,6 +295,7 @@ class MenuBuilderItemService extends Component
         $record->fallbackUrl = $item->fallbackUrl;
         $record->visibility = Json::encode($item->visibility);
         $record->metadata = Json::encode($item->metadata);
+        $record->contentId = $item->contentId;
 
         if (!$record->save()) {
             $item->addErrors($record->getErrors());
@@ -664,6 +676,13 @@ class MenuBuilderItemService extends Component
         $groupId = (int)$record->groupId;
 
         if (!$keepChildren) {
+            // The subtree's content elements first: the parentId cascade
+            // below removes those item rows inside the database, so once it
+            // has run there is nothing left naming their content. (Whatever
+            // a crash between the two strands is swept by MenuBuilder's
+            // garbage collector.)
+            MenuBuilder::getInstance()->itemContent->deleteByIds($this->contentIdsInSubtree($id));
+
             $result = (bool)$record->delete();
             $this->invalidateGroup($groupId);
 
@@ -689,6 +708,12 @@ class MenuBuilderItemService extends Component
                     return false;
                 }
             }
+
+            // Only this item's own content: its children have been
+            // reparented above, so they and their content survive.
+            MenuBuilder::getInstance()->itemContent->deleteByIds([
+                $record->contentId !== null ? (int)$record->contentId : null,
+            ]);
 
             $result = (bool)$record->delete();
             $transaction->commit();
@@ -812,6 +837,97 @@ class MenuBuilderItemService extends Component
      *
      * @return array<int,array{id:int,parentId:int|null,sortOrder:int}>
      */
+    /**
+     * The item that owns the given content element, or null when it has
+     * been stranded. The reverse of `MenuBuilderItem::$contentId`, and the
+     * only query that walks that direction — the index on `contentId` is
+     * unique, so this is a point lookup.
+     */
+    public function getByContentId(int $contentId): ?MenuBuilderItem
+    {
+        $record = MenuBuilderItemRecord::findOne(['contentId' => $contentId]);
+
+        return $record ? $this->recordToModel($record) : null;
+    }
+
+    /**
+     * Deletes every content element belonging to a menu, without touching
+     * the items themselves.
+     *
+     * Called by MenuBuilderGroupService::deleteById() *before* the group is
+     * deleted, while the item rows naming these elements still exist — the
+     * cascading FK on `groupId` removes those rows inside the database,
+     * where this plugin can no longer read them.
+     */
+    public function deleteContentForGroup(int $groupId): void
+    {
+        $contentIds = MenuBuilderItemRecord::find()
+            ->select(['contentId'])
+            ->where(['groupId' => $groupId])
+            ->andWhere(['not', ['contentId' => null]])
+            ->column();
+
+        if ($contentIds !== []) {
+            MenuBuilder::getInstance()->itemContent->deleteByIds(array_map('intval', $contentIds));
+        }
+    }
+
+    /**
+     * The content element IDs of an item and everything under it — what a
+     * cascading subtree delete is about to strand.
+     *
+     * One query for the whole group, then a pure walk, for the same reason
+     * {@see validateHierarchy()} works that way: an ancestor-chain query per
+     * row is an N+1 on exactly the operation that touches the most rows.
+     *
+     * @return int[]
+     */
+    private function contentIdsInSubtree(int $itemId): array
+    {
+        $record = MenuBuilderItemRecord::findOne($itemId);
+
+        if (!$record) {
+            return [];
+        }
+
+        $rows = MenuBuilderItemRecord::find()
+            ->select(['id', 'parentId', 'sortOrder', 'contentId'])
+            ->where(['groupId' => $record->groupId])
+            ->asArray()
+            ->all();
+
+        $contentIds = [];
+        // `sortOrder` is selected because childMap() orders by it — the
+        // order is irrelevant to a delete, but a projection missing a column
+        // the helper reads is a fatal, not a wrong answer.
+        $childMap = MenuBuilderHierarchyHelper::childMap(array_map(fn(array $row) => [
+            'id' => (int)$row['id'],
+            'parentId' => $row['parentId'] === null ? null : (int)$row['parentId'],
+            'sortOrder' => (int)$row['sortOrder'],
+        ], $rows));
+
+        $wanted = array_flip([$itemId, ...MenuBuilderHierarchyHelper::descendantIds($childMap, $itemId)]);
+
+        foreach ($rows as $row) {
+            if ($row['contentId'] !== null && isset($wanted[(int)$row['id']])) {
+                $contentIds[] = (int)$row['contentId'];
+            }
+        }
+
+        return $contentIds;
+    }
+
+    /**
+     * A menu's field layout ID, or null when it defines no fields — what a
+     * duplicated item's new content element is built on.
+     */
+    private function fieldLayoutIdForGroup(int $groupId): ?int
+    {
+        $group = MenuBuilder::getInstance()->groups->getById($groupId);
+
+        return $group !== null && $group->hasCustomFields() ? $group->fieldLayoutId : null;
+    }
+
     private function snapshotForGroup(int $groupId): array
     {
         $rows = MenuBuilderItemRecord::find()
@@ -956,6 +1072,13 @@ class MenuBuilderItemService extends Component
         $clone->fallbackUrl = $original->fallbackUrl;
         $clone->visibility = $original->visibility;
         $clone->metadata = $original->metadata;
+        // A *copy* of the content element, never a shared id: two items
+        // pointing at one would mean editing either one's fields silently
+        // rewrote the other's, and deleting either would empty both.
+        $clone->contentId = MenuBuilder::getInstance()->itemContent->duplicateContent(
+            $original->contentId !== null ? (int)$original->contentId : null,
+            $this->fieldLayoutIdForGroup($groupId),
+        );
 
         // Must throw rather than return a half-made clone: this runs inside
         // a transaction, and a failed save leaves $clone->id null — every
@@ -1036,6 +1159,7 @@ class MenuBuilderItemService extends Component
         $item->fallbackUrl = $record->fallbackUrl;
         $item->visibility = ConfigHelper::decodeJsonBag($record->visibility);
         $item->metadata = ConfigHelper::decodeJsonBag($record->metadata);
+        $item->contentId = $record->contentId !== null ? (int)$record->contentId : null;
         $item->uid = $record->uid;
         $item->dateCreated = $record->dateCreated;
         $item->dateUpdated = $record->dateUpdated;

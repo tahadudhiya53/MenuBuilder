@@ -463,24 +463,16 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * JSON has a map type, so custom fields keep their own types instead of
-     * needing GraphQL's four typed accessors.
+     * A node with no content element serializes an empty field bag without
+     * reaching for the plugin — which is what keeps this suite runnable
+     * without a booted Craft, and what a separator or a fresh item really
+     * is.
      */
-    public function testCustomFieldsKeepTheirJsonTypes(): void
+    public function testANodeWithoutContentSerializesNoCustomFields(): void
     {
-        $node = $this->node(customFields: [
-            'subtitle' => 'Read more',
-            'columns' => 3,
-            'promoted' => true,
-            'ratio' => 1.5,
-        ]);
+        $serialized = MenuBuilderApiHelper::serializeNode($this->node());
 
-        $decoded = json_decode(json_encode(MenuBuilderApiHelper::serializeNode($node)['customFields']), true);
-
-        $this->assertSame('Read more', $decoded['subtitle']);
-        $this->assertSame(3, $decoded['columns']);
-        $this->assertTrue($decoded['promoted']);
-        $this->assertSame(1.5, $decoded['ratio']);
+        $this->assertSame([], (array)$serialized['customFields']);
     }
 
     /**
@@ -612,7 +604,7 @@ class MenuBuilderApiTest extends TestCase
         ?string $icon = null,
         ?string $badge = null,
         ?string $badgeStyle = null,
-        array $customFields = [],
+        ?int $contentId = null,
         array $mobile = [],
         ?MenuBuilderMegaMenuConfig $megaMenu = null,
         ?int $megaMenuColumn = null,
@@ -641,7 +633,7 @@ class MenuBuilderApiTest extends TestCase
             megaMenu: $megaMenu,
             megaMenuColumn: $megaMenuColumn,
             badgeStyle: $badgeStyle,
-            customFields: $customFields,
+            contentId: $contentId,
             mobile: $mobile,
         );
     }

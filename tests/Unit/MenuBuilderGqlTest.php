@@ -194,12 +194,12 @@ class MenuBuilderGqlTest extends TestCase
         ]);
 
         $this->assertSame([
-            ['handle' => 'subtitle', 'value' => 'Since 1998', 'booleanValue' => null, 'numberValue' => null, 'intValue' => null],
-            ['handle' => 'featured', 'value' => 'true', 'booleanValue' => true, 'numberValue' => null, 'intValue' => null],
-            ['handle' => 'hidden', 'value' => 'false', 'booleanValue' => false, 'numberValue' => null, 'intValue' => null],
-            ['handle' => 'weight', 'value' => '3', 'booleanValue' => null, 'numberValue' => 3.0, 'intValue' => 3],
-            ['handle' => 'ratio', 'value' => '1.5', 'booleanValue' => null, 'numberValue' => 1.5, 'intValue' => null],
-            ['handle' => 'photo', 'value' => '41', 'booleanValue' => null, 'numberValue' => 41.0, 'intValue' => 41],
+            ['handle' => 'subtitle', 'value' => 'Since 1998', 'booleanValue' => null, 'numberValue' => null, 'intValue' => null, 'jsonValue' => '"Since 1998"'],
+            ['handle' => 'featured', 'value' => 'true', 'booleanValue' => true, 'numberValue' => null, 'intValue' => null, 'jsonValue' => 'true'],
+            ['handle' => 'hidden', 'value' => 'false', 'booleanValue' => false, 'numberValue' => null, 'intValue' => null, 'jsonValue' => 'false'],
+            ['handle' => 'weight', 'value' => '3', 'booleanValue' => null, 'numberValue' => 3.0, 'intValue' => 3, 'jsonValue' => '3'],
+            ['handle' => 'ratio', 'value' => '1.5', 'booleanValue' => null, 'numberValue' => 1.5, 'intValue' => null, 'jsonValue' => '1.5'],
+            ['handle' => 'photo', 'value' => '41', 'booleanValue' => null, 'numberValue' => 41.0, 'intValue' => 41, 'jsonValue' => '41'],
         ], $entries);
     }
 
@@ -216,14 +216,42 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertFalse($entries[0]['booleanValue']);
     }
 
-    /** A value that bypassed the editor and isn't a scalar has no representation here. */
-    public function testNonScalarCustomFieldValuesAreDropped(): void
+    /**
+     * A field whose serialized value isn't a scalar — a relation field's
+     * element IDs, a Matrix field's blocks — has no honest scalar
+     * representation, so every scalar accessor stays null and the value is
+     * offered JSON-encoded instead. Flattening it into a string, or picking
+     * one id to stand for the list, would be a guess at a shape only the
+     * field itself knows.
+     */
+    public function testNonScalarCustomFieldValuesAreOfferedAsJson(): void
     {
         $entries = MenuBuilderGqlHelper::customFieldEntries([
             'good' => 'kept',
-            'array' => ['a', 'b'],
-            'object' => new \stdClass(),
-            'null' => null,
+            'related' => [12, 15],
+            'blocks' => ['type' => 'promo'],
+        ]);
+
+        $this->assertSame(['good', 'related', 'blocks'], array_column($entries, 'handle'));
+
+        $related = $entries[1];
+        $this->assertNull($related['value']);
+        $this->assertNull($related['booleanValue']);
+        $this->assertNull($related['numberValue']);
+        $this->assertNull($related['intValue']);
+        $this->assertSame('[12,15]', $related['jsonValue']);
+        $this->assertSame('{"type":"promo"}', $entries[2]['jsonValue']);
+    }
+
+    /**
+     * A field holding nothing is not reported as an empty field: null has no
+     * entry at all, so a consumer can tell "no value" from "empty string".
+     */
+    public function testNullCustomFieldValuesAreDropped(): void
+    {
+        $entries = MenuBuilderGqlHelper::customFieldEntries([
+            'good' => 'kept',
+            'empty' => null,
         ]);
 
         $this->assertSame(['good'], array_column($entries, 'handle'));

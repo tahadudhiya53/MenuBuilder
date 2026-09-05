@@ -6,6 +6,7 @@ use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 /**
  * The Twig-facing representation of a resolved navigation item — hides the
@@ -58,24 +59,25 @@ class MenuBuilderNode
          */
         public readonly ?string $badgeStyle = null,
         /**
-         * The item's editor-defined custom field values, keyed by handle —
-         * already checked against the menu's definitions by
-         * CustomFieldHelper::valuesForOutput(), so a handle the menu no
-         * longer defines, or a value that no longer fits its field's type,
-         * never gets this far.
+         * The `elements` row carrying this item's custom field content — a
+         * {@see \Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent}
+         * — or null when the menu defines no fields.
          *
-         * Values are plain scalars (text, number, boolean, an option
-         * string, a URL, or an asset **ID**) and are emitted through Twig's
-         * autoescaping like any other string. An asset field stores the ID,
-         * never the URL — see `craft.menuBuilder.customAsset()`, and
-         * {@see iconType()} for the same reasoning applied to icons.
+         * An **ID**, not the values, and deliberately so: this node is what
+         * gets cached, and a Craft field's value can be a live element query
+         * (Matrix, relations) that has no meaning once serialised and no way
+         * to know when the elements behind it changed. Caching an ID instead
+         * means a menu's cache entry stays valid while its items' field
+         * content is always read fresh, through Craft's own element cache —
+         * the same reasoning that keeps an asset field's **ID** rather than
+         * its URL, one level up.
          *
-         * Declared last, after the existing defaulted parameters, so every
-         * positional construction of a node keeps working unchanged.
-         *
-         * @var array<string,mixed>
+         * Reads go through {@see custom()}, which batches every node in the
+         * tree into one query. Declared last, after the existing defaulted
+         * parameters, so every positional construction of a node keeps
+         * working unchanged.
          */
-        public readonly array $customFields = [],
+        public readonly ?int $contentId = null,
         /**
          * The item's normalized mobile-presentation config — see
          * {@see MobileHelper}. `[]` means "nothing configured", which is
@@ -194,21 +196,49 @@ class MenuBuilderNode
     }
 
     /**
-     * One custom field value by handle, or `$default` when this item has
-     * none. The documented Twig entry point:
+     * One custom field value by handle, or `$default` when this menu has no
+     * such field. The documented Twig entry point, unchanged from the
+     * plugin's own custom fields — but the value is now whatever the Craft
+     * field returns, so a Plain Text field gives a string, an Assets field
+     * gives a query you can chain, and a Matrix field gives its blocks:
      *
      *     {{ node.custom('subtitle') }}
-     *     {% if node.custom('featured', false) %}…{% endif %}
+     *     {% set image = node.custom('promoImage').one() %}
+     *     {% for block in node.custom('promoBlocks').all() %}…{% endfor %}
+     *
+     * Fail-closed on the handle: a field the menu has since removed returns
+     * `$default` rather than throwing on a live page.
      */
     public function custom(string $handle, mixed $default = null): mixed
     {
-        return $this->customFields[$handle] ?? $default;
+        // Short-circuited rather than delegated: a node with no content has
+        // no fields by definition, and this keeps a plain MenuBuilderNode
+        // readable without a booted plugin — which is what lets the node's
+        // own behaviour be unit-tested without a database.
+        return $this->contentId === null
+            ? $default
+            : MenuBuilder::getInstance()->itemContent->valueFor($this->contentId, $handle, $default);
     }
 
-    /** Whether this item has a value for the given custom field. */
+    /** Whether this item has a non-empty value for the given custom field. */
     public function hasCustom(string $handle): bool
     {
-        return array_key_exists($handle, $this->customFields);
+        return $this->contentId !== null
+            && MenuBuilder::getInstance()->itemContent->hasValueFor($this->contentId, $handle);
+    }
+
+    /**
+     * Every custom field handle this node can answer to — what a template
+     * or a GraphQL query iterates when it wants the menu's fields without
+     * naming them.
+     *
+     * @return string[]
+     */
+    public function customHandles(): array
+    {
+        return $this->contentId === null
+            ? []
+            : MenuBuilder::getInstance()->itemContent->handlesFor($this->contentId);
     }
 
     /**

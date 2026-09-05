@@ -198,13 +198,12 @@ class MenuBuilderGqlHelper
     /**
      * An item's custom field values as a list of typed entries.
      *
-     * A definition's type is not carried on the resolved node — the node
-     * holds values keyed by handle, already checked against the menu's
-     * definitions by {@see CustomFieldHelper::valuesForOutput()} — so the
-     * type is read back off the value itself. Each entry exposes the value
+     * Fed the **serialized** form of a menu item's Craft field values —
+     * what each field itself defines as its storage shape — so this helper
+     * stays free of Craft and of any knowledge of individual field types.
+     * The type is read back off the value. Each entry exposes the value
      * under whichever of the typed accessors actually fits, plus a string
-     * form that is always populated, so a consumer can take the loose one or
-     * the exact one:
+     * form, so a consumer can take the loose one or the exact one:
      *
      * - a boolean is `true`/`false` on `booleanValue`, and `"true"`/`"false"`
      *   on `value` — never `"1"`/`""`, which is what a bare string cast of a
@@ -214,19 +213,27 @@ class MenuBuilderGqlHelper
      *   consumer feeds back into Craft's own `asset(id:)` query);
      * - everything else is a string.
      *
-     * Arrays and objects have no representation here and are dropped: a
-     * custom field's value is a scalar by definition, so anything else is a
-     * value that bypassed the editor, and a GraphQL response is not the place
-     * to start guessing at its shape.
+     * A field whose serialized value is **not** a scalar — a relation field
+     * (a list of element IDs), a Matrix field (its blocks), a Table field —
+     * has no honest scalar representation, so `value` stays null and the
+     * whole serialized value is offered JSON-encoded on `jsonValue`
+     * instead. Flattening a Matrix field into a string, or picking one of
+     * its ids to stand for it, would be a guess at a shape only the field
+     * itself knows.
+     *
+     * `jsonValue` is populated for scalars too, so a client that wants one
+     * uniform accessor has one.
      *
      * @param array<string,mixed> $values
-     * @return list<array{handle: string, value: string|null, booleanValue: bool|null, numberValue: float|null, intValue: int|null}>
+     * @return list<array{handle: string, value: string|null, booleanValue: bool|null, numberValue: float|null, intValue: int|null, jsonValue: string|null}>
      */
     public static function customFieldEntries(array $values): array
     {
         $entries = [];
 
         foreach ($values as $handle => $value) {
+            $json = self::jsonOrNull($value);
+
             if (is_bool($value)) {
                 $entries[] = [
                     'handle' => (string)$handle,
@@ -234,6 +241,7 @@ class MenuBuilderGqlHelper
                     'booleanValue' => $value,
                     'numberValue' => null,
                     'intValue' => null,
+                    'jsonValue' => $json,
                 ];
 
                 continue;
@@ -246,6 +254,7 @@ class MenuBuilderGqlHelper
                     'booleanValue' => null,
                     'numberValue' => (float)$value,
                     'intValue' => is_int($value) ? $value : null,
+                    'jsonValue' => $json,
                 ];
 
                 continue;
@@ -258,10 +267,48 @@ class MenuBuilderGqlHelper
                     'booleanValue' => null,
                     'numberValue' => null,
                     'intValue' => null,
+                    'jsonValue' => $json,
                 ];
+
+                continue;
             }
+
+            if ($value === null || $json === null) {
+                // Nothing storable and nothing encodable — a resource, a
+                // closure, an object with no JSON form. Dropped rather than
+                // reported as an empty field, which would be a lie about
+                // what the item holds.
+                continue;
+            }
+
+            $entries[] = [
+                'handle' => (string)$handle,
+                'value' => null,
+                'booleanValue' => null,
+                'numberValue' => null,
+                'intValue' => null,
+                'jsonValue' => $json,
+            ];
         }
 
         return $entries;
+    }
+
+    /**
+     * `$value` as a JSON string, or null when it has no JSON form.
+     *
+     * Guarded rather than trusted: a third-party field's serialized value is
+     * whatever that field says it is, and an unencodable one must not turn a
+     * whole GraphQL response into an error.
+     */
+    private static function jsonOrNull(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        return $json === false ? null : $json;
     }
 }

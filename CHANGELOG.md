@@ -47,8 +47,11 @@ First release. Everything in the plugin is new, so this entry lists what 1.0.0 s
   featured flag, CSS class, HTML id and custom HTML attributes — all validated server-side.
 - Accessibility fields: ARIA label and `title` attribute.
 - Enable/disable and duplicate, both applying to the item's whole subtree.
-- Up to 20 editor-defined custom fields per menu, in seven types (text, textarea, number, boolean,
-  select, URL, asset).
+- Custom fields per menu, on a real **Craft field layout** built in Craft's own field layout
+  designer (menu → **Item Fields**): any installed field type, Matrix and relational fields
+  included, in as many tabs as the editor wants, with Craft's field conditions. Content is stored on
+  a `MenuBuilderItemContent` element beside each item, read fresh per request and batched into one
+  query per tree.
 
 ### Visibility
 
@@ -78,8 +81,7 @@ First release. Everything in the plugin is new, so this entry lists what 1.0.0 s
 
 ### Developer surface
 
-- Twig: `craft.menuBuilder.get()`, `.breadcrumbs()`, `.getGroup()`, `.getItem()`, `.iconAsset()`,
-  `.customAsset()`.
+- Twig: `craft.menuBuilder.get()`, `.breadcrumbs()`, `.getGroup()`, `.getItem()`, `.iconAsset()`.
 - `MenuBuilderNode` as the stable public object; breadcrumbs derived from the menu hierarchy, never
   from URL segments.
 - Optional macros: `_macros/tree.twig`, `_macros/breadcrumbs.twig`, and an optional `NavAsset` script

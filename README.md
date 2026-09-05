@@ -53,7 +53,7 @@ The full menu-building experience, in **one menu**.
 - Unlimited nesting
 - Drag & drop hierarchy, keyboard reordering
 - All eight link types — entry, category, asset, custom URL, anchor, heading, separator, dynamic
-- Mega menus, mobile navigation, icons, badges, custom fields
+- Mega menus, mobile navigation, icons, badges, custom fields on a real Craft field layout
 - Visibility rules, including date scheduling
 - Active state, breadcrumbs, preview, link health
 - Twig API, macros, GraphQL, the REST API and the Navigation field
@@ -124,7 +124,7 @@ The resolved tree is plain data — see [Resolving a menu](#resolving-a-menu).
 | Mega menus | Any item, 1–6 columns, rendered as a native `<details>` disclosure |
 | Mobile | Per-item viewport, order, collapsible children and mega-menu behaviour — one menu reshaped, never a second menu |
 | Dynamic navigation | Children from entries by section, categories by group or assets by volume; limit capped at 50, whitelisted order |
-| Item extras | Icons (class or asset), badges in 5 styles, description, image, featured flag, ARIA label, validated attributes, and up to 20 editor-defined custom fields per menu |
+| Item extras | Icons (class or asset), badges in 5 styles, description, image, featured flag, ARIA label, validated attributes, and a full Craft field layout per menu |
 | Control panel | Drag-and-drop and keyboard tree, slide-out editor, quick add, search, bulk actions, link-health badges, visual preview |
 | Multi-site | Per-menu site restriction, per-item `site` rule, per-site resolution, per-site cache |
 | Developer API | `craft.menuBuilder.get()` / `.breadcrumbs()` / `.getGroup()` / `.getItem()`, optional macros, a Navigation field, 2 extension events |
@@ -151,7 +151,7 @@ Not included: import/export (menus move with the database), and menu reordering 
 | Restrict to sites | Multi-site only. An unavailable menu returns no tree at all |
 | CSS class / HTML attributes | Rendered onto the `<nav>` wrapper. Validated server-side |
 | Description | Internal note for editors |
-| Custom fields | Extra editor-defined fields offered to every item in this menu (max 20) |
+| Item Fields | Craft's own field layout designer, on its own tab. Any installed field type — Matrix, relations, third-party fields — in as many tabs as you like |
 
 **Duplicate** clones a menu's settings *and* all its items in one transaction, with a unique handle.
 
@@ -184,7 +184,7 @@ Leave the title blank on an element-backed item to inherit the element's own tit
 | Visibility | The rules below |
 | Mobile | Viewport, mobile order, collapsible children, mega-menu behaviour |
 | Mega menu | Enable, 1–6 columns; children pick a column |
-| Custom fields | Whatever the menu defines |
+| Custom fields | Whatever the menu's field layout defines |
 
 **Fallback behaviour** decides what happens when a linked element is missing, disabled or has no
 URL: hide the item, keep it without a link, or fall back to a URL you give.
@@ -311,7 +311,6 @@ The other accessors — that's the whole variable:
 {% set group = craft.menuBuilder.getGroup('main') %}          {# settings only, no tree #}
 {% set item  = craft.menuBuilder.getItem(42) %}               {# raw item — admin/debug #}
 {% set icon  = craft.menuBuilder.iconAsset(node) %}           {# Asset behind an `asset:` icon #}
-{% set img   = craft.menuBuilder.customAsset(node, 'teaser') %}
 {% set trail = craft.menuBuilder.breadcrumbs('main') %}
 ```
 
@@ -335,7 +334,7 @@ The other accessors — that's the whole variable:
 | `isActive`, `isActiveAncestor`, `isActiveOrAncestor()` | Per-request, never cached |
 | `megaMenu`, `megaMenuColumns()`, `megaMenuColumn` | `megaMenuColumns()` returns `{column: nodes}` |
 | `isDynamic` | True for synthesised nodes |
-| `custom(handle, default)`, `hasCustom(handle)`, `customFields` | See [Custom fields](#custom-fields) |
+| `custom(handle, default)`, `hasCustom(handle)`, `customHandles()` | See [Custom fields](#custom-fields) |
 | `mobileVisibility()`, `mobileOrder()`, … | See [Mobile rendering](#mobile-rendering) |
 
 ## Rendering with the macros
@@ -475,21 +474,37 @@ classes.
 
 ## Custom fields
 
+Each menu has its own **Craft field layout**, built in Craft's own field layout designer under the
+menu's **Item Fields** tab. Any installed field type works — Plain Text, Dropdown, Matrix, Entries,
+Assets, Money, third-party fields — arranged into as many tabs as you want, with Craft's field
+conditions and instructions. Whatever you put there appears on every item in that menu.
+
+Read the values on a node by handle:
+
 ```twig
 {{ node.custom('subtitle') }}
 {{ node.custom('rank', 0) }}
 
-{% if node.hasCustom('teaser') %}
-  {% set teaser = craft.menuBuilder.customAsset(node, 'teaser') %}
-  {% if teaser %}<img src="{{ teaser.url }}" alt="">{% endif %}
-{% endif %}
+{# The value is whatever the field returns — an Assets field gives you Craft's
+   own element query, so chain it exactly as you would anywhere else. #}
+{% set teaser = node.custom('teaser').one() %}
+{% if teaser %}<img src="{{ teaser.url }}" alt="">{% endif %}
+
+{% for block in node.custom('promoBlocks').all() %}
+  <h3>{{ block.heading }}</h3>
+{% endfor %}
 ```
 
-Each menu defines its own set (max 20) in seven types: text, textarea, number, boolean, select, URL,
-asset. Every value is a plain scalar (an `asset` field stores an ID), escaped where you print it —
-there is no HTML or template type. Reads fail closed against the menu's current definitions: delete
-a field or change its type and values that no longer fit stop being returned. Custom fields never
-affect a URL, active state, visibility or caching, and the bundled macros render none of them.
+`hasCustom('handle')` is true when the field holds a non-empty value; `customHandles()` lists every
+handle the menu defines, for iterating without naming them.
+
+Reads fail closed on the handle: remove a field from the menu's layout and `custom()` returns the
+default rather than throwing on a live page. Values are read fresh on every request — the resolved
+tree caches each item's *content ID*, never the values — and the whole tree's content is fetched in
+one batched query, so a menu with custom fields costs one extra query, not one per item.
+
+Custom fields never affect a URL, active state, visibility or caching, and the bundled macros render
+none of them.
 
 ## Mobile rendering
 
@@ -666,7 +681,7 @@ an argument** — pass `currentUri` or both flags are `false`.
 | Icon / badge | `iconType`, `iconClass`, `iconAssetId`; `badge`, `badgeStyle`, `badgeClass` |
 | Mega menu | `megaMenu { columns }`, `megaMenuColumn` |
 | Mobile | `mobileVisibility`, `mobileOrder`, `isMobileCollapsible`, `mobileMegaMenuBehavior`, `viewportAttribute` |
-| Custom fields | `customFields { handle value booleanValue numberValue intValue }` |
+| Custom fields | `customFields { handle value booleanValue numberValue intValue jsonValue }` |
 | Hierarchy | `hasChildren`, `children` |
 
 These read through the same fail-closed accessors as the Twig node. **Asset references are IDs, not
@@ -737,7 +752,7 @@ With no header the request falls back to Craft's public schema unless `allowPubl
       "megaMenu": { "columns": 4 }, "megaMenuColumn": null,
       "mobile": { "visibility": "both", "order": null, "isCollapsible": true,
                   "megaMenuBehavior": "stack", "viewportAttribute": null },
-      "customFields": { "subtitle": "Who we are", "promoted": true },
+      "customFields": { "subtitle": "Who we are", "promoted": true, "relatedEntries": [12, 15] },
       "hasChildren": true, "children": []
     }]
   }
@@ -745,8 +760,10 @@ With no header the request falls back to Craft's public schema unless `allowPubl
 ```
 
 `icon`, `badge` and `megaMenu` are `null` when absent; `htmlAttributes` and `customFields` are
-always objects (`{}`, never `[]`). Custom fields keep their JSON type, and an asset field's value is
-a Craft asset ID. Row IDs, and anything a visitor never sees, are not exposed. Menus resolve for the
+always objects (`{}`, never `[]`). Custom fields carry each field's **serialized** value, so a
+relation field is a list of element IDs you feed back into Craft's own queries rather than resolved
+elements — the same reason `imageId` is an ID. Over GraphQL, a field whose value isn't a scalar
+populates `jsonValue` only. Row IDs, and anything a visitor never sees, are not exposed. Menus resolve for the
 **anonymous** audience whoever is asking, including a browser carrying an admin's session cookie.
 
 | Status | `error.code` | When |

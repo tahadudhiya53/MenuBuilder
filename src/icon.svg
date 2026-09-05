@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="menu-builder-icon-title">
+    <title id="menu-builder-icon-title">MenuBuilder</title>
+    <!--
+        The Plugin Store / Settings → Plugins icon: full colour, square, no
+        fixed width or height so Craft can size it.
+
+        The same mark as icon-mask.svg, and literally the same path data —
+        one 24×18 grid, scaled 3× and centred on the plate — so the coloured
+        icon and the silhouette Craft tints for the sidebar can't drift
+        apart. Everything is a filled shape rather than a stroke, because
+        the sidebar's mask CSS sets `stroke-width: 0` and a stroked path
+        would vanish there.
+
+        The two elbows are 1.2-wide L shapes: the stem starts flush with the
+        bottom of the bar above it and the arm ends on the vertical centre
+        line of the bar it points at (y 9 and y 16.2), which is exactly
+        where each pill's rounded left cap is widest — so the connectors
+        meet the bars without a gap or an overlap.
+    -->
+    <rect width="100" height="100" rx="22" fill="#3F4D5A"/>
+    <g transform="translate(14 23) scale(3)">
+        <g fill="#FFFFFF">
+            <rect width="24" height="3.6" rx="1.8"/>
+            <rect x="4" y="7.2" width="19" height="3.6" rx="1.8"/>
+            <rect x="8" y="14.4" width="14" height="3.6" rx="1.8"/>
+        </g>
+        <g fill="#E5422B">
+            <path d="M2 3.6h1.2v4.8H4v1.2H2Z"/>
+            <path d="M6 10.8h1.2v4.8H8v1.2H6Z"/>
+        </g>
+    </g>
+</svg>

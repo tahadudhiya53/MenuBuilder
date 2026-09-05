@@ -7,6 +7,7 @@ use craft\gql\GqlEntityRegistry;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\Type;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderGqlHelper;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 
 /**
@@ -74,9 +75,9 @@ class MenuBuilderNavigationItemType
     }
 
     /**
-     * One editor-defined custom field value. See
+     * One custom field value from the owning menu's Craft field layout. See
      * {@see MenuBuilderGqlHelper::customFieldEntries()} for why a value is
-     * offered under four accessors rather than one.
+     * offered under five accessors rather than one.
      */
     public static function customFieldType(): Type
     {
@@ -103,7 +104,12 @@ class MenuBuilderNavigationItemType
                 'intValue' => [
                     'name' => 'intValue',
                     'type' => Type::int(),
-                    'description' => Craft::t('menu-builder', 'The value, when it is a whole number — an asset field’s asset ID, for instance; null otherwise.'),
+                    'description' => Craft::t('menu-builder', 'The value, when it is a whole number; null otherwise.'),
+                ],
+                'jsonValue' => [
+                    'name' => 'jsonValue',
+                    'type' => Type::string(),
+                    'description' => Craft::t('menu-builder', 'The field’s stored value, JSON-encoded. The only accessor populated for a field whose value isn’t a scalar — a relation field’s element IDs, a Matrix field’s blocks, a table field’s rows.'),
                 ],
             ],
         ]));
@@ -197,8 +203,12 @@ class MenuBuilderNavigationItemType
             'customFields' => self::field(
                 'customFields',
                 Type::nonNull(Type::listOf(Type::nonNull(self::customFieldType()))),
-                'The item’s editor-defined custom field values, already checked against the menu’s current definitions.',
-                fn(MenuBuilderNode $node) => MenuBuilderGqlHelper::customFieldEntries($node->customFields),
+                'The item’s custom field values, from the owning menu’s Craft field layout.',
+                fn(MenuBuilderNode $node) => MenuBuilderGqlHelper::customFieldEntries(
+                    $node->contentId === null
+                        ? []
+                        : MenuBuilder::getInstance()->itemContent->serializedValuesFor($node->contentId),
+                ),
             ),
 
             // --- hierarchy ------------------------------------------------

@@ -77,9 +77,6 @@ class MenuBuilderVariable
      * memoized per request: a menu where twenty items share one icon costs
      * one query, not twenty.
      *
-     * Shared with {@see customAsset()} — both look an Asset up by ID, so
-     * one item's icon and another's `asset` custom field pointing at the
-     * same file is still a single query.
      *
      * @var array<int,Asset|null>
      */
@@ -101,29 +98,16 @@ class MenuBuilderVariable
     }
 
     /**
-     * The Asset behind an `asset` custom field, or null when the field is
-     * empty, isn't an asset field, or points at an asset that has since
-     * been deleted.
+     * `customAsset()` is gone. A menu's custom fields are Craft fields now,
+     * so an Assets field on a node returns Craft's own element query and is
+     * read the way an asset field is read anywhere else in Craft:
      *
-     * Same contract and the same reasoning as {@see iconAsset()}: the
-     * cached tree carries the asset **ID**, never a URL, and the lookup is
-     * memoized per request so a menu where twenty items point at one image
-     * costs one query.
+     *     {% set image = node.custom('promoImage').one() %}
+     *
+     * That query is Craft's to batch and cache; a lookup helper here would
+     * only be a second, worse element cache in front of it. `iconAsset()`
+     * stays, because an icon really is a bare ID on the node.
      */
-    public function customAsset(MenuBuilderNode $node, string $handle): ?Asset
-    {
-        $value = $node->custom($handle);
-
-        if (!is_int($value) || $value < 1) {
-            return null;
-        }
-
-        if (!array_key_exists($value, $this->iconAssets)) {
-            $this->iconAssets[$value] = Asset::find()->id($value)->one();
-        }
-
-        return $this->iconAssets[$value];
-    }
 
     /** A single raw (unresolved, unfiltered) item by ID — mainly useful for admin/debug templates. */
     public function getItem(int $id): ?MenuBuilderItem

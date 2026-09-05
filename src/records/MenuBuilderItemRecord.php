@@ -32,6 +32,7 @@ use craft\db\ActiveRecord;
  * @property string|null $fallbackUrl
  * @property string $visibility JSON-encoded.
  * @property string $metadata JSON-encoded.
+ * @property int|null $contentId
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

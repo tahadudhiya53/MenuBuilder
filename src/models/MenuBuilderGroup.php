@@ -2,9 +2,11 @@
 
 namespace Tahadudhiya\MenuBuilder\models;
 
-use Craft;
+use craft\base\FieldLayoutProviderInterface;
 use craft\base\Model;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
+use craft\behaviors\FieldLayoutBehavior;
+use craft\models\FieldLayout;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 
 /**
@@ -13,7 +15,7 @@ use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
  * item must always belong to the same group — cross-group parenting is
  * rejected by MenuBuilderItemService.
  */
-class MenuBuilderGroup extends Model
+class MenuBuilderGroup extends Model implements FieldLayoutProviderInterface
 {
     public ?int $id = null;
     public string $name = '';
@@ -42,16 +44,21 @@ class MenuBuilderGroup extends Model
     public array $settings = [];
 
     /**
-     * @var MenuBuilderCustomField[] The extra editor-defined fields every
-     *      item in this menu is offered (icon/badge/description and the rest
-     *      of the built-ins are *not* here — they have their own columns).
+     * @var int|null The Craft field layout every item in this menu is
+     *      offered, or null when the menu defines no extra fields.
      *
-     * Persisted inside the `settings` bag, exactly as `siteIds` is (see
-     * MenuBuilderGroupService::CUSTOM_FIELDS_KEY), so `$settings` stays a
-     * plain bag and no schema change is involved. Values live on the item,
-     * in `metadata['custom']` — see {@see CustomFieldHelper}.
+     * A real `fieldlayouts` row, not a bespoke definition list: the layout
+     * is built by Craft's own field layout designer, so a menu can use
+     * *any* installed field type — Matrix, relations, third-party fields —
+     * arranged into tabs, with Craft's own conditions and instructions.
+     * The built-in icon/badge/description columns are deliberately not in
+     * it; they have their own columns and their own editor UI.
+     *
+     * The content for one item lives on that item's
+     * {@see MenuBuilderItemContent} element — see that class for why the
+     * item is not itself the element.
      */
-    public array $customFields = [];
+    public ?int $fieldLayoutId = null;
 
     public ?string $uid = null;
     public ?string $dateCreated = null;
@@ -73,9 +80,8 @@ class MenuBuilderGroup extends Model
             [['enabled'], 'boolean'],
             [['sortOrder'], 'integer'],
             [['maxDepth'], 'integer', 'min' => 1, 'max' => 10],
+            [['fieldLayoutId'], 'integer'],
             [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
-            [['customFields'], 'validateCustomFields', 'skipOnEmpty' => false],
-            [['customFields'], 'safe'],
             [['siteIds'], 'validateSiteIds', 'skipOnEmpty' => false],
             [['siteIds'], 'safe'],
             [['htmlAttributes', 'settings'], 'safe'],
@@ -102,58 +108,91 @@ class MenuBuilderGroup extends Model
     }
 
     /**
-     * Each definition validates itself ({@see MenuBuilderCustomField}); this
-     * adds the two rules that are only knowable across the whole set —
-     * handles must be unique within a menu (otherwise an item's
-     * `metadata['custom']` key would be ambiguous), and there is a hard
-     * ceiling on how many a menu can define, since every one of them is
-     * stored per item in a shared TEXT column.
+     * Craft's field layout plumbing, attached as a behavior so this model
+     * answers `getFieldLayout()` / `setFieldLayout()` the same way every
+     * other layout-owning Craft model does — which is what lets the CP's
+     * `fieldLayoutDesignerField` macro and `Fields::assembleLayoutFromPost()`
+     * work against it without a single line of adapter code.
+     *
+     * `elementType` names the element the layout's content is stored on, so
+     * the designer offers the right field settings and Craft's own
+     * field-usage lookups can find this layout.
      */
-    public function validateCustomFields(): void
+    public function behaviors(): array
     {
-        if (!is_array($this->customFields)) {
-            $this->addError('customFields', Craft::t('menu-builder', 'Invalid custom fields.'));
+        return [
+            'fieldLayout' => [
+                'class' => FieldLayoutBehavior::class,
+                'elementType' => MenuBuilderItemContent::class,
+                'idAttribute' => 'fieldLayoutId',
+            ],
+        ];
+    }
 
-            return;
-        }
+    /**
+     * This menu's field layout, always as an object — a menu that has never
+     * had one gets an empty layout rather than null, so the designer and
+     * every caller below have something to render and to save. Only the
+     * *id* distinguishes "saved" from "not yet".
+     *
+     * @see FieldLayoutBehavior::getFieldLayout()
+     */
+    public function getFieldLayout(): FieldLayout
+    {
+        /** @var FieldLayoutBehavior $behavior */
+        $behavior = $this->getBehavior('fieldLayout');
 
-        if (count($this->customFields) > CustomFieldHelper::MAX_FIELDS) {
-            $this->addError('customFields', Craft::t('menu-builder', 'A menu can define at most {max} custom fields.', ['max' => CustomFieldHelper::MAX_FIELDS]));
+        return $behavior->getFieldLayout();
+    }
 
-            return;
-        }
+    /**
+     * Required by FieldLayoutProviderInterface (via `Grippable`). Craft uses
+     * it to name the layout's owner on the field-usage screens — "used by
+     * the *main* menu" rather than by an anonymous layout id.
+     *
+     * A method beside the public `$handle` property rather than a rename:
+     * `$group->handle` is read from Twig, the controllers and every service,
+     * and the property keeps answering those unchanged.
+     */
+    public function getHandle(): ?string
+    {
+        return $this->handle !== '' ? $this->handle : null;
+    }
 
-        $seen = [];
+    /**
+     * Replaces this menu's field layout.
+     *
+     * `$fieldLayoutId` is only overwritten when the incoming layout carries
+     * an id of its own. The CP posts a freshly assembled layout with no id
+     * on every save, and clobbering the stored one with null would strand
+     * the row this menu already owns — the save would then write a *second*
+     * layout and leave the first behind, unreachable, holding the content
+     * every existing item is still pointing at.
+     */
+    public function setFieldLayout(FieldLayout $fieldLayout): void
+    {
+        /** @var FieldLayoutBehavior $behavior */
+        $behavior = $this->getBehavior('fieldLayout');
+        $behavior->setFieldLayout($fieldLayout);
 
-        foreach ($this->customFields as $index => $field) {
-            if (!$field instanceof MenuBuilderCustomField) {
-                $this->addError('customFields', Craft::t('menu-builder', 'Invalid custom fields.'));
-
-                return;
-            }
-
-            if (!$field->validate()) {
-                foreach ($field->getErrorSummary(true) as $error) {
-                    $this->addError('customFields', Craft::t('menu-builder', 'Custom field #{index}: {error}', ['index' => (int)$index + 1, 'error' => $error]));
-                }
-
-                continue;
-            }
-
-            if (isset($seen[$field->handle])) {
-                $this->addError('customFields', Craft::t('menu-builder', 'Two custom fields share the handle “{handle}”.', ['handle' => $field->handle]));
-
-                continue;
-            }
-
-            $seen[$field->handle] = true;
+        if ($fieldLayout->id !== null) {
+            $this->fieldLayoutId = $fieldLayout->id;
         }
     }
 
-    /** One of this menu's custom field definitions by handle, or null. */
-    public function customField(string $handle): ?MenuBuilderCustomField
+    /**
+     * Whether this menu offers its items any custom fields at all.
+     *
+     * A layout row can exist while holding no fields — an editor who adds a
+     * field and then removes it again leaves one behind — so this asks the
+     * layout what is *in* it rather than whether it exists. Every caller
+     * that would otherwise create a content element, render an empty fields
+     * tab, or run an extra query for a menu with no fields checks this
+     * first.
+     */
+    public function hasCustomFields(): bool
     {
-        return CustomFieldHelper::definitionByHandle($this->customFields, $handle);
+        return $this->fieldLayoutId !== null && $this->getFieldLayout()->getCustomFields() !== [];
     }
 
     /**

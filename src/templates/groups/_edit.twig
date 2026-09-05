@@ -40,6 +40,22 @@
 {% endif %}
 {% set formActions = formActions|length ? formActions : null %}
 
+{# Two tabs rather than one long form: the field layout designer is a
+   full-height drag-and-drop canvas, and sitting it under the CSS class field
+   buried every setting below it. Craft's own section/entry-type editors split
+   the same way for the same reason. The designer is only offered on a saved
+   menu — a layout has to be attached to a `menubuilder_groups` row, and a new
+   menu has none until it is saved once. #}
+{% set showFieldsTab = not isNew %}
+{% set tabs = {
+    settings: { label: "Settings"|t('menu-builder'), url: '#menu-builder-tab-settings' },
+} %}
+{% if showFieldsTab %}
+    {% set tabs = tabs|merge({
+        fields: { label: "Item Fields"|t('menu-builder'), url: '#menu-builder-tab-fields' },
+    }) %}
+{% endif %}
+
 {% if not canManageSettings %}
     {% set contentNotice = "You have read-only access to menu settings."|t('menu-builder') %}
 {% endif %}
@@ -56,6 +72,7 @@
    focus, no edit, nothing submitted — in one place, rather than threading a
    `disabled` flag through a dozen field calls where one omission would leave
    a field that looks editable and silently isn't. #}
+<div id="menu-builder-tab-settings">
 <fieldset class="menu-builder-fieldset"{{ canManageSettings ? '' : ' disabled' }}>
 
 {{ forms.textField({
@@ -128,52 +145,6 @@
     }) }}
 {% endif %}
 
-{# The menu's custom field *definitions*. Values live on each item, under
-   `metadata['custom']` — see helpers/CustomFieldHelper for why definitions
-   and values are stored where they are. The type list is closed and has no
-   markup member, so nothing defined here can produce executable content. #}
-{{ forms.editableTableField({
-    label: "Custom fields"|t('menu-builder'),
-    instructions: "Extra fields every item in this menu can fill in, on top of the built-in icon, badge, description and image. Read in Twig as `node.custom('handle')`."|t('menu-builder'),
-    id: 'customFields',
-    name: 'customFields',
-    allowAdd: true,
-    allowReorder: true,
-    allowDelete: true,
-    addRowLabel: "Add a custom field"|t('menu-builder'),
-    maxRows: 20,
-    cols: {
-        name: { type: 'singleline', heading: "Name"|t('menu-builder'), width: 200 },
-        handle: { type: 'singleline', heading: "Handle"|t('menu-builder'), class: 'code', width: 160 },
-        type: {
-            type: 'select',
-            heading: "Type"|t('menu-builder'),
-            width: 140,
-            options: [
-                { label: "Text"|t('menu-builder'), value: 'text' },
-                { label: "Multi-line text"|t('menu-builder'), value: 'textarea' },
-                { label: "Number"|t('menu-builder'), value: 'number' },
-                { label: "Boolean"|t('menu-builder'), value: 'boolean' },
-                { label: "Dropdown"|t('menu-builder'), value: 'select' },
-                { label: "URL"|t('menu-builder'), value: 'url' },
-                { label: "Asset"|t('menu-builder'), value: 'asset' },
-            ],
-        },
-        options: { type: 'singleline', heading: "Dropdown options (comma-separated)"|t('menu-builder') },
-        instructions: { type: 'singleline', heading: "Instructions"|t('menu-builder') },
-        required: { type: 'checkbox', heading: "Required"|t('menu-builder'), thin: true },
-    },
-    rows: group.customFields|map(field => {
-        name: field.name,
-        handle: field.handle,
-        type: field.type,
-        options: field.options|join(', '),
-        instructions: field.instructions,
-        required: field.required,
-    })|values,
-    errors: group.getErrors('customFields'),
-}) }}
-
 {{ forms.textField({
     label: "CSS class"|t('menu-builder'),
     instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menu-builder'),
@@ -199,5 +170,31 @@
         {{ "{count} menu items"|t('menu-builder', { count: itemCount }) }} &middot;
         <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ "Edit this menu’s items"|t('menu-builder') }}</a>
     </p>
+{% endif %}
+</div>
+
+{% if showFieldsTab %}
+    <div id="menu-builder-tab-fields" class="hidden">
+        {# Craft's own field layout designer, against this menu's layout.
+           Every installed field type is available — Matrix, relations,
+           third-party fields — arranged into as many tabs as the editor
+           wants, with Craft's conditions and instructions. The content each
+           item stores against it lives on a MenuBuilderItemContent element;
+           see that class for why the item is not itself the element.
+
+           The built-in icon/badge/description/image are deliberately not
+           offered here: they have their own columns and their own controls
+           on the item editor, and duplicating them as layout elements would
+           give an editor two places to set one value. #}
+        {% if canManageSettings %}
+            {{ forms.fieldLayoutDesignerField({
+                fieldLayout: group.fieldLayout,
+                customizableTabs: true,
+                customizableUi: true,
+            }) }}
+        {% else %}
+            <p class="light">{{ "You have read-only access to menu settings."|t('menu-builder') }}</p>
+        {% endif %}
+    </div>
 {% endif %}
 {% endblock %}

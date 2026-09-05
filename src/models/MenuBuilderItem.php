@@ -4,14 +4,15 @@ namespace Tahadudhiya\MenuBuilder\models;
 
 use Craft;
 use craft\base\Model;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
+use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 /**
  * A single navigation node. `clickable` is an explicit, independent flag —
@@ -109,24 +110,22 @@ class MenuBuilderItem extends Model
     public array $metadata = [];
 
     /**
-     * @var MenuBuilderCustomField[]|null The owning menu's custom field
-     *      definitions, when they are known — **not persisted**, and not
-     *      part of this item's identity: they belong to the menu (see
-     *      MenuBuilderGroup::$customFields).
+     * @var int|null The `elements` row carrying this item's custom field
+     *      content — a {@see MenuBuilderItemContent}.
      *
-     * They are injected rather than looked up so this model stays free of
-     * database access and remains unit-testable without a booted Craft app,
-     * the same reasoning as everywhere else in `defineRules()`.
-     * MenuBuilderItemService::save() fills them in for every write path that
-     * doesn't set them itself, so a save is always definition-aware.
-     *
-     * `null` means "not resolved" — validation then checks the *shape* of
-     * `metadata['custom']` only. A stored value still can't reach a template
-     * unvalidated: MenuBuilderResolver reads it through
-     * CustomFieldHelper::valuesForOutput(), which fails closed against the
-     * definitions of the day.
+     * Null until the owning menu has a field layout with at least one field
+     * in it; {@see MenuBuilderItemService::saveContent()} creates the
+     * element on the first save after that, so an install that uses no
+     * custom fields never writes an `elements` row at all.
      */
-    public ?array $customFieldDefinitions = null;
+    public ?int $contentId = null;
+
+    /**
+     * @var MenuBuilderItemContent|null Lazily loaded, never persisted here —
+     *      see {@see getContent()}.
+     */
+    private ?MenuBuilderItemContent $content = null;
+    private bool $contentLoaded = false;
 
     public ?string $uid = null;
     public ?string $dateCreated = null;
@@ -183,7 +182,6 @@ class MenuBuilderItem extends Model
             [['visibility'], 'validateVisibility', 'skipOnEmpty' => false],
             [['metadata'], 'validateMegaMenu', 'skipOnEmpty' => false],
             [['metadata'], 'validateDynamicSource', 'skipOnEmpty' => false],
-            [['metadata'], 'validateCustomFields', 'skipOnEmpty' => false],
             [['metadata'], 'validateMobile', 'skipOnEmpty' => false],
             [['htmlAttributes', 'metadata'], 'safe'],
         ];
@@ -337,117 +335,56 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Validates `metadata[CustomFieldHelper::VALUES_KEY]` — the item's
-     * editor-defined field values.
+     * This item's custom field content element, or null when the owning
+     * menu defines no fields.
      *
-     * Two layers, because the two have different prerequisites:
+     * Lazy and memoized: most reads of an item (the CP tree, a hierarchy
+     * check, a bulk enable) never touch its fields, and the tree view loads
+     * hundreds of items at once — fetching an element per item eagerly
+     * would be an N+1 on every one of those paths. The render path does not
+     * come through here at all; it batches through
+     * {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderItemContentService}.
      *
-     * 1. **Shape**, always: an associative bag of handle => scalar|null,
-     *    within {@see CustomFieldHelper::MAX_FIELDS} and the length cap.
-     *    This needs nothing but the item, so it runs on every write path
-     *    including an import or a console script.
-     * 2. **Type**, when {@see $customFieldDefinitions} is known: each value
-     *    against its field's type/options, and every required field present.
-     *    Handles the menu doesn't define are rejected rather than silently
-     *    dropped — a value under an unknown handle is a bug or a tampered
-     *    post, and swallowing it would hide both.
+     * A menu with no field layout returns null rather than an empty element:
+     * there is nothing to edit, nothing to save, and no `elements` row to
+     * write.
      */
-    public function validateCustomFields(): void
+    public function getContent(): ?MenuBuilderItemContent
     {
-        if (!is_array($this->metadata)) {
-            return;
+        if ($this->contentLoaded) {
+            return $this->content;
         }
 
-        $values = $this->metadata[CustomFieldHelper::VALUES_KEY] ?? null;
+        $this->contentLoaded = true;
+        $this->content = MenuBuilder::getInstance()->itemContent->contentForItem($this);
 
-        if ($values === null) {
-            $values = [];
-        }
-
-        if (!is_array($values)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Custom field values must be an object keyed by field handle.'));
-
-            return;
-        }
-
-        if (count($values) > CustomFieldHelper::MAX_FIELDS) {
-            $this->addError('metadata', Craft::t('menu-builder', 'An item can carry values for at most {max} custom fields.', ['max' => CustomFieldHelper::MAX_FIELDS]));
-
-            return;
-        }
-
-        foreach ($values as $handle => $value) {
-            if (!is_string($handle) || preg_match('/^[a-zA-Z][a-zA-Z0-9_]*$/', $handle) !== 1 || strlen($handle) > CustomFieldHelper::MAX_HANDLE_LENGTH) {
-                $this->addError('metadata', Craft::t('menu-builder', 'Custom field handles must start with a letter and contain only letters, numbers, and underscores.'));
-
-                continue;
-            }
-
-            // Scalars only: a nested array or object in this bag has no
-            // field type that could produce it, and would reach a template
-            // as something no accessor is documented to return.
-            if ($value !== null && !is_scalar($value)) {
-                $this->addError('metadata', Craft::t('menu-builder', 'Custom field “{handle}” must hold a single text, number or boolean value.', ['handle' => $handle]));
-
-                continue;
-            }
-
-            if (is_string($value) && mb_strlen($value) > CustomFieldHelper::MAX_TEXTAREA_LENGTH) {
-                $this->addError('metadata', Craft::t('menu-builder', 'Custom field “{handle}” can be at most {max} characters.', ['handle' => $handle, 'max' => CustomFieldHelper::MAX_TEXTAREA_LENGTH]));
-
-                continue;
-            }
-
-            if ($this->customFieldDefinitions === null) {
-                continue;
-            }
-
-            $definition = CustomFieldHelper::definitionByHandle($this->customFieldDefinitions, $handle);
-
-            if ($definition === null) {
-                $this->addError('metadata', Craft::t('menu-builder', 'This menu has no custom field with the handle “{handle}”.', ['handle' => $handle]));
-
-                continue;
-            }
-
-            $error = CustomFieldHelper::validateValue($definition, $value);
-
-            if ($error !== null) {
-                $this->addError('metadata', $error);
-            }
-        }
-
-        foreach ($this->customFieldDefinitions ?? [] as $definition) {
-            if (!$definition->required) {
-                continue;
-            }
-
-            $error = CustomFieldHelper::validateValue($definition, $values[$definition->handle] ?? null);
-
-            if ($error !== null && !array_key_exists($definition->handle, $values)) {
-                $this->addError('metadata', $error);
-            }
-        }
+        return $this->content;
     }
 
     /**
-     * This item's stored custom field values, keyed by handle. Raw — the
-     * fail-closed, definition-checked read a template gets is
-     * MenuBuilderNode::customFields (see CustomFieldHelper::valuesForOutput()).
-     *
-     * @return array<string,mixed>
+     * Replaces the loaded content element — used by the save path, which
+     * builds one from the posted form before the item itself is written.
      */
-    public function customFieldValues(): array
+    public function setContent(?MenuBuilderItemContent $content): void
     {
-        $values = $this->metadata[CustomFieldHelper::VALUES_KEY] ?? null;
-
-        return is_array($values) ? $values : [];
+        $this->content = $content;
+        $this->contentLoaded = true;
     }
 
-    /** One stored custom field value by handle, or null when the item has none. */
+    /**
+     * One custom field value by handle, or null when the menu defines no
+     * such field. The CP editor's read; the render path's equivalent is
+     * {@see \Tahadudhiya\MenuBuilder\models\MenuBuilderNode::custom()}.
+     */
     public function customFieldValue(string $handle): mixed
     {
-        return $this->customFieldValues()[$handle] ?? null;
+        $content = $this->getContent();
+
+        if ($content === null || $content->getFieldLayout()?->getFieldByHandle($handle) === null) {
+            return null;
+        }
+
+        return $content->getFieldValue($handle);
     }
 
     /**

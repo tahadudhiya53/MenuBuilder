@@ -4,11 +4,10 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use craft\helpers\UrlHelper;
+use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
-use Tahadudhiya\MenuBuilder\helpers\CustomFieldHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
-use Tahadudhiya\MenuBuilder\models\MenuBuilderCustomField;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderMenuLimitService;
 use yii\base\Action;
@@ -165,7 +164,15 @@ class GroupsController extends BaseMenuBuilderController
         $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
         $group->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $group->siteIds = ConfigHelper::normalizeIdList($request->getBodyParam('siteIds'));
-        $group->customFields = $this->buildCustomFields($this->bodyArray('customFields'));
+        // Craft assembles the field layout from the designer's own posted
+        // payload — this plugin neither parses nor validates its contents,
+        // which is the whole point of using the real designer: the tabs,
+        // the field settings, the conditions and the element condition
+        // rules are Craft's grammar, not a second one to keep in step.
+        $fieldLayout = Craft::$app->getFields()->assembleLayoutFromPost();
+        $fieldLayout->id = $group->fieldLayoutId;
+        $fieldLayout->type = MenuBuilderItemContent::class;
+        $group->setFieldLayout($fieldLayout);
 
         if (!MenuBuilder::getInstance()->groups->save($group)) {
             // asModelFailure() sets the error flash itself — setting one
@@ -178,57 +185,6 @@ class GroupsController extends BaseMenuBuilderController
         return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menu-builder/' . $group->handle));
     }
 
-    /**
-     * Builds the menu's custom field definitions from the editable table's
-     * posted rows.
-     *
-     * Rows are mapped, never trusted: each becomes a
-     * {@see MenuBuilderCustomField}, which validates itself, and the set is
-     * then checked for duplicate handles and the per-menu ceiling by
-     * MenuBuilderGroup::validateCustomFields(). Completely blank rows are
-     * dropped rather than reported — Craft's editable table always posts a
-     * trailing empty row.
-     *
-     * @param array<mixed,mixed> $rows
-     * @return MenuBuilderCustomField[]
-     */
-    private function buildCustomFields(array $rows): array
-    {
-        $definitions = [];
-
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-
-            $handle = trim((string)($this->scalarOrEmpty($row['handle'] ?? null)));
-            $name = trim((string)($this->scalarOrEmpty($row['name'] ?? null)));
-
-            if ($handle === '' && $name === '') {
-                continue;
-            }
-
-            $field = new MenuBuilderCustomField();
-            $field->handle = $handle;
-            $field->name = $name;
-            $field->type = $this->scalarOrEmpty($row['type'] ?? null);
-            $field->instructions = $this->scalarOrEmpty($row['instructions'] ?? null) ?: null;
-            $field->required = ($row['required'] ?? false) === true || ($row['required'] ?? null) === '1';
-            // One comma-separated cell rather than a nested table: the
-            // options list is a short allowlist, and CustomFieldHelper
-            // trims, de-duplicates and drops the empties.
-            $field->options = CustomFieldHelper::normalizeOptions(explode(',', $this->scalarOrEmpty($row['options'] ?? null)));
-
-            $definitions[] = $field;
-        }
-
-        return $definitions;
-    }
-
-    private function scalarOrEmpty(mixed $value): string
-    {
-        return is_scalar($value) ? (string)$value : '';
-    }
 
     public function actionDuplicate(): Response
     {

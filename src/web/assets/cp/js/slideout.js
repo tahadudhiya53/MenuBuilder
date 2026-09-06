@@ -5,16 +5,12 @@
 
     /**
      * A small self-contained slide-out panel, built on Craft's own
-     * `.slideout`/`.slideout-container`/`.slideout-shade` CSS (so it looks
-     * native) but with its own JS — Craft.CpScreenSlideout expects a
-     * private "CP screen" response contract from its target action that
-     * isn't practical to reverse-engineer reliably, so this instead talks to
-     * MenuBuilder's own `items/edit` and `items/save` actions using a JSON
-     * shape we control end to end (see ItemsController::actionEdit/actionSave).
-     *
-     * Only one instance exists at a time — opening a new item closes
-     * whatever's already open, after confirming unsaved changes.
-     */
+     * `.slideout`/`.slideout-container`/`.slideout-shade` CSS (so it looks native) but with its own
+     * JS — Craft.CpScreenSlideout expects a private "CP screen" response contract from its target
+     * action that isn't practical to reverse-engineer reliably, so this instead talks to
+     * MenuBuilder's own `items/edit` and `items/save` actions using a JSON shape we control end to
+     * end (see ItemsController::actionEdit/actionSave).
+    */
     window.MenuBuilder = window.MenuBuilder || {};
 
     var $shade, $container, $panel, $header, $title, $closeBtn, $body, $footer, $cancelBtn, $saveBtn, $spinner;
@@ -33,9 +29,8 @@
 
         $shade = $('<div class="slideout-shade menu-builder-slideout-shade"></div>').appendTo(Garnish.$bod);
         $container = $('<div class="slideout-container"></div>').appendTo(Garnish.$bod);
-        // `aria-labelledby` rather than a bare dialog role: without it the
-        // panel announces itself as an unnamed dialog, so the item being
-        // edited was never spoken.
+        // `aria-labelledby` rather than a bare dialog role: without it the panel announces itself
+        // as an unnamed dialog, so the item being edited was never spoken.
         $panel = $('<div class="slideout menu-builder-slideout" id="menu-builder-slideout" role="dialog" aria-modal="true" tabindex="-1"></div>')
             .attr('aria-labelledby', TITLE_ID)
             .appendTo($container);
@@ -98,9 +93,9 @@
         Garnish.$bod.removeClass('menu-builder-slideout-open');
         Craft.releaseFocusWithin($panel[0]);
 
-        // Focus was inside a panel that no longer exists on screen; without
-        // this it falls back to <body> and the keyboard user is dropped at
-        // the top of the document instead of on the row they came from.
+        // Focus was inside a panel that no longer exists on screen; without this it falls back to
+        // <body> and the keyboard user is dropped at the top of the document instead of on the row
+        // they came from.
         if ($returnFocusTo && $returnFocusTo.length && document.contains($returnFocusTo[0])) {
             $returnFocusTo.trigger('focus');
         }
@@ -109,10 +104,9 @@
     }
 
     /**
-     * @param {Object} params `groupHandle` and `itemId`. Edit-only — new items
-     *               are created by the dashboard's quick-add panel.
+     * @param {Object} params `groupHandle` and `itemId`. Edit-only — new items are created by the dashboard's quick-add panel.
      * @param {Function} [onSaved] called with the save response's data once the item is saved.
-     */
+    */
     window.MenuBuilder.openItemSlideout = function(params, onSaved) {
         build();
 
@@ -129,8 +123,8 @@
         $shade.addClass('is-open');
         Garnish.$bod.addClass('menu-builder-slideout-open');
         $title.text(Craft.t('menu-builder', 'Loading…'));
-        // A bare spinner announces nothing; screen readers were told only that
-        // the dialog was empty.
+        // A bare spinner announces nothing; screen readers were told only that the dialog was
+        // empty.
         $body
             .attr('aria-busy', 'true')
             .html('<div class="menu-builder-slideout-loading"><div class="spinner"></div><p class="light">' +
@@ -138,8 +132,8 @@
         $panel.attr('data-group-handle', params.groupHandle);
         $saveBtn.removeClass('hidden').prop('disabled', true);
         $panel.trigger('focus');
-        // Tab must not walk out of an `aria-modal` dialog into the page behind
-        // it — Garnish already implements the trap Craft's own slideouts use.
+        // Tab must not walk out of an `aria-modal` dialog into the page behind it — Garnish
+        // already implements the trap Craft's own slideouts use.
         Craft.trapFocusWithin($panel[0]);
 
         window.MenuBuilder.request('GET', 'menu-builder/items/edit', { params: params })
@@ -159,9 +153,8 @@
                     window.MenuBuilder.initItemFields(root);
                 }
 
-                // `items/edit` only needs `view`, so this panel can legitimately
-                // be open for someone who may not save. Offering a Save the
-                // save action would refuse is worse than not offering one.
+                // `items/edit` only needs `view`, so this panel can legitimately be open for
+                // someone who may not save.
                 var canSave = response.data.canSave !== false;
                 $saveBtn.toggleClass('hidden', !canSave).prop('disabled', !canSave);
                 $cancelBtn.text(canSave ? Craft.t('app', 'Cancel') : Craft.t('app', 'Close'));
@@ -185,15 +178,11 @@
     };
 
     /**
-     * Rebuilds a PHP-style bracket-notation payload (`foo[bar][]`) from a
-     * jQuery serializeArray() list — Craft.sendActionRequest posts our data
-     * as-is rather than through a real `<form>` submission, so we have to
-     * reconstruct the nested/array shape the controller expects ourselves.
-     * A later `foo[bar][]` always wins over an earlier `foo[bar]` scalar —
-     * checkboxSelectField renders a zero-value padding input ahead of its
-     * checkboxes precisely so the key exists even when nothing is checked,
-     * and that padding value must not survive once real items are collected.
-     */
+     * Rebuilds a PHP-style bracket-notation payload (`foo[bar][]`) from a jQuery serializeArray()
+     * list — Craft.sendActionRequest posts our data as-is rather than through a real `<form>`
+     * submission, so we have to reconstruct the nested/array shape the controller expects
+     * ourselves.
+    */
     function setBracketValue(root, rawName, value) {
         var segments = [];
         var re = /^[^\[\]]+|\[([^\]]*)\]/g;
@@ -264,9 +253,8 @@
                 }
             })
             .catch(function(error) {
-                // The save endpoint returns which fields were rejected and
-                // why; showing only a banner left the editor to guess, in a
-                // form with six collapsible sections.
+                // The save endpoint returns which fields were rejected and why; showing only a
+                // banner left the editor to guess, in a form with six collapsible sections.
                 var shown = window.MenuBuilder.applyFieldErrors($form[0], window.MenuBuilder.errorsFor(error));
 
                 if (!shown) {

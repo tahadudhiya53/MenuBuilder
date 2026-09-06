@@ -18,17 +18,9 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
- * The GraphQL surface's decidable half: argument normalization, the audience
- * a GraphQL request resolves for, and what each field of each type actually
- * returns for a given node.
- *
- * No booted Craft application. The registry's type prefix is set explicitly
- * (it would otherwise be read from a general config that doesn't exist here),
- * which is enough for the webonyx type objects themselves to be built — so
- * these tests cover the real `fieldDefinitions()` the real schema is built
- * from, not a copy of them. Whether Craft can *assemble* a schema out of
- * them, and what a real query returns, is MenuBuilderNavigationGqlTest's job.
- */
+ * The GraphQL surface's decidable half: argument normalization, the audience a GraphQL request
+ * resolves for, and what each field of each type actually returns for a given node.
+*/
 class MenuBuilderGqlTest extends TestCase
 {
     public static function setUpBeforeClass(): void
@@ -38,9 +30,7 @@ class MenuBuilderGqlTest extends TestCase
         GqlEntityRegistry::setPrefix('');
     }
 
-    // ---------------------------------------------------------------------
     // Argument normalization — every one of these is attacker-controlled
-    // ---------------------------------------------------------------------
 
     public function testHandleAcceptsACraftHandle(): void
     {
@@ -48,9 +38,7 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertSame('footer_2', MenuBuilderGqlHelper::normalizeHandle('  footer_2  '));
     }
 
-    /**
-     * @dataProvider malformedHandles
-     */
+    /** @dataProvider malformedHandles */
     public function testHandleRejectsAnythingThatIsntOne(mixed $value): void
     {
         $this->assertNull(MenuBuilderGqlHelper::normalizeHandle($value));
@@ -106,18 +94,16 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * `currentUri` is part of Craft's GraphQL result-cache key, so an
-     * unbounded one is an unbounded number of cache entries.
-     */
+     * `currentUri` is part of Craft's GraphQL result-cache key, so an unbounded one is an unbounded
+     * number of cache entries.
+    */
     public function testAnAbsurdlyLongCurrentUriIsRejected(): void
     {
         $this->assertNull(MenuBuilderGqlHelper::normalizeCurrentUri(str_repeat('a', 2049)));
         $this->assertNotNull(MenuBuilderGqlHelper::normalizeCurrentUri(str_repeat('a', 2048)));
     }
 
-    // ---------------------------------------------------------------------
     // Schema scope
-    // ---------------------------------------------------------------------
 
     public function testTheScopeComponentIsNamespacedAndKeyedByUid(): void
     {
@@ -127,7 +113,9 @@ class MenuBuilderGqlTest extends TestCase
         );
     }
 
-    /** An unsaved menu has no UID, so no schema can name it — and it is never readable. */
+    /**
+     * An unsaved menu has no UID, so no schema can name it — and it is never readable.
+    */
     public function testAMenuWithNoUidHasNoScopeComponent(): void
     {
         $this->assertNull(MenuBuilderGqlHelper::scopeComponent(null));
@@ -135,17 +123,12 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertNull(MenuBuilderGqlHelper::scopeComponent('   '));
     }
 
-    // ---------------------------------------------------------------------
     // The audience — the security property this whole surface rests on
-    // ---------------------------------------------------------------------
 
     /**
-     * Craft caches GraphQL results by (site, schema, query, variables) and by
-     * nothing about the caller. If the audience were the *request's*, an
-     * admin's query would fill a shared cache entry with the items only
-     * logged-in users may see, and the next anonymous caller would read them
-     * out of it.
-     */
+     * Craft caches GraphQL results by (site, schema, query, variables) and by nothing about the
+     * caller.
+    */
     public function testGraphqlResolvesForNobody(): void
     {
         $context = MenuBuilderGqlHelper::anonymousContext(2, new DateTimeZone('UTC'), 'production');
@@ -168,9 +151,7 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertSame('staging', $context->environment);
     }
 
-    // ---------------------------------------------------------------------
     // Value shaping
-    // ---------------------------------------------------------------------
 
     public function testAttributeBagsBecomeNameValuePairs(): void
     {
@@ -204,10 +185,9 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * A false boolean must not read as `""` on `value` — a bare string cast
-     * of a PHP bool produces exactly that, and it is indistinguishable from
-     * an empty text field.
-     */
+     * A false boolean must not read as `""` on `value` — a bare string cast of a PHP bool
+     * produces exactly that, and it is indistinguishable from an empty text field.
+    */
     public function testAFalseBooleanIsNotAnEmptyString(): void
     {
         $entries = MenuBuilderGqlHelper::customFieldEntries(['flag' => false]);
@@ -217,13 +197,10 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * A field whose serialized value isn't a scalar — a relation field's
-     * element IDs, a Matrix field's blocks — has no honest scalar
-     * representation, so every scalar accessor stays null and the value is
-     * offered JSON-encoded instead. Flattening it into a string, or picking
-     * one id to stand for the list, would be a guess at a shape only the
-     * field itself knows.
-     */
+     * A field whose serialized value isn't a scalar — a relation field's element IDs, a Matrix
+     * field's blocks — has no honest scalar representation, so every scalar accessor stays null
+     * and the value is offered JSON-encoded instead.
+    */
     public function testNonScalarCustomFieldValuesAreOfferedAsJson(): void
     {
         $entries = MenuBuilderGqlHelper::customFieldEntries([
@@ -244,9 +221,9 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * A field holding nothing is not reported as an empty field: null has no
-     * entry at all, so a consumer can tell "no value" from "empty string".
-     */
+     * A field holding nothing is not reported as an empty field: null has no entry at all, so a
+     * consumer can tell "no value" from "empty string".
+    */
     public function testNullCustomFieldValuesAreDropped(): void
     {
         $entries = MenuBuilderGqlHelper::customFieldEntries([
@@ -257,9 +234,7 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertSame(['good'], array_column($entries, 'handle'));
     }
 
-    // ---------------------------------------------------------------------
     // The item type: what each field returns
-    // ---------------------------------------------------------------------
 
     public function testTheItemTypeNeverExposesTheRowId(): void
     {
@@ -272,7 +247,9 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertArrayHasKey('handle', $fields);
     }
 
-    /** Visibility rules, fallback behaviour and the raw metadata bag are editor-side configuration. */
+    /**
+     * Visibility rules, fallback behaviour and the raw metadata bag are editor-side configuration.
+    */
     public function testTheItemTypeExposesNoEditorSideConfiguration(): void
     {
         $fields = MenuBuilderNavigationItemType::fieldDefinitions();
@@ -323,10 +300,9 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * The node's *safe* attribute bag, not the stored one — so an attribute
-     * that would be stripped from rendered HTML is stripped from a GraphQL
-     * response too.
-     */
+     * The node's *safe* attribute bag, not the stored one — so an attribute that would be
+     * stripped from rendered HTML is stripped from a GraphQL response too.
+    */
     public function testHtmlAttributesGoThroughTheSameFilterAsRenderedMarkup(): void
     {
         $node = $this->node(htmlAttributes: ['data-ok' => 'yes', 'onclick' => 'alert(1)']);
@@ -338,7 +314,9 @@ class MenuBuilderGqlTest extends TestCase
         );
     }
 
-    /** An unknown badge style fails closed here exactly as it does in a template. */
+    /**
+     * An unknown badge style fails closed here exactly as it does in a template.
+    */
     public function testBadgeFieldsFailClosed(): void
     {
         $fields = MenuBuilderNavigationItemType::fieldDefinitions();
@@ -356,10 +334,9 @@ class MenuBuilderGqlTest extends TestCase
     }
 
     /**
-     * An icon is exposed as a reference, never as a resolved URL: an asset's
-     * URL can change without the menu changing, and the node is what gets
-     * cached.
-     */
+     * An icon is exposed as a reference, never as a resolved URL: an asset's URL can change without
+     * the menu changing, and the node is what gets cached.
+    */
     public function testIconIsExposedAsAReferenceNotAUrl(): void
     {
         $fields = MenuBuilderNavigationItemType::fieldDefinitions();
@@ -371,8 +348,8 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertSame(41, $this->resolve($fields, 'iconAssetId', $asset));
         $this->assertNull($this->resolve($fields, 'iconClass', $asset));
 
-        // Fails closed: an unsafe class value written straight into the
-        // database reads back as nothing.
+        // Fails closed: an unsafe class value written straight into the database reads back as
+        // nothing.
         $unsafe = $this->node(icon: 'class:"><script>');
         $this->assertNull($this->resolve($fields, 'iconClass', $unsafe));
     }
@@ -403,9 +380,7 @@ class MenuBuilderGqlTest extends TestCase
         $this->assertNull($this->resolve($fields, 'megaMenu', $this->node()));
     }
 
-    // ---------------------------------------------------------------------
     // The menu type
-    // ---------------------------------------------------------------------
 
     public function testTheMenuTypeExposesThePublicFactsOnly(): void
     {
@@ -416,9 +391,8 @@ class MenuBuilderGqlTest extends TestCase
             array_keys($fields),
         );
 
-        // A row ID, the site restriction list and the settings bag are an
-        // install's structure, not a fact about the navigation a visitor is
-        // being handed.
+        // A row ID, the site restriction list and the settings bag are an install's structure, not
+        // a fact about the navigation a visitor is being handed.
         foreach (['id', 'siteIds', 'settings', 'sortOrder', 'customFields', 'enabled'] as $forbidden) {
             $this->assertArrayNotHasKey($forbidden, $fields);
         }
@@ -464,9 +438,7 @@ class MenuBuilderGqlTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Helpers
-    // ---------------------------------------------------------------------
 
     /** @param array<string,array<string,mixed>> $fields */
     private function resolve(array $fields, string $name, mixed $source): mixed

@@ -14,18 +14,7 @@ use Twig\TwigFilter;
 
 /**
  * The badge model: "Products [NEW]".
- *
- * Two stored values on two existing pieces of storage — free text in the
- * `badge` column, an optional style from a closed enum in
- * `metadata['badgeStyle']` — and one rule that decides everything about
- * how they're treated: the text is *text* and is escaped where it is
- * rendered; the style is the only half that reaches a class attribute,
- * and it fails closed against the allowlist.
- *
- * The rendering half of that rule is tested by actually rendering the
- * bundled macro through Twig rather than by grepping it, because "this
- * escapes" is a property of the output, not of the source.
- */
+*/
 class MenuBuilderPresentationTest extends TestCase
 {
     private const MACRO_DIR = __DIR__ . '/../../src/templates/_macros/';
@@ -69,16 +58,14 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * Renders the bundled `render()` macro over one node, through a real
-     * Twig environment with autoescaping on — the same setting Craft runs
-     * templates under.
-     */
+     * Renders the bundled `render()` macro over one node, through a real Twig environment with
+     * autoescaping on — the same setting Craft runs templates under.
+    */
     private function renderMacro(MenuBuilderNode $node): string
     {
         $twig = new Environment(new FilesystemLoader(self::MACRO_DIR), ['autoescape' => 'html', 'cache' => false]);
 
-        // Craft's `t` filter, which the macro uses for the "opens in a new
-        // tab" hint. Reduced to the passthrough this test needs.
+        // Craft's `t` filter, which the macro uses for the "opens in a new tab" hint.
         $twig->addFilter(new TwigFilter('t', static fn(string $message): string => $message));
 
         return $twig->createTemplate(
@@ -91,9 +78,7 @@ class MenuBuilderPresentationTest extends TestCase
         return (string)file_get_contents(__DIR__ . '/../../' . $path);
     }
 
-    // ---------------------------------------------------------------------
     // The text half
-    // ---------------------------------------------------------------------
 
     /** @dataProvider badgeTextProvider */
     public function testBadgeTextIsStoredExactlyAsTyped(string $typed): void
@@ -119,9 +104,9 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * An empty badge is not a badge, however it arrives — blank, spaces,
-     * or the newlines and tabs a paste smuggles in.
-     */
+     * An empty badge is not a badge, however it arrives — blank, spaces, or the newlines and tabs
+     * a paste smuggles in.
+    */
     public function testAnEmptyBadgeIsNoBadge(): void
     {
         foreach ([null, '', '   ', "\n\t", "\u{00a0}"] as $empty) {
@@ -138,10 +123,8 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * Markup typed into the badge field is *kept*, as text. Stripping it
-     * here would mangle legitimate badges while adding nothing — the
-     * safety is the escaping at the render boundary, tested below.
-     */
+     * Markup typed into the badge field is *kept*, as text.
+    */
     public function testMarkupTypedIntoABadgeIsKeptAsTextRatherThanSanitizedAway(): void
     {
         $injection = '<script>alert(1)</script>';
@@ -150,10 +133,8 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * The one limit on badge text is the column's: varchar(255). Without
-     * the `max` rule an over-long badge passed validation and then failed
-     * at the database with no field error to explain it.
-     */
+     * The one limit on badge text is the column's: varchar(255).
+    */
     public function testAnOverLongBadgeIsRejectedWithAFieldError(): void
     {
         $item = $this->urlItem();
@@ -187,9 +168,7 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertFalse($blank->hasBadge());
     }
 
-    // ---------------------------------------------------------------------
     // The style half — a closed enum, failing closed
-    // ---------------------------------------------------------------------
 
     /** @dataProvider knownStyleProvider */
     public function testAKnownStyleIsKept(string $style): void
@@ -209,7 +188,9 @@ class MenuBuilderPresentationTest extends TestCase
         ];
     }
 
-    /** The default is "no modifier class", not a class nothing styles. */
+    /**
+     * The default is "no modifier class", not a class nothing styles.
+    */
     public function testTheDefaultStyleReadsBackAsNoStyle(): void
     {
         foreach ([null, '', 'default', ' DEFAULT '] as $value) {
@@ -219,12 +200,12 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * Fail closed: a style that isn't in the allowlist — a legacy row, a
-     * hand-written database update, a crafted post — reads back as null
-     * rather than as something that lands in a class attribute.
+     * Fail closed: a style that isn't in the allowlist — a legacy row, a hand-written database
+     * update, a crafted post — reads back as null rather than as something that lands in a class
+     * attribute.
      *
      * @dataProvider unknownStyleProvider
-     */
+    */
     public function testAnUnknownStyleReadsBackAsNoStyleRatherThanAsMarkup(mixed $stored): void
     {
         $this->assertNull(BadgeHelper::style($stored));
@@ -273,9 +254,7 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertNull($item->badgeStyle());
     }
 
-    // ---------------------------------------------------------------------
     // The node
-    // ---------------------------------------------------------------------
 
     public function testTheNodeExposesTheBadgeToTwig(): void
     {
@@ -287,7 +266,9 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertSame('menu-builder-badge menu-builder-badge--info', $node->badgeClass());
     }
 
-    /** A style with no text is not a badge — nothing to render, so nothing renders. */
+    /**
+     * A style with no text is not a badge — nothing to render, so nothing renders.
+    */
     public function testAStyleWithoutTextIsNotABadge(): void
     {
         $node = $this->nodeWithBadge(null, 'info');
@@ -296,7 +277,10 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringNotContainsString('menu-builder-badge', $this->renderMacro($node));
     }
 
-    /** withChildren() copies the node for the per-request pipeline; readonly badge state has to survive it. */
+    /**
+     * withChildren() copies the node for the per-request pipeline; readonly badge state has to
+     * survive it.
+    */
     public function testTheBadgeSurvivesTheNodeCopyMadeForVisibilityAndActiveState(): void
     {
         $node = $this->nodeWithBadge('NEW', 'info');
@@ -308,9 +292,7 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertSame('critical', $copy->children[0]->badgeStyle);
     }
 
-    // ---------------------------------------------------------------------
     // The bundled macro — rendered, not grepped
-    // ---------------------------------------------------------------------
 
     public function testTheMacroRendersTheBadgeInsideTheLabel(): void
     {
@@ -339,22 +321,18 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * The whole point. Every one of these renders as *text* — the badge
-     * says `<script>alert(1)</script>`, it does not run it, and it cannot
-     * close the span or break out into an attribute.
+     * The whole point.
      *
      * @dataProvider injectionProvider
-     */
+    */
     public function testBadgeTextIsEscapedWhenRendered(string $badge, string $expected): void
     {
         $html = $this->renderMacro($this->nodeWithBadge($badge));
 
         $this->assertStringContainsString('<span class="menu-builder-badge">' . $expected . '</span>', $html);
-        // The raw text never survives as markup — and the badge text is not
-        // asserted *absent* (an escaped `onerror=` is legitimately still the
-        // word "onerror" on screen): what must hold is that the payload
-        // opened no tag and no attribute of its own. Counting the markup
-        // delimiters against a benign badge is what says that.
+        // The raw text never survives as markup — and the badge text is not asserted *absent* (an
+        // escaped `onerror=` is legitimately still the word "onerror" on screen): what must hold is
+        // that the payload opened no tag and no attribute of its own.
         $control = $this->renderMacro($this->nodeWithBadge('SAFE'));
 
         $this->assertSame(substr_count($control, '<'), substr_count($html, '<'), 'The badge opened a tag.');
@@ -375,7 +353,9 @@ class MenuBuilderPresentationTest extends TestCase
         ];
     }
 
-    /** Very long badge text is still just text — no truncation, no markup, nothing broken. */
+    /**
+     * Very long badge text is still just text — no truncation, no markup, nothing broken.
+    */
     public function testAVeryLongBadgeRendersAsOneEscapedRunOfText(): void
     {
         $long = str_repeat('VERY LONG BADGE ', 15);
@@ -386,7 +366,9 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertSame(1, substr_count($html, 'menu-builder-badge'));
     }
 
-    /** An unknown style can never reach the class attribute, even straight off a node. */
+    /**
+     * An unknown style can never reach the class attribute, even straight off a node.
+    */
     public function testAnUnknownStyleOnANodeNeverReachesTheClassAttribute(): void
     {
         $html = $this->renderMacro($this->nodeWithBadge('NEW', 'info" onclick="alert(1)'));
@@ -396,11 +378,8 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * Two call sites: the link branch and the heading branch. Not the
-     * mega-menu trigger — that button no longer repeats the item's label at
-     * all (it carries a caret and an accessible name of its own), so a badge
-     * there would be the item's badge announced twice.
-     */
+     * Two call sites: the link branch and the heading branch.
+    */
     public function testTheMacroBadgesEveryLabelBranch(): void
     {
         $macro = $this->source('src/templates/_macros/tree.twig');
@@ -414,15 +393,12 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringNotContainsString('node.badge|striptags', $macro);
     }
 
-    // ---------------------------------------------------------------------
     // Persistence, duplication and the CP form
-    // ---------------------------------------------------------------------
 
     /**
-     * Both halves are carried by storage that already existed — the
-     * `badge` column and the `metadata` blob — which is why this phase
-     * needs no migration.
-     */
+     * Both halves are carried by storage that already existed — the `badge` column and the
+     * `metadata` blob — which is why this phase needs no migration.
+    */
     public function testBothHalvesRideOnStorageThatAlreadyExists(): void
     {
         $install = $this->source('src/migrations/Install.php');
@@ -442,7 +418,9 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringContainsString('$record->metadata = ', $items);
     }
 
-    /** Duplication copies both halves — the text column and the metadata the style rides in. */
+    /**
+     * Duplication copies both halves — the text column and the metadata the style rides in.
+    */
     public function testDuplicationCarriesTheBadgeAndItsStyle(): void
     {
         $items = $this->source('src/services/MenuBuilderItemService.php');
@@ -451,7 +429,10 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringContainsString('$clone->metadata = $original->metadata;', $items);
     }
 
-    /** The resolver reads through the fail-closed helpers rather than handing raw column values to Twig. */
+    /**
+     * The resolver reads through the fail-closed helpers rather than handing raw column values to
+     * Twig.
+    */
     public function testTheResolverReadsBothHalvesThroughTheHelper(): void
     {
         $resolver = $this->source('src/services/MenuBuilderResolver.php');
@@ -473,7 +454,9 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringContainsString("\$metadata['badgeStyle'] = \$badgeStyle;", $controller);
     }
 
-    /** The CP tree previews the badge, escaped like everywhere else — no `|raw` in the row. */
+    /**
+     * The CP tree previews the badge, escaped like everywhere else — no `|raw` in the row.
+    */
     public function testTheCpTreePreviewsTheBadgeWithoutRawOutput(): void
     {
         $row = $this->source('src/templates/dashboard/_items.twig');
@@ -483,12 +466,12 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertStringNotContainsString('item.badge|raw', $row);
     }
 
-    // ---------------------------------------------------------------------
     // What a badge must NOT touch
-    // ---------------------------------------------------------------------
 
     
-    /** Two nodes differing only in their badge resolve to the same URL and the same active state. */
+    /**
+     * Two nodes differing only in their badge resolve to the same URL and the same active state.
+    */
     public function testChangingABadgeChangesNeitherUrlNorActiveState(): void
     {
         $plain = $this->nodeWithBadge(null);
@@ -501,13 +484,10 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * The badge is menu-wide presentation, not a per-user decision, so it
-     * belongs in the cached payload — and the cache key already accounts
-     * for the new property, because the payload version is a hash of the
-     * node's property list. That's what keeps an entry written before this
-     * phase from unserializing into a node with an uninitialized readonly
-     * `badgeStyle`.
-     */
+     * The badge is menu-wide presentation, not a per-user decision, so it belongs in the cached
+     * payload — and the cache key already accounts for the new property, because the payload
+     * version is a hash of the node's property list.
+    */
     public function testTheCachedPayloadVersionCoversTheNewNodeProperty(): void
     {
         $this->assertContains(
@@ -516,8 +496,8 @@ class MenuBuilderPresentationTest extends TestCase
             'The node is the cached payload, so its property list is what the key digests.'
         );
 
-        // That a new property rotates the digest is pinned by
-        // MenuBuilderCacheTest; what this phase adds is the property.
+        // That a new property rotates the digest is pinned by MenuBuilderCacheTest; what this phase
+        // adds is the property.
         $properties = array_map(
             fn(\ReflectionProperty $p) => $p->getName(),
             (new \ReflectionClass(MenuBuilderNode::class))->getProperties(\ReflectionProperty::IS_PUBLIC)
@@ -527,9 +507,8 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertContains('badgeStyle', $properties);
     }
 
-    // =====================================================================
-    // Icons: the other half of item presentation
-    // =====================================================================
+    // ===================================================================== Icons: the other half
+    // of item presentation =====================================================================
 
     
 
@@ -559,9 +538,7 @@ class MenuBuilderPresentationTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // The grammar
-    // ---------------------------------------------------------------------
 
     public function testAnEmptyIconIsNoIcon(): void
     {
@@ -582,11 +559,11 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * Every icon stored before this grammar existed was a free-typed
-     * handle/class — those rows must keep meaning exactly what they meant.
+     * Every icon stored before this grammar existed was a free-typed handle/class — those rows
+     * must keep meaning exactly what they meant.
      *
      * @dataProvider legacyClassProvider
-     */
+    */
     public function testExistingFreeTypedIconsKeepWorking(string $stored): void
     {
         $this->assertSame(IconHelper::TYPE_CLASS, IconHelper::type($stored));
@@ -625,15 +602,13 @@ class MenuBuilderPresentationTest extends TestCase
 
     public function testAZeroOrNegativeAssetIdIsNotAnAssetIcon(): void
     {
-        // 'asset:0' can't reference anything, so it falls through to the
-        // class form — where the colon rule still has to hold.
+        // 'asset:0' can't reference anything, so it falls through to the class form — where the
+        // colon rule still has to hold.
         $this->assertNull(IconHelper::assetId('asset:0'));
         $this->assertSame(IconHelper::TYPE_CLASS, IconHelper::type('asset:0'));
     }
 
-    // ---------------------------------------------------------------------
     // Markup never gets in
-    // ---------------------------------------------------------------------
 
     /** @return array<string,array{string}> */
     public static function unsafeIconProvider(): array
@@ -669,11 +644,11 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * The other half: even if such a value reached the column anyway — a
-     * legacy row, a direct database write — nothing hands it to a template.
+     * The other half: even if such a value reached the column anyway — a legacy row, a direct
+     * database write — nothing hands it to a template.
      *
      * @dataProvider unsafeIconProvider
-     */
+    */
     public function testAnUnsafeStoredIconReadsBackAsNoIcon(string $icon): void
     {
         $this->assertNull(IconHelper::classValue($icon));
@@ -722,10 +697,9 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * The length rule and the grammar rule are independent — an over-long
-     * but otherwise well-formed icon has to fail on the column width, not
-     * pass because it parsed.
-     */
+     * The length rule and the grammar rule are independent — an over-long but otherwise
+     * well-formed icon has to fail on the column width, not pass because it parsed.
+    */
     public function testAnOverLongIconIsStillRejected(): void
     {
         $item = $this->urlItem();
@@ -735,9 +709,7 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertArrayHasKey('icon', $item->getErrors());
     }
 
-    // ---------------------------------------------------------------------
     // The CP form's three inputs → one column
-    // ---------------------------------------------------------------------
 
     public function testTheIconSourceSelectDecidesWhichInputWins(): void
     {
@@ -763,9 +735,8 @@ class MenuBuilderPresentationTest extends TestCase
 
     public function testAnUnsafeClassFieldSurvivesComposeAndIsRejectedByValidationInstead(): void
     {
-        // composeFromForm() is not a sanitizer — it must not quietly drop or
-        // mangle a bad value, or the editor would be told the save
-        // succeeded with an icon they never chose. The model rejects it.
+        // composeFromForm() is not a sanitizer — it must not quietly drop or mangle a bad value,
+        // or the editor would be told the save succeeded with an icon they never chose.
         $composed = IconHelper::composeFromForm('class', '<svg onload="alert(1)">', []);
 
         $this->assertNotNull($composed);
@@ -777,9 +748,7 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertArrayHasKey('icon', $item->getErrors());
     }
 
-    // ---------------------------------------------------------------------
     // What Twig sees
-    // ---------------------------------------------------------------------
 
     public function testANodeExposesTheIconThroughTypedAccessors(): void
     {
@@ -801,9 +770,9 @@ class MenuBuilderPresentationTest extends TestCase
     }
 
     /**
-     * withChildren() clones the node for the per-request half of the
-     * pipeline; the icon is readonly state that has to survive that copy.
-     */
+     * withChildren() clones the node for the per-request half of the pipeline; the icon is readonly
+     * state that has to survive that copy.
+    */
     public function testTheIconSurvivesTheNodeCopyMadeForVisibilityAndActiveState(): void
     {
         $node = $this->nodeWithIcon('asset:42');
@@ -814,7 +783,5 @@ class MenuBuilderPresentationTest extends TestCase
         $this->assertSame('icon-cart', $copy->children[0]->iconClass());
     }
 
-    // ---------------------------------------------------------------------
     // The bundled macro
-    // ---------------------------------------------------------------------
 }

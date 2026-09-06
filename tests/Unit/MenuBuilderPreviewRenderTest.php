@@ -10,31 +10,12 @@ require_once __DIR__ . '/NavMacroRendering.php';
 
 /**
  * The preview surface, rendered for real.
- *
- * These tests compile the plugin's actual Twig — `_macros/tree.twig` and
- * `preview/_stage.twig` — against real `MenuBuilderNode` objects and assert
- * against the resulting DOM. Nothing here is a string search over source
- * code: what is checked is the markup an editor's browser receives, which is
- * the same markup a front-end template receives, because it comes out of the
- * same macro.
- *
- * A booted Craft app isn't needed for this: the macros consume finished
- * nodes and exactly one Craft touchpoint (`craft.menuBuilder.iconAsset()`,
- * which turns an `asset:` reference into an Asset), stubbed here the way the
- * variable behaves — including returning null for a deleted asset.
- *
- * The *decisions* behind the nodes (visibility, active state, link
- * resolution, mega grouping, dynamic synthesis) belong to the services and
- * are covered by their own suites; this file covers how a resolved node is
- * presented, and that the preview stage adds chrome without touching it.
- */
+*/
 class MenuBuilderPreviewRenderTest extends TestCase
 {
     use NavMacroRendering;
 
-    // ---------------------------------------------------------------------
     // Structure: what a navigation is made of
-    // ---------------------------------------------------------------------
 
     public function testTopLevelItemsRenderAsLinksInOneList(): void
     {
@@ -51,7 +32,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('/news', $links[1]->getAttribute('href'));
     }
 
-    /** Children nest inside their parent's `<li>` — the hierarchy is real markup, not indentation. */
+    /**
+     * Children nest inside their parent's `<li>` — the hierarchy is real markup, not indentation.
+    */
     public function testChildrenNestInsideTheirParentListItem(): void
     {
         $html = $this->renderNav([
@@ -71,10 +54,8 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * A separator is an `<hr>` — whose role *is* separator — inside an
-     * ordinary list item. The role is not repeated on the `<li>`: that would
-     * both state it twice and put a non-`listitem` child into the list.
-     */
+     * A separator is an `<hr>` — whose role *is* separator — inside an ordinary list item.
+    */
     public function testASeparatorIsAnHorizontalRuleInsideAnOrdinaryListItem(): void
     {
         $html = $this->renderNav([
@@ -90,7 +71,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//a'), 'A separator is never a link.');
     }
 
-    /** A heading is a label. The macro must not invent an href for it. */
+    /**
+     * A heading is a label.
+    */
     public function testANonClickableHeadingRendersAsASpanWithNoLink(): void
     {
         $html = $this->renderNav([
@@ -105,10 +88,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * An unavailable element link on "disable link" resolves with no URL —
-     * the item stays in the navigation as a label rather than becoming a
-     * link to nowhere.
-     */
+     * An unavailable element link on "disable link" resolves with no URL — the item stays in the
+     * navigation as a label rather than becoming a link to nowhere.
+    */
     public function testAnUnavailableLinkRendersAsALabelRatherThanAnEmptyHref(): void
     {
         $html = $this->renderNav([
@@ -119,7 +101,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//li/span'));
     }
 
-    /** A fallback URL is just a resolved URL by the time it reaches the macro. */
+    /**
+     * A fallback URL is just a resolved URL by the time it reaches the macro.
+    */
     public function testAFallbackUrlRendersAsAnOrdinaryLink(): void
     {
         $html = $this->renderNav([
@@ -129,9 +113,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('/somewhere-else', $this->query($html, '//a')[0]->getAttribute('href'));
     }
 
-    /**
-     * @dataProvider linkShapeProvider
-     */
+    /** @dataProvider linkShapeProvider */
     public function testEveryResolvedLinkShapeReachesTheHrefIntact(string $type, ?string $url): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Item', url: $url, type: $type)]);
@@ -139,9 +121,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame($url, $this->query($html, '//a')[0]->getAttribute('href'));
     }
 
-    /**
-     * @return array<string,array{string,string}>
-     */
+    /** @return array<string,array{string,string}> */
     public static function linkShapeProvider(): array
     {
         return [
@@ -172,15 +152,12 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('Post one', trim($links[0]->textContent));
     }
 
-    // ---------------------------------------------------------------------
     // Active state
-    // ---------------------------------------------------------------------
 
     /**
-     * The two flags must stay visually and semantically distinct: the
-     * ancestor's branch is marked open, but only the node that *is* the page
-     * carries `aria-current`.
-     */
+     * The two flags must stay visually and semantically distinct: the ancestor's branch is marked
+     * open, but only the node that *is* the page carries `aria-current`.
+    */
     public function testOnlyTheActiveNodeCarriesAriaCurrentWhileItsAncestorIsMerelyMarkedActive(): void
     {
         $child = $this->node(2, title: 'Shoes', url: '/products/shoes', level: 2);
@@ -210,9 +187,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($html, '//li[contains(@class, "is-active")]'));
     }
 
-    // ---------------------------------------------------------------------
     // Icons and badges
-    // ---------------------------------------------------------------------
 
     public function testAClassIconRendersAsADecorativeEmptySpan(): void
     {
@@ -226,7 +201,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('', trim($icons[0]->textContent));
     }
 
-    /** An uploaded SVG is an `<img>`, never inlined markup — script inside it can't run there. */
+    /**
+     * An uploaded SVG is an `<img>`, never inlined markup — script inside it can't run there.
+    */
     public function testAnAssetIconRendersAsAnImageAndIsNeverInlinedAsSvg(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/', icon: 'asset:' . self::KNOWN_ASSET_ID)]);
@@ -240,7 +217,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertStringNotContainsString('<svg', $html);
     }
 
-    /** A reference to an asset that has since been deleted renders nothing at all. */
+    /**
+     * A reference to an asset that has since been deleted renders nothing at all.
+    */
     public function testADeletedAssetIconRendersNothing(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/', icon: 'asset:999')]);
@@ -249,7 +228,10 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('Home', trim($this->query($html, '//a')[0]->textContent));
     }
 
-    /** A stored class list that wouldn't validate today fails closed on read, so no icon reaches the markup. */
+    /**
+     * A stored class list that wouldn't validate today fails closed on read, so no icon reaches the
+     * markup.
+    */
     public function testAnUnsafeStoredIconClassRendersNoIcon(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/', icon: 'icon" onload="alert(1)')]);
@@ -280,9 +262,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertStringNotContainsString('onmouseover', $html);
     }
 
-    // ---------------------------------------------------------------------
     // Mega menus
-    // ---------------------------------------------------------------------
 
     public function testAMegaMenuRendersANativeDisclosureAndOneListPerColumn(): void
     {
@@ -304,7 +284,10 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(2, $columns, 'One column element per used column.');
     }
 
-    /** Column membership is `MenuBuilderNode::megaMenuColumns()`'s answer, not a decision the markup makes. */
+    /**
+     * Column membership is `MenuBuilderNode::megaMenuColumns()`'s answer, not a decision the markup
+     * makes.
+    */
     public function testMegaMenuChildrenLandInTheColumnTheyWereAssignedTo(): void
     {
         $html = $this->renderNav([$this->megaParent()]);
@@ -324,11 +307,10 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * The menu this feature exists for: one parent, its children split
-     * across columns, two of them left for the fallback — assigned to a
-     * column the parent doesn't have, or never assigned one at all. Neither
-     * mistake may drop an item out of the navigation.
-     */
+     * The menu this feature exists for: one parent, its children split across columns, two of them
+     * left for the fallback — assigned to a column the parent doesn't have, or never assigned one
+     * at all.
+    */
     public function testARealWorldMegaMenuGroupsItsChildrenIntoTheAssignedColumns(): void
     {
         $html = $this->renderNav([
@@ -354,7 +336,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(4, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]//a'), 'Every child is still in the navigation.');
     }
 
-    /** One column is a legitimate mega menu: a single wide panel. */
+    /**
+     * One column is a legitimate mega menu: a single wide panel.
+    */
     public function testASingleColumnMegaMenuRendersOneColumn(): void
     {
         $html = $this->renderNav([
@@ -368,7 +352,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(2, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-column")]//a'));
     }
 
-    /** Six columns is the configured ceiling; all six have to reach the markup. */
+    /**
+     * Six columns is the configured ceiling; all six have to reach the markup.
+    */
     public function testTheMaximumSupportedColumnCountRendersSixColumns(): void
     {
         $children = [];
@@ -392,10 +378,10 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * A column is rendered by the same `render()` the rest of the tree uses,
-     * so everything an item carries — icon, badge, and a submenu of its own
-     * — renders inside the panel exactly as it does outside it.
-     */
+     * A column is rendered by the same `render()` the rest of the tree uses, so everything an item
+     * carries — icon, badge, and a submenu of its own — renders inside the panel exactly as it
+     * does outside it.
+    */
     public function testAMegaMenuColumnRendersTheSameItemPresentationAsTheRestOfTheTree(): void
     {
         $html = $this->renderNav([
@@ -418,9 +404,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Link attributes and escaping
-    // ---------------------------------------------------------------------
 
     public function testTargetAndRelSurviveOntoTheAnchor(): void
     {
@@ -447,9 +431,8 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * Editor-authored text is data. A title that looks like markup must
-     * arrive as text, not as an element — the macro never uses `|raw`.
-     */
+     * Editor-authored text is data.
+    */
     public function testEditorAuthoredTextCannotBecomeMarkup(): void
     {
         $html = $this->renderNav([
@@ -461,7 +444,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;', $html);
     }
 
-    /** A quote in a resolved URL must not close the attribute it sits in. */
+    /**
+     * A quote in a resolved URL must not close the attribute it sits in.
+    */
     public function testAQuoteInAUrlCannotBreakOutOfTheHrefAttribute(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Odd', url: '/search?q="onmouseover="alert(1)')]);
@@ -473,15 +458,12 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * The markup panel exists to show attributes as text. The expression it
-     * uses must escape, not render — the same capture printed unescaped is
-     * what the stage does, so the difference is worth pinning behaviourally
-     * rather than by reading the template.
-     */
+     * The markup panel exists to show attributes as text.
+    */
     public function testTheRenderedMarkupPanelEscapesTheMarkupInsteadOfRenderingItTwice(): void
     {
-        // The panel's exact expression from preview/index.twig, run against
-        // the real macro: capture, format, split, print one line per element.
+        // The panel's exact expression from preview/index.twig, run against the real macro:
+        // capture, format, split, print one line per element.
         $twig = $this->twig();
         $rendered = $twig->createTemplate(
             '{% import "_macros/tree.twig" as m %}{% set cap %}{{ m.render(nodes) }}{% endset %}'
@@ -502,16 +484,13 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('</ul>', $lines[count($lines) - 1]->textContent);
     }
 
-    // ---------------------------------------------------------------------
     // The "Rendered markup" panel's formatter
-    // ---------------------------------------------------------------------
 
     /**
-     * Run over the real macro's real output, because that is the input the
-     * formatter exists for: Twig writes readable templates, not readable
-     * output, so the raw markup arrives with an anchor's attributes spread
-     * down a dozen lines and long runs of blank ones.
-     */
+     * Run over the real macro's real output, because that is the input the formatter exists for:
+     * Twig writes readable templates, not readable output, so the raw markup arrives with an
+     * anchor's attributes spread down a dozen lines and long runs of blank ones.
+    */
     public function testTheMarkupPanelFormatsRealMacroOutputIntoOneElementPerLine(): void
     {
         $raw = $this->renderNav([
@@ -552,7 +531,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         ], explode("\n", $formatted));
     }
 
-    /** A separator's `<hr>` closes itself, so it must not push everything after it one level in. */
+    /**
+     * A separator's `<hr>` closes itself, so it must not push everything after it one level in.
+    */
     public function testAVoidElementDoesNotOpenAnIndentLevel(): void
     {
         $formatted = MenuBuilderPreviewService::formatMarkup(
@@ -567,10 +548,10 @@ class MenuBuilderPreviewRenderTest extends TestCase
     }
 
     /**
-     * The formatter runs over *rendered* markup, where editor text is already
-     * escaped — so a title reading like a tag stays text and cannot be
-     * mistaken for one, in the formatter or in the panel.
-     */
+     * The formatter runs over *rendered* markup, where editor text is already escaped — so a
+     * title reading like a tag stays text and cannot be mistaken for one, in the formatter or in
+     * the panel.
+    */
     public function testTextThatLooksLikeMarkupIsNotTreatedAsAnElement(): void
     {
         $formatted = MenuBuilderPreviewService::formatMarkup(
@@ -606,9 +587,7 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame('', MenuBuilderPreviewService::formatMarkup("   \n  "));
     }
 
-    // ---------------------------------------------------------------------
     // The stage around the navigation
-    // ---------------------------------------------------------------------
 
     public function testTheStageWrapsTheNavigationInALandmarkWithoutAlteringIt(): void
     {
@@ -630,7 +609,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//button[@data-mb-preview-burger]'));
     }
 
-    /** The compact header starts closed and its button controls the hidden header navigation. */
+    /**
+     * The compact header starts closed and its button controls the hidden header navigation.
+    */
     public function testTheMobileStageStartsWithAClosedDisclosureBoundToTheHeaderNavigation(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], isMobile: true);
@@ -656,7 +637,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//footer//nav[@hidden]'), 'The footer stays available when the header menu is closed.');
     }
 
-    /** Representative page furniture must not be read out or become part of the navigation. */
+    /**
+     * Representative page furniture must not be read out or become part of the navigation.
+    */
     public function testTheIllustrativePageIsHiddenFromAssistiveTechnology(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
@@ -667,7 +650,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//nav//*[contains(@class, "menu-builder-preview-feature")]'));
     }
 
-    /** The page is a finished sample site, not the old browser-and-skeleton client mock. */
+    /**
+     * The page is a finished sample site, not the old browser-and-skeleton client mock.
+    */
     public function testTheStageRendersACompleteIllustrativeWebsiteRatherThanAWireframe(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
@@ -686,11 +671,11 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//*[contains(@class, "menu-builder-preview-skeleton")]'));
     }
 
-    // ---------------------------------------------------------------------
     // Placement: header, footer, or both
-    // ---------------------------------------------------------------------
 
-    /** Header placement: the real navigation is in the masthead, the footer is shapes. */
+    /**
+     * Header placement: the real navigation is in the masthead, the footer is shapes.
+    */
     public function testAHeaderMenuRendersInTheMastheadAndLeavesTheFooterAsPlaceholders(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')], placement: 'header');
@@ -701,7 +686,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(1, $this->query($stage, '//div[contains(@class, "menu-builder-preview-stage--header")]'));
     }
 
-    /** Footer placement: the same markup, in the footer, with the masthead as shapes. */
+    /**
+     * Footer placement: the same markup, in the footer, with the masthead as shapes.
+    */
     public function testAFooterMenuRendersInTheFooterAndLeavesTheMastheadAsPlaceholders(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Privacy', url: '/privacy')], placement: 'footer');
@@ -712,7 +699,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(1, $this->query($stage, '//div[contains(@class, "menu-builder-preview-stage--footer")]'));
     }
 
-    /** Single-region views have one navigation and decorative placeholders. */
+    /**
+     * Single-region views have one navigation and decorative placeholders.
+    */
     public function testOnlyOneNavigationIsRenderedAndThePlaceholdersAreDecorative(): void
     {
         foreach (['header', 'footer'] as $placement) {
@@ -728,7 +717,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         }
     }
 
-    /** The default view demonstrates both treatments with unique landmarks and IDs. */
+    /**
+     * The default view demonstrates both treatments with unique landmarks and IDs.
+    */
     public function testBothPlacementRendersAccessibleHeaderAndFooterInstances(): void
     {
         $nodes = [
@@ -752,7 +743,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertSame($ids, array_values(array_unique($ids)), 'Rendering one menu twice must not duplicate an HTML id.');
     }
 
-    /** Wide footer mega groups are stable columns; they never become hover flyouts. */
+    /**
+     * Wide footer mega groups are stable columns; they never become hover flyouts.
+    */
     public function testDesktopFooterMegaMenusRenderAsFlatColumns(): void
     {
         $stage = $this->renderStage([$this->megaParent()]);
@@ -764,7 +757,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(2, $this->query($stage, '//footer//div[contains(@class, "menu-builder-megamenu-column")]'));
     }
 
-    /** Compact footer mega groups remain visible columns, never interactive disclosures. */
+    /**
+     * Compact footer mega groups remain visible columns, never interactive disclosures.
+    */
     public function testMobileFooterMegaMenusRemainStatic(): void
     {
         $stage = $this->renderStage([$this->megaParent()], isMobile: true);
@@ -775,14 +770,18 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//footer//summary'));
     }
 
-    /** A footer has no masthead disclosure to own, so the mobile toggle belongs to the header only. */
+    /**
+     * A footer has no masthead disclosure to own, so the mobile toggle belongs to the header only.
+    */
     public function testTheMobileToggleIsOnlyRenderedForAHeaderMenu(): void
     {
         $this->assertCount(1, $this->query($this->renderStage([$this->node(1, url: '/')], isMobile: true), '//button[@data-mb-preview-burger]'));
         $this->assertCount(0, $this->query($this->renderStage([$this->node(1, url: '/')], isMobile: true, placement: 'footer'), '//button[@data-mb-preview-burger]'));
     }
 
-    /** The representative header action is visual furniture, never part of the menu. */
+    /**
+     * The representative header action is visual furniture, never part of the menu.
+    */
     public function testTheHeaderActionIsHiddenFromAssistiveTechnology(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/')]);
@@ -794,7 +793,9 @@ class MenuBuilderPreviewRenderTest extends TestCase
         $this->assertCount(0, $this->query($stage, '//nav//span[contains(@class, "menu-builder-preview-header-slot")]'), 'Chrome never sits inside the navigation.');
     }
 
-    /** The stage is presentation. It must not smuggle script into the control panel. */
+    /**
+     * The stage is presentation.
+    */
     public function testTheStageContainsNoInlineScript(): void
     {
         $stage = $this->renderStage([$this->node(1, title: 'Home', url: '/<script>')], isMobile: true);

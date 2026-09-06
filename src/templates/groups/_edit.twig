@@ -3,18 +3,11 @@
 
 {% set title = isNew ? "New menu"|t('menu-builder') : group.name %}
 
-{# `groups/edit` needs only `view`, so this form is reachable by someone who
-   may not save it. Rendering it read-only is the honest answer; a Save button
-   that answers 403 is not. #}
+{# `groups/edit` needs only `view`, so this form is reachable by someone who may not save it. #}
 {% set fullPageForm = canManageSettings %}
 {% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
 
-{# Duplicate and Delete live in the action-button menu, not in a <form> of
-   their own. The delete used to be a nested <form>, which is invalid HTML:
-   the parser drops the inner start tag, so its `onsubmit` confirmation never
-   ran and its button ended up submitting the page form instead. Craft's own
-   formActions mechanism posts the page form to a different action, with a
-   confirmation, and without nesting anything. #}
+{# Duplicate and Delete live in the action-button menu, not in a <form> of their own. #}
 {% set formActions = [] %}
 {% if not isNew and canManageSettings %}
     {% set formActions = formActions|merge([{
@@ -40,12 +33,10 @@
 {% endif %}
 {% set formActions = formActions|length ? formActions : null %}
 
-{# Two tabs rather than one long form: the field layout designer is a
-   full-height drag-and-drop canvas, and sitting it under the CSS class field
-   buried every setting below it. Craft's own section/entry-type editors split
-   the same way for the same reason. The designer is only offered on a saved
-   menu — a layout has to be attached to a `menubuilder_groups` row, and a new
-   menu has none until it is saved once. #}
+{#
+   Two tabs rather than one long form: the field layout designer is a full-height drag-and-drop
+   canvas, and sitting it under the CSS class field buried every setting below it.
+#}
 {% set showFieldsTab = not isNew %}
 {% set tabs = {
     settings: { label: "Settings"|t('menu-builder'), url: '#menu-builder-tab-settings' },
@@ -68,10 +59,11 @@
 {{ csrfInput() }}
 {% endif %}
 
-{# A disabled fieldset makes every control inside it genuinely inert — no
-   focus, no edit, nothing submitted — in one place, rather than threading a
-   `disabled` flag through a dozen field calls where one omission would leave
-   a field that looks editable and silently isn't. #}
+{#
+   A disabled fieldset makes every control inside it genuinely inert — no focus, no edit, nothing
+   submitted — in one place, rather than threading a `disabled` flag through a dozen field calls
+   where one omission would leave a field that looks editable and silently isn't.
+#}
 <div id="menu-builder-tab-settings">
 <fieldset class="menu-builder-fieldset"{{ canManageSettings ? '' : ' disabled' }}>
 
@@ -96,10 +88,10 @@
     errors: group.getErrors('handle'),
 }) }}
 
-{# Craft's own handle behaviour: typing a name fills the handle in, and the
-   generator backs off as soon as the handle is edited by hand. Only wired up
-   for new menus — an existing handle is referenced from Twig, GraphQL and the
-   REST route, so renaming a saved menu must never silently rewrite it. #}
+{#
+   Craft's own handle behaviour: typing a name fills the handle in, and the generator backs off as
+   soon as the handle is edited by hand.
+#}
 {% if canManageSettings and isNew %}
     {% js %}
         new Craft.HandleGenerator('#{{ 'name'|namespaceInputId }}', '#{{ 'handle'|namespaceInputId }}');
@@ -175,17 +167,7 @@
 
 {% if showFieldsTab %}
     <div id="menu-builder-tab-fields" class="hidden">
-        {# Craft's own field layout designer, against this menu's layout.
-           Every installed field type is available — Matrix, relations,
-           third-party fields — arranged into as many tabs as the editor
-           wants, with Craft's conditions and instructions. The content each
-           item stores against it lives on a MenuBuilderItemContent element;
-           see that class for why the item is not itself the element.
-
-           The built-in icon/badge/description/image are deliberately not
-           offered here: they have their own columns and their own controls
-           on the item editor, and duplicating them as layout elements would
-           give an editor two places to set one value. #}
+        {# Craft's own field layout designer, against this menu's layout. #}
         {% if canManageSettings %}
             {{ forms.fieldLayoutDesignerField({
                 fieldLayout: group.fieldLayout,

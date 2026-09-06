@@ -60,30 +60,22 @@ use yii\base\Event;
  * @property-read MenuBuilderBreadcrumbService $breadcrumbs
  * @property-read MenuBuilderLicenseService $license
  * @property-read MenuBuilderMenuLimitService $menuLimit
- */
+*/
 class MenuBuilder extends Plugin
 {
     /**
      * The free edition: every feature the plugin has, inside one menu.
-     * First in {@see editions()}, so it is what Craft installs by default
-     * and what an unrecognized edition falls back to.
-     */
+    */
     public const EDITION_FREE = 'free';
 
     /**
      * The commercial edition: the same plugin, without the menu ceiling.
-     * There is no separate Pro implementation of anything — see
-     * {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderMenuLimitService}.
-     */
+    */
     public const EDITION_PRO = 'pro';
 
     /**
-     * @inheritdoc
-     *
-     * Order matters twice over: Craft installs the *first* edition when none
-     * is named, and `Plugin::is()` compares editions by their index here, so
-     * Free must stay first and Pro last.
-     */
+     * @inheritdoc Order matters twice over: Craft installs the *first* edition when none is named, and `Plugin::is()` compares editions by their index here, so Free must stay first and Pro last.
+    */
     public static function editions(): array
     {
         return [
@@ -95,15 +87,8 @@ class MenuBuilder extends Plugin
     public string $schemaVersion = '1.0.0';
 
     /**
-     * The REST API's configuration, read from `config/menu-builder.php` once
-     * per request.
-     *
-     * Static and memoized because it is needed at two very different moments
-     * — while URL rules are being registered, and again inside
-     * {@see \Tahadudhiya\MenuBuilder\controllers\ApiController} — and the
-     * two must never see different values: a route that exists for a config
-     * the controller then refuses is a 404 nobody can explain.
-     */
+     * The REST API's configuration, read from `config/menu-builder.php` once per request.
+    */
     private static ?MenuBuilderApiConfig $apiConfig = null;
 
     public static function apiConfig(): MenuBuilderApiConfig
@@ -111,11 +96,8 @@ class MenuBuilder extends Plugin
         if (self::$apiConfig === null) {
             $config = Craft::$app->getConfig()->getConfigFromFile('menu-builder');
 
-            // getConfigFromFile() can hand back a callable or a BaseConfig
-            // for the config files Craft itself owns. This plugin's file is a
-            // plain array; anything else is not a config it can read, and
-            // MenuBuilderApiConfig::fromArray() turns that into the disabled
-            // default rather than into a fatal on every request.
+            // getConfigFromFile() can hand back a callable or a BaseConfig for the config files
+            // Craft itself owns.
             self::$apiConfig = MenuBuilderApiConfig::fromArray($config);
         }
 
@@ -162,10 +144,9 @@ class MenuBuilder extends Plugin
 
     private function attachEventHandlers(): void
     {
-        // craft\base\Plugin auto-registers the CP template root; the site
-        // (front-end) root is not auto-registered, and the optional
-        // _macros/tree.twig helper is meant to be importable from front-end
-        // templates too.
+        // craft\base\Plugin auto-registers the CP template root; the site (front-end) root is not
+        // auto-registered, and the optional _macros/tree.twig helper is meant to be importable from
+        // front-end templates too.
         Event::on(
             View::class,
             View::EVENT_REGISTER_SITE_TEMPLATE_ROOTS,
@@ -187,16 +168,8 @@ class MenuBuilder extends Plugin
             }
         );
 
-        // The field type is registered here rather than in a service: it is a
-        // Craft component type, and Craft only asks for the list once, at
-        // Fields::getAllFieldTypes(). Nothing about it needs the plugin's own
-        // services to be resolved first.
-        // The read-only REST API. Its URL rules are registered **only** when
-        // the install has turned it on in config/menu-builder.php: an API
-        // that nobody asked for should not have a URL, however
-        // comprehensively its own gates would refuse a request. See
-        // MenuBuilderApiConfig for why the per-menu GraphQL schema scope
-        // isn't opt-in enough on its own.
+        // The field type is registered here rather than in a service: it is a Craft component type,
+        // and Craft only asks for the list once, at Fields::getAllFieldTypes().
         $apiConfig = self::apiConfig();
 
         if ($apiConfig->enabled) {
@@ -208,12 +181,9 @@ class MenuBuilder extends Plugin
 
                     $event->rules[$prefix . '/navigations'] = 'menu-builder/api/index';
 
-                    // Deliberately `[^/]+` rather than Craft's handle
-                    // grammar: a handle-shaped pattern would let a malformed
-                    // handle fall through to Craft's own 404, which is an
-                    // HTML error page an API consumer has to parse. Matching
-                    // anything and refusing it in the controller keeps every
-                    // answer this endpoint gives a JSON one.
+                    // Deliberately `[^/]+` rather than Craft's handle grammar: a handle-shaped
+                    // pattern would let a malformed handle fall through to Craft's own 404, which
+                    // is an HTML error page an API consumer has to parse.
                     $event->rules[$prefix . '/navigations/<handle:[^/]+>'] = 'menu-builder/api/view';
                 }
             );
@@ -227,12 +197,7 @@ class MenuBuilder extends Plugin
             }
         );
 
-        // GraphQL. Registered unconditionally, but scoped to nothing by
-        // default: the schema components below start unticked, and
-        // MenuBuilderNavigationQuery::getQueries() adds no fields at all to a
-        // schema that names no menu — so an install that doesn't use GraphQL
-        // sees no change, and a headless one opts in menu by menu. See
-        // MenuBuilderNavigationResolver for the five gates a menu passes.
+        // GraphQL.
         Event::on(
             Gql::class,
             Gql::EVENT_REGISTER_GQL_SCHEMA_COMPONENTS,
@@ -253,11 +218,7 @@ class MenuBuilder extends Plugin
             }
         );
 
-        // The content element behind menu items' custom fields. Registered
-        // so Craft can resolve the class from `elements.type` when it loads
-        // one, and so field settings screens can name the element type a
-        // menu's field layout belongs to. It has no element index and no
-        // sources — see MenuBuilderItemContent.
+        // The content element behind menu items' custom fields.
         Event::on(
             Elements::class,
             Elements::EVENT_REGISTER_ELEMENT_TYPES,
@@ -304,19 +265,7 @@ class MenuBuilder extends Plugin
 
     /**
      * Deletes content elements no navigation item points at any more.
-     *
-     * `menubuilder_items.parentId` carries an `ON DELETE CASCADE`, so
-     * deleting a parent removes its whole subtree inside the database with
-     * no PHP involved (see migrations/Install.php — it is what makes a
-     * subtree delete one statement instead of a recursive sweep). The rows
-     * are gone before this plugin can collect their `contentId`s, so those
-     * elements are stranded by design and swept here instead, on Craft's own
-     * garbage collection run.
-     *
-     * MenuBuilderItemService deletes content up front on every path it
-     * controls; this is the backstop for the one it cannot, plus any row a
-     * crash mid-transaction left behind.
-     */
+    */
     private function collectGarbage(): void
     {
         $orphanIds = (new Query())
@@ -336,9 +285,9 @@ class MenuBuilder extends Plugin
             return;
         }
 
-        // Deleted through Craft rather than with a DELETE: a content element
-        // can own Matrix blocks, and those are elements of their own that
-        // only Elements::deleteElement() knows to take down with it.
+        // Deleted through Craft rather than with a DELETE: a content element can own Matrix blocks,
+        // and those are elements of their own that only Elements::deleteElement() knows to take
+        // down with it.
         $this->itemContent->deleteByIds(array_map('intval', $orphanIds));
     }
 
@@ -373,17 +322,12 @@ class MenuBuilder extends Plugin
     }
 
     /**
-     * Shapes the control-panel nav item, factored out of getCpNavItem() as pure
-     * logic so it can be checked without a booted Craft app.
-     *
-     * The plugin has a single CP destination, so the item carries **no** subnav:
-     * a one-entry subnav turns the top-level item into a disclosure toggle that
-     * has to be expanded before the menus index can be reached. Without it, one
-     * click on "MenuBuilder" opens the index in place.
+     * Shapes the control-panel nav item, factored out of getCpNavItem() as pure logic so it can be
+     * checked without a booted Craft app.
      *
      * @param array<string,mixed> $item
      * @return array<string,mixed>|null Null when the user may not view menus.
-     */
+    */
     public static function shapeCpNavItem(array $item, bool $canView): ?array
     {
         if (!$canView) {

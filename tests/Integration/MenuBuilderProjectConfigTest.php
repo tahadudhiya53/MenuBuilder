@@ -12,22 +12,7 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 
 /**
  * What this plugin does and does not put in project config.
- *
- * MenuBuilder deliberately splits its state in two (see ARCHITECTURE.md):
- *
- * - **Menus and their items are database-backed.** They are content, edited
- *   by people who do not deploy, and must never require a project-config
- *   sync — nor turn a menu edit into a file change on a production install
- *   with `allowAdminChanges` off.
- * - **The Navigation field is a field**, so its definition and settings ride
- *   in project config like every other Craft field, and deploy from one
- *   environment to the next.
- *
- * A test suite that only checks "no project config is written" would pass
- * just as happily if the field stopped deploying, so both halves are asserted
- * here — including a real *deploy*: project config written on one environment
- * and applied on another.
- */
+*/
 class MenuBuilderProjectConfigTest extends TestCase
 {
     private const PATH = 'fields';
@@ -74,9 +59,7 @@ class MenuBuilderProjectConfigTest extends TestCase
         return $prefix . bin2hex(random_bytes(4));
     }
 
-    // ---------------------------------------------------------------------
     // Create
-    // ---------------------------------------------------------------------
 
     public function testSavingTheFieldWritesItToProjectConfig(): void
     {
@@ -91,9 +74,9 @@ class MenuBuilderProjectConfigTest extends TestCase
     }
 
     /**
-     * The allow list is stored as menu **UIDs** rather than IDs precisely so
-     * it can deploy: auto-increment IDs differ per environment, UIDs do not.
-     */
+     * The allow list is stored as menu **UIDs** rather than IDs precisely so it can deploy:
+     * auto-increment IDs differ per environment, UIDs do not.
+    */
     public function testTheAllowListIsStoredAsUidsSoItSurvivesADeploy(): void
     {
         $menu = $this->menu();
@@ -107,17 +90,15 @@ class MenuBuilderProjectConfigTest extends TestCase
         MenuBuilder::getInstance()->groups->deleteById((int)$menu->id);
     }
 
-    // ---------------------------------------------------------------------
     // Update
-    // ---------------------------------------------------------------------
 
     public function testEditingTheFieldUpdatesItsProjectConfigEntryInPlace(): void
     {
         $menu = $this->menu();
         $field = $this->makeField($this->handle('navEdit'));
 
-        // An empty allow list is stored as nothing rather than as an empty
-        // array — "no restriction" is the absence of the setting.
+        // An empty allow list is stored as nothing rather than as an empty array — "no
+        // restriction" is the absence of the setting.
         $this->assertSame([], $this->configFor($field)['settings']['allowedGroupUids'] ?? []);
 
         $field->allowedGroupUids = [(string)$menu->uid];
@@ -131,9 +112,7 @@ class MenuBuilderProjectConfigTest extends TestCase
         MenuBuilder::getInstance()->groups->deleteById((int)$menu->id);
     }
 
-    // ---------------------------------------------------------------------
     // Delete
-    // ---------------------------------------------------------------------
 
     public function testDeletingTheFieldRemovesItFromProjectConfig(): void
     {
@@ -148,16 +127,12 @@ class MenuBuilderProjectConfigTest extends TestCase
         $this->assertNull(Craft::$app->getFields()->getFieldByHandle($handle));
     }
 
-    // ---------------------------------------------------------------------
     // Deploy
-    // ---------------------------------------------------------------------
 
     /**
-     * A deploy is project config arriving from *outside* — written by another
-     * environment and applied here, with no `saveField()` call involved. If
-     * the field could only be created through its own save path, it would
-     * never appear on a production install.
-     */
+     * A deploy is project config arriving from *outside* — written by another environment and
+     * applied here, with no `saveField()` call involved.
+    */
     public function testAFieldArrivingFromAnotherEnvironmentIsInstalledByApplyingProjectConfig(): void
     {
         $handle = $this->handle('navDeployed');
@@ -190,10 +165,9 @@ class MenuBuilderProjectConfigTest extends TestCase
     }
 
     /**
-     * The allow list names a menu by UID, and menus do not deploy — so on the
-     * receiving environment the UID may name a menu that is not there yet.
-     * That has to leave a usable field rather than a broken one.
-     */
+     * The allow list names a menu by UID, and menus do not deploy — so on the receiving
+     * environment the UID may name a menu that is not there yet.
+    */
     public function testAnAllowListNamingAMenuThatDoesNotExistHereStillInstalls(): void
     {
         $handle = $this->handle('navUnknown');
@@ -218,8 +192,8 @@ class MenuBuilderProjectConfigTest extends TestCase
         $field = Craft::$app->getFields()->getFieldByHandle($handle);
 
         $this->assertInstanceOf(MenuBuilderField::class, $field);
-        // The picker offers nothing rather than erroring: the allow list is
-        // satisfied by no menu on this environment.
+        // The picker offers nothing rather than erroring: the allow list is satisfied by no menu on
+        // this environment.
         $this->assertSame([], MenuBuilderFieldHelper::selectableGroups(
             MenuBuilder::getInstance()->groups->getAll(),
             $field->allowedGroupUids,
@@ -238,16 +212,13 @@ class MenuBuilderProjectConfigTest extends TestCase
         $this->assertNull(Craft::$app->getFields()->getFieldByHandle($handle));
     }
 
-    // ---------------------------------------------------------------------
     // What must never be in project config
-    // ---------------------------------------------------------------------
 
     /**
-     * The plugin registers no project-config event handlers of its own for
-     * menus, and no menu lifecycle operation may add one — asserted here
-     * against the whole config rather than against a path, so a handler added
-     * under any name is caught.
-     */
+     * The plugin registers no project-config event handlers of its own for menus, and no menu
+     * lifecycle operation may add one — asserted here against the whole config rather than
+     * against a path, so a handler added under any name is caught.
+    */
     public function testNoMenuStateEverReachesProjectConfig(): void
     {
         $projectConfig = Craft::$app->getProjectConfig();

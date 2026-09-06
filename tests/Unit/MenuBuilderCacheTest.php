@@ -23,19 +23,12 @@ use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 use yii\caching\ArrayCache;
 
 /**
- * Cache keying, the config/version half of the key, and the element-save
- * invalidation that keeps those keys fresh.
- *
- * The parts that read and write an actual cache backend are exercised
- * end to end in MenuBuilderCacheIntegrationTest; the pure key-building and
- * the decision of *which* menus an element change invalidates are covered
- * here.
- */
+ * Cache keying, the config/version half of the key, and the element-save invalidation that keeps
+ * those keys fresh.
+*/
 class MenuBuilderCacheTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // Cache keys: one entry per (menu, site, configuration/version)
-    // ---------------------------------------------------------------------
 
     private const VERSION = 'abc123';
 
@@ -75,10 +68,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The third dimension of the key: two payloads built under different
-     * configuration/plugin versions are different payloads and must never
-     * share an entry.
-     */
+     * The third dimension of the key: two payloads built under different configuration/plugin
+     * versions are different payloads and must never share an entry.
+    */
     public function testTheSameMenuOnTheSameSiteUnderADifferentVersionIsADifferentKey(): void
     {
         $this->assertNotSame(
@@ -88,10 +80,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Guards against a key scheme where concatenation could collide across
-     * different (handle, siteId) pairs, e.g. site 1 + handle "2main" vs.
-     * site 12 + handle "main".
-     */
+     * Guards against a key scheme where concatenation could collide across different (handle,
+     * siteId) pairs, e.g.
+    */
     public function testKeysDoNotCollideAcrossSiteAndHandleBoundary(): void
     {
         $this->assertNotSame(
@@ -100,9 +91,7 @@ class MenuBuilderCacheTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // The configuration/version half of the key
-    // ---------------------------------------------------------------------
 
     public function testAnUnchangedMenuKeepsItsConfigVersion(): void
     {
@@ -113,10 +102,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * `dateUpdated` moves on every menu save, so editing a menu reads a
-     * fresh key by construction — independently of the invalidation that
-     * also runs for it.
-     */
+     * `dateUpdated` moves on every menu save, so editing a menu reads a fresh key by construction
+     * — independently of the invalidation that also runs for it.
+    */
     public function testEditingAMenuChangesItsConfigVersion(): void
     {
         $this->assertNotSame(
@@ -135,9 +123,7 @@ class MenuBuilderCacheTest extends TestCase
 
     /**
      * A handle can be freed by a delete and reused by a *different* menu.
-     * The new menu must not read what the old one cached, even if its
-     * `dateUpdated` happened to match.
-     */
+    */
     public function testAReusedHandleOnANewMenuIsADifferentConfigVersion(): void
     {
         $this->assertNotSame(
@@ -147,9 +133,8 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A plugin upgrade must not read entries written by the previous
-     * version's code.
-     */
+     * A plugin upgrade must not read entries written by the previous version's code.
+    */
     public function testAPluginSchemaVersionBumpChangesEveryConfigVersion(): void
     {
         $this->assertNotSame(
@@ -159,12 +144,11 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A cache entry *is* a serialized MenuBuilderNode graph, so the payload
-     * classes' own shape is part of the version: adding or renaming a
-     * property on one of them would otherwise unserialize an old entry into
-     * an object with uninitialized readonly properties, and hand Twig a
+     * A cache entry *is* a serialized MenuBuilderNode graph, so the payload classes' own shape is
+     * part of the version: adding or renaming a property on one of them would otherwise unserialize
+     * an old entry into an object with uninitialized readonly properties, and hand Twig a
      * half-built node.
-     */
+    */
     public function testThePayloadVersionIsTheShapeOfTheCachedClasses(): void
     {
         $this->assertSame(
@@ -198,9 +182,7 @@ class MenuBuilderCacheTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Invalidation tags: per menu, plus one global
-    // ---------------------------------------------------------------------
 
     public function testEachMenuHasItsOwnInvalidationTag(): void
     {
@@ -222,9 +204,7 @@ class MenuBuilderCacheTest extends TestCase
         ];
     }
 
-    // ---------------------------------------------------------------------
     // Element saves: which groups a changed element invalidates
-    // ---------------------------------------------------------------------
 
     /** @dataProvider watchedElementClasses */
     public function testWatchedElementClassesMapToTheirDynamicSourceType(string $elementClass, string $expected): void
@@ -253,11 +233,11 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A menu item can't link to these, so saving one must not be able to
-     * reach any menu cache at all.
+     * A menu item can't link to these, so saving one must not be able to reach any menu cache at
+     * all.
      *
      * @dataProvider unwatchedElementClasses
-     */
+    */
     public function testUnlinkableElementTypesMapToNothing(string $elementClass): void
     {
         $this->assertNull(MenuBuilderElementService::sourceTypeForElement($elementClass));
@@ -282,9 +262,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Saving an asset must not invalidate a group whose dynamic items only
-     * list entries — the source type has to match, not just the container ID.
-     */
+     * Saving an asset must not invalidate a group whose dynamic items only list entries — the
+     * source type has to match, not just the container ID.
+    */
     public function testADynamicSourceDoesNotMatchAnotherElementType(): void
     {
         $this->assertFalse(MenuBuilderElementService::dynamicSourceMatches(
@@ -295,10 +275,10 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A stored `sourceId` can legitimately be a numeric string (posted
-     * config, imported config) — it's normalized the same way the render-time
-     * query normalizes it, so it must match the same container.
-     */
+     * A stored `sourceId` can legitimately be a numeric string (posted config, imported config) —
+     * it's normalized the same way the render-time query normalizes it, so it must match the same
+     * container.
+    */
     public function testANumericStringSourceIdStillMatches(): void
     {
         $this->assertTrue(MenuBuilderElementService::dynamicSourceMatches(
@@ -309,10 +289,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Ignored config in = no invalidation out: a config the dynamic service
-     * would refuse to run can't produce menu content, so it can never
-     * justify flushing a cached tree.
-     */
+     * Ignored config in = no invalidation out: a config the dynamic service would refuse to run
+     * can't produce menu content, so it can never justify flushing a cached tree.
+    */
     public static function unusableConfigs(): array
     {
         return [
@@ -332,10 +311,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * An element with no determinable container (a nested entry has no
-     * `sectionId`) must fail *open* — matching every dynamic source of the
-     * right type rather than leaving a menu stale.
-     */
+     * An element with no determinable container (a nested entry has no `sectionId`) must fail
+     * *open* — matching every dynamic source of the right type rather than leaving a menu stale.
+    */
     public function testAnUnknownContainerMatchesEveryDynamicSourceOfThatType(): void
     {
         $this->assertTrue(MenuBuilderElementService::dynamicSourceMatches(
@@ -351,9 +329,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The ceiling that bounds the one staleness no event can announce: a
-     * pending entry going live, or a live entry expiring, on a clock.
-     */
+     * The ceiling that bounds the one staleness no event can announce: a pending entry going live,
+     * or a live entry expiring, on a clock.
+    */
     public function testCraftsCacheDurationBecomesTheTreeCacheCeiling(): void
     {
         $this->assertSame(86400, MenuBuilderCacheService::resolveDuration(86400));
@@ -376,18 +354,19 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertNull(MenuBuilderCacheService::resolveDuration($configured));
     }
 
-    // =====================================================================
-    // The cache in use: hits, misses, invalidation and isolation
+    // ===================================================================== The cache in use: hits,
+    // misses, invalidation and isolation
     // =====================================================================
 
     private const EN = 1;
     private const DE = 2;
 
-    /** A site that is currently disabled — its entries must still invalidate. */
+    /**
+     * A site that is currently disabled — its entries must still invalidate.
+    */
     private const DISABLED = 3;
 
-    // =====================================================================
-    // Hit and miss
+    // ===================================================================== Hit and miss
     // =====================================================================
 
     public function testAMissBuildsTheTreeOnceAndCachesIt(): void
@@ -414,9 +393,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A hit is a *copy*, not the same object graph — the entry is serialized,
-     * so one request's tree can never be mutated into another request's.
-     */
+     * A hit is a *copy*, not the same object graph — the entry is serialized, so one request's
+     * tree can never be mutated into another request's.
+    */
     public function testAHitReturnsItsOwnObjectGraph(): void
     {
         $cache = $this->service();
@@ -441,8 +420,7 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(2, $this->builds, 'A menu with no ID has no identity to cache under.');
     }
 
-    // =====================================================================
-    // Targeted invalidation
+    // ===================================================================== Targeted invalidation
     // =====================================================================
 
     public function testInvalidatingAMenuMakesTheNextRenderRebuild(): void
@@ -459,9 +437,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The requirement this phase exists for: a change that affects one menu
-     * must not cost every other menu its cache.
-     */
+     * The requirement this phase exists for: a change that affects one menu must not cost every
+     * other menu its cache.
+    */
     public function testInvalidatingOneMenuLeavesEveryOtherMenuCached(): void
     {
         $cache = $this->service();
@@ -485,11 +463,10 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * One call, every site: an entry is tagged by menu ID, so invalidation
-     * never has to enumerate site IDs (which Craft answers differently
-     * depending on where the call is made from) and can't miss a site —
-     * including one that is currently disabled.
-     */
+     * One call, every site: an entry is tagged by menu ID, so invalidation never has to enumerate
+     * site IDs (which Craft answers differently depending on where the call is made from) and can't
+     * miss a site — including one that is currently disabled.
+    */
     public function testInvalidatingAMenuReachesEverySitesEntry(): void
     {
         $cache = $this->service();
@@ -513,10 +490,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Invalidation reaches entries written under an *earlier* config version
-     * too — the tag doesn't carry the version, so nothing is orphaned in a
-     * readable state by a menu edit.
-     */
+     * Invalidation reaches entries written under an *earlier* config version too — the tag
+     * doesn't carry the version, so nothing is orphaned in a readable state by a menu edit.
+    */
     public function testInvalidationReachesEntriesFromEveryPastConfigVersion(): void
     {
         $cache = $this->service();
@@ -535,9 +511,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The one genuinely global change (a site save or delete) still works —
-     * and it is the only thing that should ever behave this way.
-     */
+     * The one genuinely global change (a site save or delete) still works — and it is the only
+     * thing that should ever behave this way.
+    */
     public function testInvalidateAllClearsEveryMenuOnEverySite(): void
     {
         $cache = $this->service();
@@ -558,8 +534,8 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(4, $this->builds);
     }
 
-    // =====================================================================
-    // Multiple sites: site A must never receive site B's cache
+    // ===================================================================== Multiple sites: site A
+    // must never receive site B's cache
     // =====================================================================
 
     public function testEachSiteBuildsAndReadsItsOwnTree(): void
@@ -583,15 +559,13 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(2, $this->builds);
     }
 
-    // =====================================================================
-    // Stale entries
+    // ===================================================================== Stale entries
     // =====================================================================
 
     /**
-     * A menu edit moves `dateUpdated`, which is part of the key, so the tree
-     * built under the old configuration is not merely invalidated — it is
-     * unreadable. Belt and braces with the invalidation the save also runs.
-     */
+     * A menu edit moves `dateUpdated`, which is part of the key, so the tree built under the old
+     * configuration is not merely invalidated — it is unreadable.
+    */
     public function testAnEditedMenuNeverReadsThePreEditTree(): void
     {
         $cache = $this->service();
@@ -603,10 +577,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A renamed menu, and a *different* menu that later takes the freed
-     * handle, both read their own key — never the entry the old menu left at
-     * that handle.
-     */
+     * A renamed menu, and a *different* menu that later takes the freed handle, both read their own
+     * key — never the entry the old menu left at that handle.
+    */
     public function testAReusedHandleDoesNotInheritTheOldMenusTree(): void
     {
         $cache = $this->service();
@@ -620,10 +593,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * An upgrade that changes the plugin's schema version reads new keys, so
-     * an entry serialized by the previous version's code can never be
-     * unserialized into the new one's classes.
-     */
+     * An upgrade that changes the plugin's schema version reads new keys, so an entry serialized by
+     * the previous version's code can never be unserialized into the new one's classes.
+    */
     public function testAnUpgradeNeverReadsThePreviousVersionsEntries(): void
     {
         $cache = $this->service();
@@ -638,10 +610,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Anything at the key that isn't the payload shape this version writes
-     * (a foreign value, a truncated entry, a backend handing back junk)
-     * rebuilds instead of reaching Twig.
-     */
+     * Anything at the key that isn't the payload shape this version writes (a foreign value, a
+     * truncated entry, a backend handing back junk) rebuilds instead of reaching Twig.
+    */
     public function testAForeignValueAtTheKeyIsRebuiltRatherThanServed(): void
     {
         $cache = $this->service();
@@ -658,8 +629,8 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(1, $this->builds);
     }
 
-    // =====================================================================
-    // Transactions: an invalidation must land after the commit
+    // ===================================================================== Transactions: an
+    // invalidation must land after the commit
     // =====================================================================
 
     public function testAnInvalidationInsideATransactionWaitsForIt(): void
@@ -682,13 +653,8 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The concrete race this deferral exists for. A bulk item operation runs
-     * inside one transaction; every item it saves invalidates. If that
-     * invalidation ran immediately, a concurrent front-end request could
-     * rebuild the tree from **pre-commit** data, re-cache it, and nothing
-     * would ever invalidate it again — the bulk change would be invisible
-     * until something unrelated happened to flush the menu.
-     */
+     * The concrete race this deferral exists for.
+    */
     public function testAConcurrentRequestCannotRecachePreCommitData(): void
     {
         $cache = $this->service();
@@ -697,8 +663,8 @@ class MenuBuilderCacheTest extends TestCase
         $cache->inTransaction = true;
         $cache->invalidateGroupId(1);
 
-        // The concurrent request: reads, misses, and caches what the database
-        // says *right now* — which is the not-yet-committed old state.
+        // The concurrent request: reads, misses, and caches what the database says *right now* —
+        // which is the not-yet-committed old state.
         $cache->getOrSet($group, $this->generator(['/pre-commit']));
 
         $cache->endTransaction();
@@ -708,11 +674,8 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A rollback flushes the queue too. Nothing changed in the database, so
-     * the extra rebuild is wasted work rather than a wrong answer — and it
-     * covers the concurrent re-cache above, which happened whether or not
-     * the transaction went on to commit.
-     */
+     * A rollback flushes the queue too.
+    */
     public function testARollbackAlsoFlushesTheQueue(): void
     {
         $cache = $this->service();
@@ -728,10 +691,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A bulk operation invalidates once per item; the queue collapses those
-     * into one invalidation per menu, and keeps them apart from another
-     * menu's.
-     */
+     * A bulk operation invalidates once per item; the queue collapses those into one invalidation
+     * per menu, and keeps them apart from another menu's.
+    */
     public function testTheQueueCollapsesRepeatsAndStaysPerMenu(): void
     {
         $cache = $this->service();
@@ -764,15 +726,13 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     
-    // =====================================================================
-    // The boundary: two users, two days and two pages share one entry
+    // ===================================================================== The boundary: two
+    // users, two days and two pages share one entry
     // =====================================================================
 
     /**
-     * User A is in the group an item is restricted to; user B is not. Both
-     * requests read the **same** cache entry, and each gets its own answer —
-     * the entry itself is never narrowed, widened or written to.
-     */
+     * User A is in the group an item is restricted to; user B is not.
+    */
     public function testTwoUsersShareOneEntryWithoutLeakingVisibility(): void
     {
         $cache = $this->service();
@@ -797,8 +757,8 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(['/public'], $this->urls($treeB), 'User B must not.');
         $this->assertSame(['/public'], $this->urls($anonymous));
 
-        // One entry served all three, and it still holds both nodes: B's
-        // narrower answer was never written back onto the shared tree.
+        // One entry served all three, and it still holds both nodes: B's narrower answer was never
+        // written back onto the shared tree.
         $this->assertSame(
             ['/public', '/members'],
             $this->urls($cache->getOrSet($group, fn() => $this->fail('The entry must still be a hit.'))),
@@ -806,10 +766,8 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A date-range item is visible yesterday and hidden today. If the
-     * decision were cached, yesterday's answer would outlive the day — so
-     * the same entry is filtered against each request's own clock.
-     */
+     * A date-range item is visible yesterday and hidden today.
+    */
     public function testYesterdaysVisibilityDoesNotSurviveIntoToday(): void
     {
         $cache = $this->service();
@@ -836,10 +794,9 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * Active state is decided from the request URI, after the cache read, on
-     * the copies visibility filtering produced. One page's active item must
-     * never appear on another page.
-     */
+     * Active state is decided from the request URI, after the cache read, on the copies visibility
+     * filtering produced.
+    */
     public function testOnePagesActiveItemNeverAppearsOnAnother(): void
     {
         $cache = $this->service();
@@ -871,8 +828,7 @@ class MenuBuilderCacheTest extends TestCase
         $this->assertSame(1, $builds);
     }
 
-    // =====================================================================
-    // Harness
+    // ===================================================================== Harness
     // =====================================================================
 
     private int $builds = 0;
@@ -885,12 +841,11 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * A tree generator that counts how many times it ran — i.e. how many
-     * cache misses the test actually produced.
+     * A tree generator that counts how many times it ran — i.e.
      *
      * @param string[] $urls
      * @return callable():MenuBuilderNode[]
-     */
+    */
     private function generator(array $urls): callable
     {
         return function() use ($urls) {
@@ -957,20 +912,16 @@ class MenuBuilderCacheTest extends TestCase
     }
 
     /**
-     * The pipeline step that runs on the cached tree. Non-public (it is only
-     * ever called from getTree()), so invoked directly — the same approach
-     * MenuBuilderVisibilityTest takes.
+     * The pipeline step that runs on the cached tree.
      *
      * @param MenuBuilderNode[] $nodes
      * @param array<int,MenuBuilderItem> $itemsById
      * @return MenuBuilderNode[]
-     */
+    */
     private function filter(array $nodes, array $itemsById, VisibilityContext $context): array
     {
-        // The per-request pass reads visibility bags keyed by item ID, not
-        // hydrated items — see
-        // MenuBuilderItemService::getVisibilityRulesForGroup(). The fixture
-        // stays expressed in items and is projected here, keys unchanged.
+        // The per-request pass reads visibility bags keyed by item ID, not hydrated items — see
+        // MenuBuilderItemService::getVisibilityRulesForGroup().
         $visibilityById = array_map(fn(MenuBuilderItem $item) => $item->visibility, $itemsById);
 
         $method = new ReflectionMethod(MenuBuilderResolver::class, 'filterVisible');
@@ -986,19 +937,17 @@ class MenuBuilderCacheTest extends TestCase
 }
 
 /**
- * Declared rather than instantiated: a Craft element can't be constructed
- * without a booted app, but the class → source-type mapping is a pure string
- * check and only needs the class to exist.
- */
+ * Declared rather than instantiated: a Craft element can't be constructed without a booted app, but
+ * the class → source-type mapping is a pure string check and only needs the class to exist.
+*/
 class SubclassedEntry extends Entry
 {
 }
 
 /**
- * Stand-ins for a cached payload class before and after a property is added
- * to it — declared rather than mutated, since a class's shape can't change at
- * runtime. See MenuBuilderCacheService::shapeDigest().
- */
+ * Stand-ins for a cached payload class before and after a property is added to it — declared
+ * rather than mutated, since a class's shape can't change at runtime.
+*/
 class CachedPayloadShapeV1
 {
     public ?string $title = null;
@@ -1012,11 +961,10 @@ class CachedPayloadShapeV2
 }
 
 /**
- * MenuBuilderCacheService with its three Craft touchpoints — the cache
- * component, the current site, and `cacheDuration` — supplied by the test,
- * plus a hand-driven stand-in for the DB transaction state. Everything under
- * test (keys, tags, the deferral queue) is the production implementation.
- */
+ * MenuBuilderCacheService with its three Craft touchpoints — the cache component, the current
+ * site, and `cacheDuration` — supplied by the test, plus a hand-driven stand-in for the DB
+ * transaction state.
+*/
 class TestableCacheService extends MenuBuilderCacheService
 {
     public ArrayCache $backing;
@@ -1034,15 +982,15 @@ class TestableCacheService extends MenuBuilderCacheService
     {
         parent::init();
 
-        // Serializing, like every cache backend Craft ships with — so a read
-        // hands back a copy and TagDependency really decides validity.
+        // Serializing, like every cache backend Craft ships with — so a read hands back a copy
+        // and TagDependency really decides validity.
         $this->backing = new ArrayCache();
     }
 
     /**
-     * Ends the simulated transaction the way Yii does: the outermost
-     * commit/rollback fires the events the service registered against.
-     */
+     * Ends the simulated transaction the way Yii does: the outermost commit/rollback fires the
+     * events the service registered against.
+    */
     public function endTransaction(bool $committed = true): void
     {
         $this->inTransaction = false;

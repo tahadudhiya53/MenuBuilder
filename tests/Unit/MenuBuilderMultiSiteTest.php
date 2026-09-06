@@ -26,59 +26,26 @@ use Tahadudhiya\MenuBuilder\visibility\SiteRule;
 use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
- * Multi-site behaviour end to end, across three sites — English (1), German
- * (2) and French (3).
- *
- * The invariant the whole phase rests on: **nothing resolved for one site may
- * ever be served on another.** Two mechanisms enforce it, and both are
- * exercised here.
- *
- * 1. **The group gate.** A navigation group carries a site restriction
- *    (MenuBuilderGroup::$siteIds, persisted inside the group's `settings`
- *    bag). `craft.menuBuilder.get('main')` returns null on a site the group
- *    isn't available to, before any item is loaded or any cache is read.
- * 2. **The cache key.** A resolved tree is keyed by (group handle, site),
- *    because element URLs, titles and availability are all resolved against
- *    the site being rendered. Site A's tree and site B's tree are separate
- *    entries that can never be read for one another.
- *
- * Per-item site restriction (`site` visibility rule) sits inside the
- * per-request half of the pipeline and is re-evaluated on every render, so it
- * is never baked into the shared cache — the same boundary
- * MenuBuilderVisibilityTest pins for user-specific rules, checked here for
- * the site dimension.
- *
- * A site's identity throughout is its numeric ID. Renaming a site changes no
- * key, no restriction and no rule; disabling or deleting one is covered
- * below on its own terms.
- *
- * What needs a booted Craft app (the queries in ElementLinkResolver and
- * MenuBuilderDynamicNavigationService, MenuBuilderCacheService::getOrSet(),
- * MenuBuilderResolver::getTree() itself) is covered two ways: the pure
- * decisions those methods delegate to are called directly, and the wiring
- * that can only be read — that the query is site-scoped, that the site gate
- * runs before the cache read — is asserted against the source. The rest is
- * the manual testing checklist.
- */
+ * Multi-site behaviour end to end, across three sites — English (1), German (2) and French (3).
+*/
 class MenuBuilderMultiSiteTest extends TestCase
 {
     private const EN = 1;
     private const DE = 2;
     private const FR = 3;
 
-    /** A site that existed when menus were configured and has since been deleted. */
+    /**
+     * A site that existed when menus were configured and has since been deleted.
+    */
     private const REMOVED = 4;
 
-    // =====================================================================
-    // The cache key: one resolved tree per (menu, site)
+    // ===================================================================== The cache key: one
+    // resolved tree per (menu, site)
     // =====================================================================
 
     /**
-     * A cache key for one menu on one site. The third component is the
-     * configuration/version digest (MenuBuilderCacheService::configVersion()),
-     * held constant here so these tests speak about the site dimension only —
-     * MenuBuilderCacheTest covers the version dimension.
-     */
+     * A cache key for one menu on one site.
+    */
     private function key(string $handle, int $siteId): string
     {
         return MenuBuilderCacheService::cacheKey($handle, $siteId, 'cfg');
@@ -97,11 +64,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * The concrete failure this phase exists to prevent: reading the German
-     * site's navigation must never hand back what was resolved for English.
-     * Modelled against a plain array standing in for the cache backend, so
-     * the key scheme is what's actually under test.
-     */
+     * The concrete failure this phase exists to prevent: reading the German site's navigation must
+     * never hand back what was resolved for English.
+    */
     public function testOneSitesCachedTreeIsNeverReadableOnAnother(): void
     {
         $cache = [
@@ -119,10 +84,8 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A site's name/handle is not part of its identity here — the numeric ID
-     * is. Renaming "German" to "Deutsch" changes nothing that was cached
-     * under it.
-     */
+     * A site's name/handle is not part of its identity here — the numeric ID is.
+    */
     public function testACacheKeyDependsOnTheSiteIdOnly(): void
     {
         $this->assertSame(
@@ -132,23 +95,11 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Invalidation is not scoped to a site at all: an entry carries a
-     * per-menu tag (MenuBuilderCacheService::groupTag(), keyed by menu ID),
-     * so invalidating a menu reaches its entry on **every** site in one
-     * call — including a disabled site, a site added after the entry was
-     * written, and every config version the menu was ever cached under.
-     *
-     * That closes a hazard the previous key-enumerating implementation had
-     * to work around: `getAllSiteIds()` answers differently depending on
-     * where it is called from (a front-end request — a web-triggered queue
-     * job running a structure move's URI updates, say — sees only enabled
-     * sites), so a tree cached while a site was enabled could survive an
-     * invalidation and be served the moment the site was switched back on.
-     * There is no site list in the path any more.
-     *
-     * MenuBuilderCacheIntegrationTest proves this against a real cache
-     * backend, across all three sites plus a disabled one.
-     */
+     * Invalidation is not scoped to a site at all: an entry carries a per-menu tag
+     * (MenuBuilderCacheService::groupTag(), keyed by menu ID), so invalidating a menu reaches its
+     * entry on **every** site in one call — including a disabled site, a site added after the
+     * entry was written, and every config version the menu was ever cached under.
+    */
     public function testInvalidationIsNotScopedToASite(): void
     {
         $tag = MenuBuilderCacheService::groupTag(1);
@@ -161,9 +112,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * And it stays targeted: two menus never share a tag, so invalidating
-     * one can't reach the other's entries on any site.
-     */
+     * And it stays targeted: two menus never share a tag, so invalidating one can't reach the
+     * other's entries on any site.
+    */
     public function testInvalidatingOneMenuCannotReachAnother(): void
     {
         $this->assertNotSame(MenuBuilderCacheService::groupTag(1), MenuBuilderCacheService::groupTag(2));
@@ -171,10 +122,8 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site removed. Its cache entries are unreachable rather than wrong —
-     * a deleted site can never be the current site again, and Craft's site
-     * IDs are auto-increment, so a new site never inherits the old one's key.
-     */
+     * Site removed.
+    */
     public function testARemovedSitesKeyIsNeverReusedByAnotherSite(): void
     {
         $this->assertNotSame(
@@ -183,8 +132,8 @@ class MenuBuilderMultiSiteTest extends TestCase
         );
     }
 
-    // =====================================================================
-    // The group gate: craft.menuBuilder.get('main') on a site it isn't for
+    // ===================================================================== The group gate:
+    // craft.menuBuilder.get('main') on a site it isn't for
     // =====================================================================
 
     public function testAMenuAvailableToOneSiteOnly(): void
@@ -217,11 +166,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * `craft.menuBuilder.get('main')` returns null — not an empty tree — on a
-     * site the group isn't available to. The gate itself is asserted above;
-     * this pins that getTree() acts on it before it can return anything, and
-     * before it reads or writes the cache.
-     */
+     * `craft.menuBuilder.get('main')` returns null — not an empty tree — on a site the group
+     * isn't available to.
+    */
     public function testTheSiteGateRunsBeforeAnythingIsResolvedOrCached(): void
     {
         $body = $this->sourceOf(MenuBuilderResolver::class, 'public function getTree', 'public static function internalHosts');
@@ -239,11 +186,8 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site removed, group level. A group restricted to a site that has since
-     * been deleted stays restricted: the menu disappears everywhere rather
-     * than silently becoming available to every site, which is what pruning
-     * the dead ID would do.
-     */
+     * Site removed, group level.
+    */
     public function testAMenuRestrictedToARemovedSiteBecomesAvailableNowhere(): void
     {
         $group = $this->group([self::REMOVED]);
@@ -262,9 +206,8 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site renamed. The restriction is stored as IDs, so a name or handle
-     * change is a no-op for availability — there is nothing to keep in step.
-     */
+     * Site renamed.
+    */
     public function testARestrictionIsUnaffectedByASiteRename(): void
     {
         $group = $this->group([self::DE]);
@@ -276,26 +219,23 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A console request has no site to match a restriction against, so a
-     * restricted menu is unavailable there rather than defaulting to one site.
-     */
+     * A console request has no site to match a restriction against, so a restricted menu is
+     * unavailable there rather than defaulting to one site.
+    */
     public function testARestrictedMenuIsUnavailableWithoutACurrentSite(): void
     {
         $this->assertFalse($this->group([self::EN])->isAvailableForSite(null));
         $this->assertTrue($this->group([])->isAvailableForSite(null));
     }
 
-    // =====================================================================
-    // Project config deployment
-    // =====================================================================
+    // ===================================================================== Project config
+    // deployment =====================================================================
 
     /**
      * Sites live in project config; navigation groups and items do not (see
-     * MenuBuilderGroupService) — the site restriction rides along inside the
-     * group's own `settings` column. This is the round-trip a deployment
-     * depends on: what's written for a multi-site restriction is what comes
-     * back out, and it is lifted back off the user-facing settings bag.
-     */
+     * MenuBuilderGroupService) — the site restriction rides along inside the group's own
+     * `settings` column.
+    */
     public function testASiteRestrictionSurvivesTheSettingsRoundTrip(): void
     {
         $written = $this->settingsWithSiteIds(['renderer' => 'nav'], [self::EN, self::DE]);
@@ -323,15 +263,14 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertStringContainsString('EVENT_AFTER_DELETE_SITE', $body);
     }
 
-    // =====================================================================
-    // Site-specific linked elements: entry, category, asset
+    // ===================================================================== Site-specific linked
+    // elements: entry, category, asset
     // =====================================================================
 
     /**
-     * An element's link is always re-queried against the site being
-     * rendered — that is what makes a per-site URI, a per-site title and a
-     * per-site enabled state show up at all.
-     */
+     * An element's link is always re-queried against the site being rendered — that is what makes
+     * a per-site URI, a per-site title and a per-site enabled state show up at all.
+    */
     public function testElementLinksAreResolvedAgainstTheCurrentSite(): void
     {
         $source = $this->sourceOf(ElementLinkResolver::class, 'public function resolve', 'public static function isPubliclyAvailable');
@@ -350,13 +289,13 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site-specific entry / category / asset: an element enabled on English
-     * but disabled for German resolves with a per-site status, and the
-     * disabled-for-this-site status must not produce a link.
+     * Site-specific entry / category / asset: an element enabled on English but disabled for German
+     * resolves with a per-site status, and the disabled-for-this-site status must not produce a
+     * link.
      *
      * @dataProvider siteScopedElements
      * @param class-string $elementClass
-     */
+    */
     public function testAnElementDisabledForOneSiteIsUnavailableThere(string $elementClass, string $availableStatus, string $siteDisabledStatus): void
     {
         $this->assertTrue(
@@ -370,10 +309,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * What the German site shows in place of an entry that only exists in
-     * English is the item's own fallback behaviour — the same decision as
-     * any other unavailable element, reached for a per-site reason.
-     */
+     * What the German site shows in place of an entry that only exists in English is the item's own
+     * fallback behaviour — the same decision as any other unavailable element, reached for a
+     * per-site reason.
+    */
     public function testFallbackAppliesPerSiteWhenAnElementIsMissingOnThatSite(): void
     {
         $hide = $this->elementItem(MenuBuilderItem::FALLBACK_HIDE);
@@ -387,10 +326,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A cached node built for one site can outlive the reason it was built —
-     * the resolved tree is per-site, so an entry that fell back on German
-     * must not leak an English URL through the fallback path.
-     */
+     * A cached node built for one site can outlive the reason it was built — the resolved tree is
+     * per-site, so an entry that fell back on German must not leak an English URL through the
+     * fallback path.
+    */
     public function testAPerSiteFallbackUrlIsStillRevalidated(): void
     {
         $item = $this->elementItem(MenuBuilderItem::FALLBACK_FALLBACK_URL, 'javascript:alert(1)');
@@ -398,15 +337,14 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertFalse(ElementLinkResolver::fallbackFor($item)->isAvailable);
     }
 
-    // =====================================================================
-    // Site-specific title and URI
-    // =====================================================================
+    // ===================================================================== Site-specific title and
+    // URI =====================================================================
 
     /**
-     * Site-specific title: with no title of its own, an item takes the
-     * label the element resolved to on the site being rendered — so the same
-     * item reads "About us" on English and "Über uns" on German.
-     */
+     * Site-specific title: with no title of its own, an item takes the label the element resolved
+     * to on the site being rendered — so the same item reads "About us" on English and "Über
+     * uns" on German.
+    */
     public function testAnItemWithoutATitleTakesThePerSiteElementTitle(): void
     {
         $this->assertSame('About us', LinkAttributeHelper::resolveTitle('', 'About us'));
@@ -414,10 +352,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * The deliberate consequence of an editor typing a title: it overrides
-     * the element's per-site title on *every* site, so a hardcoded title
-     * does not translate. Worth pinning rather than discovering.
-     */
+     * The deliberate consequence of an editor typing a title: it overrides the element's per-site
+     * title on *every* site, so a hardcoded title does not translate.
+    */
     public function testAnItemTitleOverridesThePerSiteElementTitleEverywhere(): void
     {
         $this->assertSame('Menu', LinkAttributeHelper::resolveTitle('Menu', 'About us'));
@@ -430,9 +367,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site-specific URI: the same menu, the same item, two sites, two URLs —
-     * and two cache entries, which is the only thing keeping them apart.
-     */
+     * Site-specific URI: the same menu, the same item, two sites, two URLs — and two cache
+     * entries, which is the only thing keeping them apart.
+    */
     public function testTheSameItemResolvesToADifferentUriPerSite(): void
     {
         $english = $this->node(10, url: '/about-us');
@@ -445,9 +382,8 @@ class MenuBuilderMultiSiteTest extends TestCase
         );
     }
 
-    // =====================================================================
-    // Site-specific visibility (per item)
-    // =====================================================================
+    // ===================================================================== Site-specific
+    // visibility (per item) =====================================================================
 
     public function testAnItemRestrictedToOneSite(): void
     {
@@ -470,9 +406,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Site removed, item level — the same fail-closed answer as the group
-     * gate: the item disappears rather than becoming visible everywhere.
-     */
+     * Site removed, item level — the same fail-closed answer as the group gate: the item
+     * disappears rather than becoming visible everywhere.
+    */
     public function testAnItemRestrictedToARemovedSiteIsHiddenOnEverySite(): void
     {
         $rule = new SiteRule();
@@ -483,11 +419,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A group restriction and an item restriction are independent gates and
-     * both must pass: a menu available on German and French, holding an item
-     * restricted to French, shows that item on French only — and shows
-     * nothing at all on English, where the menu doesn't exist.
-     */
+     * A group restriction and an item restriction are independent gates and both must pass: a menu
+     * available on German and French, holding an item restricted to French, shows that item on
+     * French only — and shows nothing at all on English, where the menu doesn't exist.
+    */
     public function testGroupAndItemRestrictionsCompose(): void
     {
         $group = $this->group([self::DE, self::FR]);
@@ -503,20 +438,15 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertTrue($service->isVisible($item, $this->context(self::FR)));
     }
 
-    // =====================================================================
-    // Integration: one cached tree, three sites through the render pipeline
+    // ===================================================================== Integration: one cached
+    // tree, three sites through the render pipeline
     // =====================================================================
 
     /**
-     * The per-request half of the pipeline (visibility filtering) run over
-     * one and the same node tree for English, German and French, with the
-     * real MenuBuilderVisibilityService and the real
+     * The per-request half of the pipeline (visibility filtering) run over one and the same node
+     * tree for English, German and French, with the real MenuBuilderVisibilityService and the real
      * MenuBuilderResolver::filterVisible().
-     *
-     * Each site sees a different menu, and the tree they were all filtered
-     * from is left exactly as it was — the property that makes it safe for
-     * the cached tree to be shared at all.
-     */
+    */
     public function testOneTreeFiltersToADifferentMenuOnEachSite(): void
     {
         $nodes = [
@@ -541,10 +471,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * The same, one level down: a German-only child under a shared parent is
-     * filtered out on English without taking its parent with it, and the
-     * cached parent's own children list is never rewritten.
-     */
+     * The same, one level down: a German-only child under a shared parent is filtered out on
+     * English without taking its parent with it, and the cached parent's own children list is never
+     * rewritten.
+    */
     public function testChildrenAreFilteredPerSiteWithoutMutatingTheCachedTree(): void
     {
         $children = [$this->node(2, url: '/de/produkte'), $this->node(3, url: '/products')];
@@ -566,11 +496,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A site restriction is evaluated on every render, so it can never be
-     * baked into the shared per-site cache in the way an already-cached tree
-     * would be: the same item answers differently for two contexts without
-     * being modified.
-     */
+     * A site restriction is evaluated on every render, so it can never be baked into the shared
+     * per-site cache in the way an already-cached tree would be: the same item answers differently
+     * for two contexts without being modified.
+    */
     public function testASiteRestrictionIsAPerRequestDecision(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -582,15 +511,13 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertSame($rules, $item->visibility, 'Evaluation must not mutate the item.');
     }
 
-    // =====================================================================
-    // Integration: active state across sites and domains
+    // ===================================================================== Integration: active
+    // state across sites and domains
     // =====================================================================
 
     /**
-     * Three sites on three domains. A node whose URL is on the German
-     * domain is the current page only when German is the site being served —
-     * the host has to match, not just the path.
-     */
+     * Three sites on three domains.
+    */
     public function testActiveStateIsScopedToTheSiteBeingServed(): void
     {
         $resolver = new MenuBuilderActiveResolver();
@@ -605,15 +532,8 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Sibling sites routinely share a path structure — `/contact` exists on
-     * all three. Serving the English `/contact` must mark the English link
-     * and nothing else: the French URL is a different page on a different
-     * site, however identical its path.
-     *
-     * This is why the internal-host list is the current site's host, not
-     * every site's: with the French host admitted, both links came back
-     * active and `aria-current="page"` landed on two of them.
-     */
+     * Sibling sites routinely share a path structure — `/contact` exists on all three.
+    */
     public function testAnIdenticalPathOnAnotherSiteIsNotActive(): void
     {
         $resolver = new MenuBuilderActiveResolver();
@@ -628,11 +548,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A link that deliberately crosses to another site of the same install
-     * still resolves active state normally when that site is the one being
-     * served: the request host is then that site's host, and the request
-     * host is always in the list.
-     */
+     * A link that deliberately crosses to another site of the same install still resolves active
+     * state normally when that site is the one being served: the request host is then that site's
+     * host, and the request host is always in the list.
+    */
     public function testACrossSiteLinkIsActiveOnTheSiteItPointsAt(): void
     {
         $resolver = new MenuBuilderActiveResolver();
@@ -657,10 +576,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A base URL spelled differently from the request — `www.` against bare,
-     * a proxy — is still the site being served, which is the whole reason the
-     * base URL joins the request host rather than replacing it.
-     */
+     * A base URL spelled differently from the request — `www.` against bare, a proxy — is still
+     * the site being served, which is the whole reason the base URL joins the request host rather
+     * than replacing it.
+    */
     public function testTheCurrentSitesBaseUrlJoinsTheRequestHost(): void
     {
         $hosts = MenuBuilderResolver::internalHosts('example.test', 'https://www.example.test/');
@@ -692,10 +611,9 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Only the site being rendered contributes a base URL — asserted against
-     * the source because the sibling-site hosts this deliberately excludes
-     * can only be gathered from a booted app.
-     */
+     * Only the site being rendered contributes a base URL — asserted against the source because
+     * the sibling-site hosts this deliberately excludes can only be gathered from a booted app.
+    */
     public function testOnlyTheCurrentSiteContributesABaseUrl(): void
     {
         $source = $this->sourceOf(MenuBuilderResolver::class, 'private function currentSiteBaseUrl', '');
@@ -704,16 +622,13 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertStringNotContainsString('getAllSites', $source);
     }
 
-    // =====================================================================
-    // Dynamic navigation per site
-    // =====================================================================
+    // ===================================================================== Dynamic navigation per
+    // site =====================================================================
 
     /**
-     * A dynamic item's stored config names a section/group/volume and
-     * nothing about a site: the site comes from the query, which is scoped
-     * to the one being rendered. That's what makes the same dynamic item
-     * list German entries on German and French entries on French.
-     */
+     * A dynamic item's stored config names a section/group/volume and nothing about a site: the
+     * site comes from the query, which is scoped to the one being rendered.
+    */
     public function testADynamicSourceIsScopedByTheQueryNotTheStoredConfig(): void
     {
         $normalized = MenuBuilderDynamicNavigationService::normalizeConfig([
@@ -732,12 +647,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * Synthesized dynamic children carry no visibility config of their own,
-     * so nothing filters them out per site on render — their site isolation
-     * rests entirely on the cache being keyed per site. Both halves are
-     * asserted together so neither can be dropped without the other being
-     * noticed.
-     */
+     * Synthesized dynamic children carry no visibility config of their own, so nothing filters them
+     * out per site on render — their site isolation rests entirely on the cache being keyed per
+     * site.
+    */
     public function testDynamicChildrenRelyOnTheSiteKeyedCacheForIsolation(): void
     {
         $germanChildren = [$this->node(101, url: '/de/neuigkeiten/eins', isDynamic: true)];
@@ -758,11 +671,10 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * A dynamic child's `id` is a Craft element ID, so it must never be
-     * looked up among the menu's own items — on a multi-site install the two
-     * ID spaces overlap freely, and a collision would apply an unrelated
-     * item's site rule to a synthesized node.
-     */
+     * A dynamic child's `id` is a Craft element ID, so it must never be looked up among the menu's
+     * own items — on a multi-site install the two ID spaces overlap freely, and a collision would
+     * apply an unrelated item's site rule to a synthesized node.
+    */
     public function testADynamicChildIdNeverPicksUpAnUnrelatedItemsSiteRule(): void
     {
         $dynamic = $this->node(2, url: '/de/neuigkeiten/eins', isDynamic: true);
@@ -773,8 +685,7 @@ class MenuBuilderMultiSiteTest extends TestCase
         $this->assertSame([2], $this->ids($filtered), 'The colliding item’s English-only rule must not reach the dynamic node.');
     }
 
-    // =====================================================================
-    // Helpers
+    // ===================================================================== Helpers
     // =====================================================================
 
     /** @param int[] $siteIds */
@@ -856,11 +767,11 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * What MenuBuilderResolver hands the active resolver on a real render of
-     * each site: the host being requested plus that site's own base URL.
+     * What MenuBuilderResolver hands the active resolver on a real render of each site: the host
+     * being requested plus that site's own base URL.
      *
      * @return string[]
-     */
+    */
     private function servingEnglish(): array
     {
         return MenuBuilderResolver::internalHosts('example.test', 'https://example.test/');
@@ -882,13 +793,11 @@ class MenuBuilderMultiSiteTest extends TestCase
      * @param MenuBuilderNode[] $nodes
      * @param array<int,MenuBuilderItem> $itemsById
      * @return MenuBuilderNode[]
-     */
+    */
     private function filter(array $nodes, array $itemsById, VisibilityContext $context): array
     {
-        // The per-request pass reads visibility bags keyed by item ID, not
-        // hydrated items — see
-        // MenuBuilderItemService::getVisibilityRulesForGroup(). The fixture
-        // stays expressed in items and is projected here, keys unchanged.
+        // The per-request pass reads visibility bags keyed by item ID, not hydrated items — see
+        // MenuBuilderItemService::getVisibilityRulesForGroup().
         $visibilityById = array_map(fn(MenuBuilderItem $item) => $item->visibility, $itemsById);
 
         $method = new ReflectionMethod(MenuBuilderResolver::class, 'filterVisible');
@@ -900,7 +809,7 @@ class MenuBuilderMultiSiteTest extends TestCase
      * @param array<string,mixed> $settings
      * @param int[] $siteIds
      * @return array<string,mixed>
-     */
+    */
     private function settingsWithSiteIds(array $settings, array $siteIds): array
     {
         $method = new ReflectionMethod(MenuBuilderGroupService::class, 'settingsWithSiteIds');
@@ -915,12 +824,12 @@ class MenuBuilderMultiSiteTest extends TestCase
     }
 
     /**
-     * The source of one method, for the handful of multi-site invariants
-     * that live in wiring a booted-app-free test can't execute: which site
-     * list a call asks for, and what order getTree() does things in.
+     * The source of one method, for the handful of multi-site invariants that live in wiring a
+     * booted-app-free test can't execute: which site list a call asks for, and what order getTree()
+     * does things in.
      *
      * @param class-string $class
-     */
+    */
     private function sourceOf(string $class, string $from, string $to): string
     {
         $source = file_get_contents((new ReflectionClass($class))->getFileName());

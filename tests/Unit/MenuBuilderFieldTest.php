@@ -14,33 +14,16 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
- * The Navigation field: what an author's selection is allowed to be, what
- * Twig gets back, and what happens to a selection when the menu behind it
- * changes underneath it.
- *
- * The field class itself needs a booted Craft application — a field layout,
- * an element, a request, a CP template root — so the rules it *enforces* are
- * kept in {@see MenuBuilderFieldHelper} and the value it *hands to Twig* in
- * {@see MenuBuilderFieldValue}, both pure. That is what is pinned here: the
- * cases that regress silently, because a broken selection keeps rendering an
- * empty menu rather than failing loudly.
- *
- * The DB/CP half — the field appearing in the field type list, a value
- * round-tripping through the content table, project config applying the
- * settings — needs a booted app and is verified manually; see the manual test
- * list in ARCHITECTURE.md.
- */
+ * The Navigation field: what an author's selection is allowed to be, what Twig gets back, and what
+ * happens to a selection when the menu behind it changes underneath it.
+*/
 class MenuBuilderFieldTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // What a stored value may be
-    // ---------------------------------------------------------------------
 
     /**
-     * The field stores a UID, never a handle. A raw handle is exactly the
-     * shape this field was specified *not* to be, so it must not survive
-     * normalization and reach a lookup as if it were an identity.
-     */
+     * The field stores a UID, never a handle.
+    */
     public function testOnlyUidShapedValuesNormalize(): void
     {
         $uid = StringHelper::UUID();
@@ -73,17 +56,11 @@ class MenuBuilderFieldTest extends TestCase
         ];
     }
 
-    // ---------------------------------------------------------------------
     // Field settings (create field / project config)
-    // ---------------------------------------------------------------------
 
     /**
-     * The allow-list is UIDs, and only UIDs. It is written into project config,
-     * so a hand-edited or partially-applied YAML must not be able to leave a
-     * handle, an ID or a stray `true` in it — any of which would silently
-     * change which menus the field offers. (The menus it references are *not*
-     * in project config; see the note on {@see testSettingsAreProjectConfigPortable()}.)
-     */
+     * The allow-list is UIDs, and only UIDs.
+    */
     public function testAllowListNormalizationDropsAnythingThatIsntAUid(): void
     {
         $a = StringHelper::UUID();
@@ -109,17 +86,10 @@ class MenuBuilderFieldTest extends TestCase
     }
 
     /**
-     * The settings surface is deliberately just a UID list and a boolean — no
-     * row IDs, no site IDs — because Craft writes it into project config and a
-     * settings attribute carrying a row ID is the thing that breaks a deploy.
-     * So the shape is pinned.
-     *
-     * "Safe to apply" is the whole claim. The menus these UIDs name are
-     * database-only and are *not* project-config entities (ARCHITECTURE.md
-     * "Group persistence — database only"), so applying this config elsewhere
-     * does not create them — they must already exist in that environment's
-     * database.
-     */
+     * The settings surface is deliberately just a UID list and a boolean — no row IDs, no site
+     * IDs — because Craft writes it into project config and a settings attribute carrying a row
+     * ID is the thing that breaks a deploy.
+    */
     public function testSettingsAreProjectConfigPortable(): void
     {
         $settings = (new \ReflectionClass(MenuBuilderField::class))->getProperties(\ReflectionProperty::IS_PUBLIC);
@@ -137,21 +107,23 @@ class MenuBuilderFieldTest extends TestCase
         ], $declared);
     }
 
-    /** The value column is a string, because the stored identity is a UID. */
+    /**
+     * The value column is a string, because the stored identity is a UID.
+    */
     public function testDbTypeIsAString(): void
     {
         $this->assertSame('string', MenuBuilderField::dbType());
     }
 
-    /** Twig gets a stable object, not a record and not a bare string. */
+    /**
+     * Twig gets a stable object, not a record and not a bare string.
+    */
     public function testPhpTypeIsTheValueObject(): void
     {
         $this->assertSame('\\' . MenuBuilderFieldValue::class . '|null', MenuBuilderField::phpType());
     }
 
-    // ---------------------------------------------------------------------
     // The picker (select menu / change menu / disabled menu)
-    // ---------------------------------------------------------------------
 
     public function testAnEmptyAllowListOffersEveryEnabledMenu(): void
     {
@@ -189,12 +161,9 @@ class MenuBuilderFieldTest extends TestCase
     }
 
     /**
-     * A menu that was disabled, or dropped from the allow-list, *after* an
-     * author selected it stays in their picker. Otherwise opening an
-     * unrelated entry and saving it would silently rewrite the selection to
-     * whatever the select box happened to fall back to — data loss with no
-     * error and no audit trail.
-     */
+     * A menu that was disabled, or dropped from the allow-list, *after* an author selected it stays
+     * in their picker.
+    */
     public function testTheCurrentSelectionIsAlwaysOfferedEvenWhenItNoLongerQualifies(): void
     {
         $main = $this->group('main');
@@ -210,16 +179,16 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertSame(['main', 'retired'], array_column($selectable, 'handle'));
     }
 
-    // ---------------------------------------------------------------------
     // Validation
-    // ---------------------------------------------------------------------
 
     public function testNoSelectionIsNotAnError(): void
     {
         $this->assertNull(MenuBuilderFieldHelper::validationError(null, null, []));
     }
 
-    /** Deleting the selected menu leaves a value pointing at nothing. */
+    /**
+     * Deleting the selected menu leaves a value pointing at nothing.
+    */
     public function testSelectionWhoseMenuWasDeletedIsAnError(): void
     {
         $this->assertSame(
@@ -246,10 +215,8 @@ class MenuBuilderFieldTest extends TestCase
     }
 
     /**
-     * `enabled` is a publishing state an editor flips independently of any
-     * entry. Treating it as a content error would make every entry pointing
-     * at a menu unsavable the moment somebody turned that menu off.
-     */
+     * `enabled` is a publishing state an editor flips independently of any entry.
+    */
     public function testADisabledMenuIsNotAValidationError(): void
     {
         $group = $this->group('main', enabled: false);
@@ -257,16 +224,12 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertNull(MenuBuilderFieldHelper::validationError($group->uid, $group, []));
     }
 
-    // ---------------------------------------------------------------------
     // Sites
-    // ---------------------------------------------------------------------
 
     /**
-     * A site-restricted menu picked on a site it isn't available on is only
-     * reportable when the field is per-site — that's the only case where the
-     * author can pick a different menu here. On an untranslatable field one
-     * value covers every site, so the "error" would be unfixable.
-     */
+     * A site-restricted menu picked on a site it isn't available on is only reportable when the
+     * field is per-site — that's the only case where the author can pick a different menu here.
+    */
     public function testSiteMismatchIsOnlyAnErrorOnATranslatableField(): void
     {
         $group = $this->group('main');
@@ -305,15 +268,12 @@ class MenuBuilderFieldTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Permissions
-    // ---------------------------------------------------------------------
 
     /**
-     * Selecting a menu is content authoring and needs no MenuBuilder
-     * permission; reaching the menu *editor* does. The input must not offer
-     * a link a permission check would then reject.
-     */
+     * Selecting a menu is content authoring and needs no MenuBuilder permission; reaching the menu
+     * *editor* does.
+    */
     public function testTheManageLinkIsOnlyOfferedToSomeoneWhoCouldFollowIt(): void
     {
         $this->assertTrue(MenuBuilderFieldHelper::canLinkToMenu(isAdmin: true, canView: false));
@@ -321,7 +281,9 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertFalse(MenuBuilderFieldHelper::canLinkToMenu(isAdmin: false, canView: false));
     }
 
-    /** The link points at the menu's dashboard, which requires `menuBuilder:view`. */
+    /**
+     * The link points at the menu's dashboard, which requires `menuBuilder:view`.
+    */
     public function testTheManageLinkTargetsAPermissionGuardedRoute(): void
     {
         $this->assertTrue(
@@ -330,9 +292,7 @@ class MenuBuilderFieldTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // The Twig value
-    // ---------------------------------------------------------------------
 
     public function testValueExposesTheSelectedMenuWithoutResolvingIt(): void
     {
@@ -384,9 +344,9 @@ class MenuBuilderFieldTest extends TestCase
     }
 
     /**
-     * An explicit `currentUri` marks active state against a different page,
-     * so it can't be answered from the tree memoized for this request's page.
-     */
+     * An explicit `currentUri` marks active state against a different page, so it can't be answered
+     * from the tree memoized for this request's page.
+    */
     public function testAnExplicitCurrentUriBypassesTheMemoizedTree(): void
     {
         $group = $this->group('main');
@@ -421,15 +381,13 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertSame('main', $asked, 'The field resolves through the one resolver, so a field-rendered menu is cached and filtered like any other.');
     }
 
-    // ---------------------------------------------------------------------
     // A selection that outlived its menu
-    // ---------------------------------------------------------------------
 
     /**
-     * Deleting the selected menu must be distinguishable from selecting
-     * nothing: the value survives so the CP can say so and validation can
-     * report it, rather than the field quietly reading as empty.
-     */
+     * Deleting the selected menu must be distinguishable from selecting nothing: the value survives
+     * so the CP can say so and validation can report it, rather than the field quietly reading as
+     * empty.
+    */
     public function testASelectionWhoseMenuWasDeletedStillCarriesTheUid(): void
     {
         $uid = StringHelper::UUID();
@@ -456,7 +414,9 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertSame(0, $resolved, 'There is no handle to resolve, so no lookup is attempted.');
     }
 
-    /** A disabled menu resolves to nothing — that is what disabling it means. */
+    /**
+     * A disabled menu resolves to nothing — that is what disabling it means.
+    */
     public function testADisabledMenuIteratesEmpty(): void
     {
         $group = $this->group('main', enabled: false);
@@ -485,10 +445,9 @@ class MenuBuilderFieldTest extends TestCase
     }
 
     /**
-     * Serializing the *selection*, never a resolved tree: a tree is per-site,
-     * per-visitor and per-page, so anything that persisted or cached one
-     * would bake a particular request into it.
-     */
+     * Serializing the *selection*, never a resolved tree: a tree is per-site, per-visitor and
+     * per-page, so anything that persisted or cached one would bake a particular request into it.
+    */
     public function testValueSerializesTheSelectionOnly(): void
     {
         $group = $this->group('main');
@@ -502,9 +461,7 @@ class MenuBuilderFieldTest extends TestCase
         ], $value->jsonSerialize());
     }
 
-    // ---------------------------------------------------------------------
     // GraphQL
-    // ---------------------------------------------------------------------
 
     public function testGraphqlExposesTheSelectionAndNotTheTree(): void
     {
@@ -541,14 +498,10 @@ class MenuBuilderFieldTest extends TestCase
         $this->assertFalse(($fields['enabled']['resolve'])($value));
     }
 
-    // ---------------------------------------------------------------------
     // Lookup path
-    // ---------------------------------------------------------------------
 
     
-    // ---------------------------------------------------------------------
     // Helpers
-    // ---------------------------------------------------------------------
 
     private function group(string $handle, bool $enabled = true): MenuBuilderGroup
     {

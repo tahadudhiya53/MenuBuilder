@@ -14,11 +14,9 @@ use yii\web\Response;
 class DashboardController extends BaseMenuBuilderController
 {
     /**
-     * The dashboard is read-only — every action on it renders the tree, so
-     * `view` covers all of them. Exposed as a pure static for the same
-     * reason the other two controllers' mappings are (see
-     * ControllerPermissionTest).
-     */
+     * The dashboard is read-only — every action on it renders the tree, so `view` covers all of
+     * them.
+    */
     public static function requiredPermissionForAction(string $actionId): string
     {
         return 'menuBuilder:view';
@@ -50,8 +48,8 @@ class DashboardController extends BaseMenuBuilderController
         $tree = MenuBuilder::getInstance()->items->getTree($group->id);
         $items = $search !== '' ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
 
-        // Built from the unfiltered tree so a search never narrows the parents
-        // the quick-add form can target.
+        // Built from the unfiltered tree so a search never narrows the parents the quick-add form
+        // can target.
         $parentOptions = array_merge(
             [['label' => Craft::t('menu-builder', 'Top level'), 'value' => '']],
             $this->parentOptions($tree, $group)
@@ -62,15 +60,13 @@ class DashboardController extends BaseMenuBuilderController
             'group' => $group,
             'items' => $items,
             'search' => $search,
-            // The number of rows actually on screen, so an active search can
-            // say "N of M" instead of leaving the header's total looking wrong.
+            // The number of rows actually on screen, so an active search can say "N of M" instead
+            // of leaving the header's total looking wrong.
             'visibleItemCount' => self::countTree($items),
             'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
-            // Link health for every item in the menu, healthy ones included
-            // (see MenuBuilderLinkHealthService) — the tree rows read it by
-            // item id, and the summary counts only what needs attention. Built
-            // from the *unfiltered* menu on purpose: a search must not make
-            // the "3 items need attention" line quietly drop to one.
+            // Link health for every item in the menu, healthy ones included (see
+            // MenuBuilderLinkHealthService) — the tree rows read it by item id, and the summary
+            // counts only what needs attention.
             'itemHealth' => $itemHealth,
             'healthSummary' => MenuBuilderLinkHealth::summarize($itemHealth),
             'parentOptions' => $parentOptions,
@@ -78,12 +74,10 @@ class DashboardController extends BaseMenuBuilderController
     }
 
     /**
-     * Total rows in a (possibly filtered) tree, descendants included. Pure and
-     * static so the count the search summary shows is testable without a
-     * booted app.
+     * Total rows in a (possibly filtered) tree, descendants included.
      *
      * @param MenuBuilderItem[] $items
-     */
+    */
     public static function countTree(array $items): int
     {
         $count = 0;
@@ -97,13 +91,10 @@ class DashboardController extends BaseMenuBuilderController
 
     /**
      * Flattens the tree into indented <option>s for the quick-add parent picker.
-     * Separators can't hold children, and anything whose children would land
-     * past the group's maxDepth is left out — the same rules the service
-     * enforces server-side on save.
      *
      * @param MenuBuilderItem[] $items
      * @return array<array{label: string, value: string}>
-     */
+    */
     private function parentOptions(array $items, MenuBuilderGroup $group, int $level = 1): array
     {
         $options = [];
@@ -130,7 +121,9 @@ class DashboardController extends BaseMenuBuilderController
         return $options;
     }
 
-    /** Keeps a node if it or any descendant matches; expands its ancestors implicitly by inclusion. */
+    /**
+     * Keeps a node if it or any descendant matches; expands its ancestors implicitly by inclusion.
+    */
     private function filterTree(array $items, string $term): array
     {
         $result = [];

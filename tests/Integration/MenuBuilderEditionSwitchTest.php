@@ -12,28 +12,8 @@ use Tahadudhiya\MenuBuilder\records\MenuBuilderItemRecord;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 
 /**
- * Edition switching through **Craft's own mechanism**, and what it does to
- * the data.
- *
- * MenuBuilderMenuLimitTest switches the running plugin instance's `edition`
- * property directly, which is what `Plugins::switchEdition()` ends up doing
- * and is enough to pin the limit arithmetic. It is not enough to answer the
- * questions a customer's licence lapse actually raises:
- *
- * - Does the switch travel the way Craft says it does — through project
- *   config (`plugins.menu-builder.edition`), the one place the edition is
- *   stored?
- * - Does anything about the switch — or about a project-config write of any
- *   kind — touch `menubuilder_groups` / `menubuilder_items`?
- * - Do the plugin's own per-request memos (the menu list, the tree cache)
- *   still agree afterwards?
- *
- * So this class drives {@see \craft\services\Plugins::switchEdition()} and
- * then reads the answer back out of project config, rather than out of the
- * object it just wrote to. Data safety is asserted by *fingerprinting* every
- * menu row before and after — a row count alone would pass a downgrade that
- * silently rewrote a column.
- */
+ * Edition switching through **Craft's own mechanism**, and what it does to the data.
+*/
 class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
 {
     private const HANDLE = 'menu-builder';
@@ -42,21 +22,19 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
 
     protected function tearDown(): void
     {
-        // Back to what the harness installs, through the same mechanism the
-        // cases use, so a failed assertion can't leave the suite on Free.
+        // Back to what the harness installs, through the same mechanism the cases use, so a failed
+        // assertion can't leave the suite on Free.
         Craft::$app->getPlugins()->switchEdition(self::HANDLE, MenuBuilder::EDITION_PRO);
 
         parent::tearDown();
     }
 
-    // ---------------------------------------------------------------------
     // The switch itself
-    // ---------------------------------------------------------------------
 
     /**
-     * The harness installs Pro (see tests/integration-bootstrap.php), and
-     * that is a project-config fact, not a property someone set.
-     */
+     * The harness installs Pro (see tests/integration-bootstrap.php), and that is a project-config
+     * fact, not a property someone set.
+    */
     public function testTheActiveEditionIsStoredInProjectConfig(): void
     {
         $this->assertSame(
@@ -69,10 +47,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The whole downgrade, end to end, through Craft: five Pro menus with
-     * items in them, a licence that lapses, and a database that is exactly
-     * as full afterwards as it was before.
-     */
+     * The whole downgrade, end to end, through Craft: five Pro menus with items in them, a licence
+     * that lapses, and a database that is exactly as full afterwards as it was before.
+    */
     public function testDowngradingThroughCraftKeepsEveryMenuAndItsItems(): void
     {
         $this->withNoMenus(function() {
@@ -97,7 +74,7 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
             $this->assertSame(MenuBuilder::EDITION_FREE, MenuBuilder::getInstance()->license->getEdition());
             $this->assertFalse(MenuBuilder::getInstance()->license->isPro());
 
-            // Nothing moved. Not the rows, not a single column of them.
+            // Nothing moved.
             $this->assertSame($before, $this->menuFingerprints(), 'A menu was deleted or modified by the downgrade.');
             $this->assertSame(10, (int)MenuBuilderItemRecord::find()->count(), 'Menu items were removed by the downgrade.');
 
@@ -105,7 +82,7 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
                 $this->assertNotNull(MenuBuilder::getInstance()->items->getById($itemId), "Item $itemId disappeared on Free.");
             }
 
-            // All five still render. The front end is not licensed.
+            // All five still render.
             foreach ($handles as $handle) {
                 $tree = MenuBuilder::getInstance()->resolver->getTree($handle);
                 $this->assertNotNull($tree, "Menu \"$handle\" stopped rendering on Free.");
@@ -121,9 +98,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The upgrade half, also through Craft: creation comes back, and the
-     * menus the install already had are untouched by the switch.
-     */
+     * The upgrade half, also through Craft: creation comes back, and the menus the install already
+     * had are untouched by the switch.
+    */
     public function testUpgradingThroughCraftRestoresMenuCreation(): void
     {
         $this->withNoMenus(function() {
@@ -155,16 +132,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A "next request": every per-request memo this plugin holds is thrown
-     * away after the switch, and the answers are unchanged.
-     *
-     * The edition itself lives in project config and nowhere else — the
-     * assertions above pin that — so what is left to get wrong is the
-     * plugin's own state: the menu list `MenuBuilderGroupService` memoizes
-     * and the trees `MenuBuilderCacheService` holds. Neither is keyed by
-     * edition, and neither may be left describing the edition that has just
-     * gone.
-     */
+     * A "next request": every per-request memo this plugin holds is thrown away after the switch,
+     * and the answers are unchanged.
+    */
     public function testEveryPerRequestMemoAgreesAfterTheSwitch(): void
     {
         $this->withNoMenus(function() {
@@ -178,14 +148,14 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
 
             Craft::$app->getPlugins()->switchEdition(self::HANDLE, MenuBuilder::EDITION_FREE);
 
-            // Without dropping anything: the limit must already be right,
-            // because it counts rows rather than remembering an answer.
+            // Without dropping anything: the limit must already be right, because it counts rows
+            // rather than remembering an answer.
             $this->assertSame(MenuBuilder::EDITION_FREE, Craft::$app->getProjectConfig()->get(self::EDITION_PATH));
             $this->assertSame(1, MenuBuilder::getInstance()->menuLimit->getMenuCount());
             $this->assertFalse(MenuBuilder::getInstance()->menuLimit->canCreateMenu());
 
-            // And the warm tree cache still serves the menu — an edition
-            // change is not a content change and invalidates nothing.
+            // And the warm tree cache still serves the menu — an edition change is not a content
+            // change and invalidates nothing.
             $tree = MenuBuilder::getInstance()->resolver->getTree('survivor');
             $this->assertNotNull($tree, 'A cached tree stopped resolving after the edition changed.');
             $this->assertCount(1, $tree->items);
@@ -202,11 +172,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Switching the edition writes one project-config value and nothing
-     * else — in particular, no menu state is written, and no menu row is
-     * read back out of it. (MenuBuilderProjectConfigTest asserts the
-     * converse: that saving a menu writes no project config at all.)
-     */
+     * Switching the edition writes one project-config value and nothing else — in particular, no
+     * menu state is written, and no menu row is read back out of it.
+    */
     public function testSwitchingEditionWritesNothingButTheEdition(): void
     {
         $this->withNoMenus(function() {
@@ -230,10 +198,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Applying project config — the deploy path — never carries menu data,
-     * so it can neither create nor delete a menu however the editions
-     * differ between environments.
-     */
+     * Applying project config — the deploy path — never carries menu data, so it can neither
+     * create nor delete a menu however the editions differ between environments.
+    */
     public function testApplyingProjectConfigNeverTouchesMenuData(): void
     {
         $this->withNoMenus(function() {
@@ -256,17 +223,14 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
         });
     }
 
-    // ---------------------------------------------------------------------
     // Harness
-    // ---------------------------------------------------------------------
 
     /**
-     * Every menu row, whole, keyed by id — the comparison that says "nothing
-     * was deleted **and** nothing was modified", which a row count alone
-     * cannot.
+     * Every menu row, whole, keyed by id — the comparison that says "nothing was deleted **and**
+     * nothing was modified", which a row count alone cannot.
      *
      * @return array<int,array<string,mixed>>
-     */
+    */
     private function menuFingerprints(): array
     {
         $rows = [];
@@ -279,12 +243,9 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Runs `$body` against an empty `menubuilder_groups`, then rolls the
-     * table (and everything cascading from it) back. Same reasoning — and
-     * the same shape — as MenuBuilderMenuLimitTest::withNoMenus(): the
-     * suite's shared fixture is built once per run and every other class
-     * reads it.
-     */
+     * Runs `$body` against an empty `menubuilder_groups`, then rolls the table (and everything
+     * cascading from it) back.
+    */
     private function withNoMenus(callable $body): void
     {
         $transaction = Craft::$app->getDb()->beginTransaction();

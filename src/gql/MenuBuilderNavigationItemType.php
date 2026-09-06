@@ -11,34 +11,8 @@ use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 
 /**
- * One resolved navigation item — the GraphQL shape of a
- * {@see MenuBuilderNode}.
- *
- * ## What is deliberately not here
- *
- * **The row ID.** A node carries `id` for Twig's benefit; it is a
- * `menubuilder_items` primary key, which is an internal fact about this
- * install's database and not an identifier any consumer of a *rendered*
- * navigation needs. `handle` is the editor-set, stable, intentionally public
- * name for an item, and it is what this type exposes. (A dynamic item's
- * synthesized children carry a Craft *element* ID in the same property — see
- * MenuBuilderResolver::buildDynamicNode() — so an `id` field here would mean
- * two different things depending on the node, which is a second reason not
- * to have one.)
- *
- * **Anything an editor configured but a visitor never sees**: visibility
- * rules, fallback behaviour, sort columns, the raw metadata bag. A visitor
- * cannot see them in HTML and a GraphQL consumer is a visitor.
- *
- * Everything that *is* here is read through the node's own accessors rather
- * than webonyx's default property lookup, so the fail-closed reads those
- * accessors perform — {@see MenuBuilderNode::iconClass()},
- * {@see MenuBuilderNode::safeHtmlAttributes()},
- * {@see MenuBuilderNode::badgeClass()} — apply to a GraphQL response exactly
- * as they apply to a rendered one. A value written straight into the database
- * cannot reach a consumer through this type any more than it can reach a
- * template.
- */
+ * One resolved navigation item — the GraphQL shape of a {@see MenuBuilderNode}.
+*/
 class MenuBuilderNavigationItemType
 {
     public const NAME = 'MenuBuilderNavigationItem';
@@ -54,14 +28,15 @@ class MenuBuilderNavigationItemType
         return GqlEntityRegistry::getOrCreate(self::NAME, fn() => new ObjectType([
             'name' => self::NAME,
             'description' => Craft::t('menu-builder', 'A resolved navigation item.'),
-            // Lazy, because `children` is this very type: webonyx has to be
-            // able to hand back the type object before its field list is
-            // built, or the recursion never terminates.
+            // Lazy, because `children` is this very type: webonyx has to be able to hand back the
+            // type object before its field list is built, or the recursion never terminates.
             'fields' => fn() => self::fieldDefinitions(),
         ]));
     }
 
-    /** The `{name, value}` pair type shared by every attribute bag on this surface. */
+    /**
+     * The `{name, value}` pair type shared by every attribute bag on this surface.
+    */
     public static function attributeType(): Type
     {
         return GqlEntityRegistry::getOrCreate(self::ATTRIBUTE_NAME, fn() => new ObjectType([
@@ -75,10 +50,8 @@ class MenuBuilderNavigationItemType
     }
 
     /**
-     * One custom field value from the owning menu's Craft field layout. See
-     * {@see MenuBuilderGqlHelper::customFieldEntries()} for why a value is
-     * offered under five accessors rather than one.
-     */
+     * One custom field value from the owning menu's Craft field layout.
+    */
     public static function customFieldType(): Type
     {
         return GqlEntityRegistry::getOrCreate(self::CUSTOM_FIELD_NAME, fn() => new ObjectType([
@@ -115,7 +88,9 @@ class MenuBuilderNavigationItemType
         ]));
     }
 
-    /** A mega-menu-enabled item's panel configuration. */
+    /**
+     * A mega-menu-enabled item's panel configuration.
+    */
     public static function megaMenuType(): Type
     {
         return GqlEntityRegistry::getOrCreate(self::MEGA_MENU_NAME, fn() => new ObjectType([
@@ -132,15 +107,14 @@ class MenuBuilderNavigationItemType
     }
 
     /**
-     * The item type's fields, resolvers included, as a plain array — the same
-     * separation {@see MenuBuilderMenuType::fieldDefinitions()} makes, and for
-     * the same reason: what each resolver returns for a given node is
-     * unit-testable without a booted Craft application, while
-     * {@see getType()} (which needs one, to read the schema's type prefix) is
-     * only exercised by the integration suite.
+     * The item type's fields, resolvers included, as a plain array — the same separation {@see
+     * MenuBuilderMenuType::fieldDefinitions()} makes, and for the same reason: what each resolver
+     * returns for a given node is unit-testable without a booted Craft application, while {@see
+     * getType()} (which needs one, to read the schema's type prefix) is only exercised by the
+     * integration suite.
      *
      * @return array<string,array<string,mixed>>
-     */
+    */
     public static function fieldDefinitions(): array
     {
         return [
@@ -215,9 +189,7 @@ class MenuBuilderNavigationItemType
             'hasChildren' => self::field('hasChildren', Type::nonNull(Type::boolean()), 'Whether this item has any visible children.', fn(MenuBuilderNode $node) => $node->hasChildren()),
             'children' => [
                 'name' => 'children',
-                // Self-referential, so this whole field list is built lazily
-                // (see getType()). The registry hands back the same instance,
-                // which is what makes the cycle legal rather than infinite.
+                // Self-referential, so this whole field list is built lazily (see getType()).
                 'type' => Type::nonNull(Type::listOf(Type::nonNull(self::getType()))),
                 'description' => Craft::t('menu-builder', 'This item’s children, already visibility-filtered and in order.'),
                 'resolve' => static fn(MenuBuilderNode $node) => $node->children,
@@ -228,7 +200,7 @@ class MenuBuilderNavigationItemType
     /**
      * @param callable(MenuBuilderNode):mixed $resolve
      * @return array<string,mixed>
-     */
+    */
     private static function field(string $name, Type $type, string $description, callable $resolve): array
     {
         return [

@@ -16,18 +16,7 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
  * Every link type, resolved against real Craft elements.
- *
- * `MenuBuilderVisibilityTest` and `LinkTypeResolverTest` cover the resolvers
- * against stand-ins, which is the right way to test their *rules*. It is not
- * a way to find out whether an entry's URL is really what Craft hands back
- * for it, whether a category in a group with no URLs resolves to nothing,
- * whether a soft-deleted asset takes its link with it, or whether a dynamic
- * item really queries the section it names. Those need elements, so they are
- * here.
- *
- * Builds on the shared fixture for the section and entry type it needs, and
- * adds elements of its own: nothing in this class mutates either.
- */
+*/
 class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
 {
     private static bool $loaded = false;
@@ -66,8 +55,8 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
 
         self::$assetId = self::makeAsset();
 
-        // Deleted last, so it is a real soft-delete of a real element rather
-        // than an id that never existed.
+        // Deleted last, so it is a real soft-delete of a real element rather than an id that never
+        // existed.
         Craft::$app->getElements()->deleteElementById(self::$deletedEntryId);
 
         self::$loaded = true;
@@ -125,15 +114,13 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
 
     private static function makeAsset(): int
     {
-        // Outside the Craft install: a local filesystem is refused if it sits
-        // within or above Craft's own system directories, which every path
-        // under `tests/_craft` does.
+        // Outside the Craft install: a local filesystem is refused if it sits within or above
+        // Craft's own system directories, which every path under `tests/_craft` does.
         $path = sys_get_temp_dir() . '/menubuilder-test-assets';
         @mkdir($path, 0777, true);
 
-        // The bootstrap drops the database each run, but nothing drops this
-        // directory — a file left by a previous run would be a name clash
-        // with the one uploaded below.
+        // The bootstrap drops the database each run, but nothing drops this directory — a file
+        // left by a previous run would be a name clash with the one uploaded below.
         foreach ((array)glob($path . '/*') as $stale) {
             @unlink($stale);
         }
@@ -156,9 +143,8 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
             throw new \RuntimeException('Could not save volume: ' . json_encode($volume->getErrors()));
         }
 
-        // Staged outside the volume's own directory: an upload whose source
-        // file already sits in the destination folder is refused as a clash
-        // with itself.
+        // Staged outside the volume's own directory: an upload whose source file already sits in
+        // the destination folder is refused as a clash with itself.
         $staging = sys_get_temp_dir() . '/menubuilder-test-staging';
         @mkdir($staging, 0777, true);
         $file = $staging . '/brochure.pdf';
@@ -178,7 +164,9 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         return (int)$asset->id;
     }
 
-    /** An unsaved item, so resolution is tested without a write per case. */
+    /**
+     * An unsaved item, so resolution is tested without a write per case.
+    */
     private function item(string $type, ?callable $configure = null): MenuBuilderItem
     {
         $item = new MenuBuilderItem();
@@ -198,9 +186,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         return MenuBuilder::getInstance()->linkResolver->resolve($item);
     }
 
-    // ---------------------------------------------------------------------
     // Entry
-    // ---------------------------------------------------------------------
 
     public function testAnEntryItemResolvesToTheEntrysOwnUrlAndTitle(): void
     {
@@ -248,10 +234,10 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
     }
 
     /**
-     * `fallbackUrl` is what an editor sets so a menu does not lose a slot
-     * when the element behind it goes away — it has to be reached from a real
-     * missing element, not only from a stubbed one.
-     */
+     * `fallbackUrl` is what an editor sets so a menu does not lose a slot when the element behind
+     * it goes away — it has to be reached from a real missing element, not only from a stubbed
+     * one.
+    */
     public function testAMissingEntryFallsBackToTheConfiguredUrl(): void
     {
         $link = $this->resolve($this->item(MenuBuilderItem::TYPE_ENTRY, function(MenuBuilderItem $i) {
@@ -275,9 +261,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertNull($link->url);
     }
 
-    // ---------------------------------------------------------------------
     // Category
-    // ---------------------------------------------------------------------
 
     public function testACategoryItemResolvesToTheCategorysUrl(): void
     {
@@ -294,11 +278,8 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A category group with no URI format produces categories with no URL at
-     * all. Craft returns `null` rather than an error, so the resolver has to
-     * treat "exists but is not addressable" as unavailable rather than
-     * emitting an empty `href`.
-     */
+     * A category group with no URI format produces categories with no URL at all.
+    */
     public function testACategoryInAGroupWithNoUrlsIsUnavailable(): void
     {
         $link = $this->resolve($this->item(
@@ -310,9 +291,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertNull($link->url);
     }
 
-    // ---------------------------------------------------------------------
     // Asset
-    // ---------------------------------------------------------------------
 
     public function testAnAssetItemResolvesToTheFilesUrl(): void
     {
@@ -338,9 +317,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertNotEmpty($this->resolve($item)->label);
     }
 
-    // ---------------------------------------------------------------------
     // URL
-    // ---------------------------------------------------------------------
 
     /** @dataProvider urlProvider */
     public function testAUrlItemResolvesToWhatWasTyped(string $url, bool $available): void
@@ -372,9 +349,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         ];
     }
 
-    // ---------------------------------------------------------------------
     // Anchor
-    // ---------------------------------------------------------------------
 
     public function testAnAnchorItemResolvesToAFragment(): void
     {
@@ -387,9 +362,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertSame('#pricing', $link->url);
     }
 
-    // ---------------------------------------------------------------------
     // Structural types
-    // ---------------------------------------------------------------------
 
     public function testANonClickableItemResolvesToNoLinkButStaysAvailable(): void
     {
@@ -407,7 +380,9 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertNull($link->url);
     }
 
-    /** A structural item is not made clickable by a URL left in the column. */
+    /**
+     * A structural item is not made clickable by a URL left in the column.
+    */
     public function testAStructuralItemIgnoresALeftoverUrl(): void
     {
         $link = $this->resolve($this->item(
@@ -418,9 +393,7 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         $this->assertNull($link->url);
     }
 
-    // ---------------------------------------------------------------------
     // Dynamic
-    // ---------------------------------------------------------------------
 
     public function testADynamicItemQueriesTheSectionItNamesAndSkipsDisabledEntries(): void
     {

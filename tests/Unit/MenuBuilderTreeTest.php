@@ -15,27 +15,15 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 /**
  * Drag-and-drop hierarchy and ordering.
  *
- * These are real behaviour tests, not source inspection: every decision a
- * move makes lives in {@see Hierarchy}, which is pure, so a move can be
- * applied to an in-memory group and the resulting tree asserted exactly as
- * the CP would render it. `applyMove()` below is the whole of what
- * MenuBuilderItemService::move() does to the data — validate, plan, write
- * `parentId`, write the planned `sortOrder`s — so what passes here is what
- * the service writes.
- *
- * The structural tests at the bottom cover the parts that can't be exercised
- * without a database: that the write path is one locked transaction, and
- * that the endpoint reaches it exactly once.
- *
  * @see MenuBuilderItemLifecycleTest for item CRUD and tree assembly.
- */
+*/
 class MenuBuilderTreeTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // The six cases
-    // ---------------------------------------------------------------------
 
-    /** CASE 1 — reorder siblings: A B C D, move D before A. */
+    /**
+     * CASE 1 — reorder siblings: A B C D, move D before A.
+    */
     public function testMovingASiblingToTheTopReordersTheRestDownwards(): void
     {
         $rows = $this->rows(['A' => null, 'B' => null, 'C' => null, 'D' => null]);
@@ -54,7 +42,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertSame(['B', 'C', 'D', 'A'], $this->outline($rows));
     }
 
-    /** CASE 2 — nest under a sibling: A B C, move C under A. */
+    /**
+     * CASE 2 — nest under a sibling: A B C, move C under A.
+    */
     public function testMovingAnItemUnderAnotherItemNestsItAndClosesTheGapBehindIt(): void
     {
         $rows = $this->rows(['A' => null, 'B' => null, 'C' => null]);
@@ -75,7 +65,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertSame(['A', 'B', 'C'], $this->outline($rows));
     }
 
-    /** CASE 3 — A > B > C, move A under C. Must fail. */
+    /**
+     * CASE 3 — A > B > C, move A under C.
+    */
     public function testMovingAnItemUnderItsOwnDescendantIsRejected(): void
     {
         $rows = $this->rows(['A' => null, 'B' => 'A', 'C' => 'B']);
@@ -91,11 +83,10 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * A cycle already sitting in the rows — two moves that each validated
-     * against the other's pre-commit state before the group lock existed, or
-     * a row edited straight in the database — must make the walks return a
-     * finite wrong answer and the checks fail closed, never hang.
-     */
+     * A cycle already sitting in the rows — two moves that each validated against the other's
+     * pre-commit state before the group lock existed, or a row edited straight in the database —
+     * must make the walks return a finite wrong answer and the checks fail closed, never hang.
+    */
     public function testAPreExistingCycleInTheStoredRowsIsDetectedRatherThanFollowedForever(): void
     {
         $cyclic = [
@@ -109,14 +100,14 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertTrue(Hierarchy::ancestryIsCyclic($parentMap, 2));
         $this->assertFalse(Hierarchy::ancestryIsCyclic($parentMap, 3));
         $this->assertSame([2], Hierarchy::ancestorIds($parentMap, 1), 'The walk stops at the repeat.');
-        // Finite, not meaningful: there is no true height for a loop. The
-        // point is that the walk terminates so validateHierarchy() can
-        // reject the move rather than the request dying on a blown stack.
+        // Finite, not meaningful: there is no true height for a loop.
         $this->assertSame(2, Hierarchy::subtreeHeight(Hierarchy::childMap($cyclic), 1));
         $this->assertSame([2], Hierarchy::descendantIds(Hierarchy::childMap($cyclic), 1));
     }
 
-    /** CASE 4 — maxDepth 2: nothing may land on level 3. */
+    /**
+     * CASE 4 — maxDepth 2: nothing may land on level 3.
+    */
     public function testMaxDepthIsMeasuredAgainstTheDeepestRowOfTheMovingSubtree(): void
     {
         $group = new MenuBuilderGroup();
@@ -136,19 +127,17 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertSame(3, $level);
         $this->assertFalse($group->allowsDepth($level));
 
-        // And a PARENT under a top-level item is level 3 too, because its
-        // child travels with it — the case a check on the moving item's own
-        // level alone would wave through.
+        // And a PARENT under a top-level item is level 3 too, because its child travels with it —
+        // the case a check on the moving item's own level alone would wave through.
         $level = Hierarchy::deepestLevelAfterMove($parentMap, $childMap, $this->id('D'), $this->id('A'));
         $this->assertSame(3, $level);
         $this->assertFalse($group->allowsDepth($level));
     }
 
     /**
-     * Max depth applies to a move to the ROOT as well: a three-level subtree
-     * lifted to the top of a two-level menu still busts the limit. Skipping
-     * the check whenever parentId was null let exactly that through.
-     */
+     * Max depth applies to a move to the ROOT as well: a three-level subtree lifted to the top of a
+     * two-level menu still busts the limit.
+    */
     public function testMaxDepthIsEnforcedForAMoveToTheRootToo(): void
     {
         $group = new MenuBuilderGroup();
@@ -173,23 +162,16 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * An INSERT is measured against the new item alone — it has no
-     * descendants yet — not against the menu's existing root forest.
-     *
-     * Regression: the service passed `$item->id ?? 0` for a brand-new item,
-     * and 0 is `childMap()`'s key for the **root set**, so `subtreeHeight()`
-     * came back with the height of the whole menu and every insert into an
-     * already-nested menu was rejected as too deep. On a real
-     * three-level menu (Products › Electronics › Phones, maxDepth 3) that
-     * meant the third level could never be created at all.
-     */
+     * An INSERT is measured against the new item alone — it has no descendants yet — not
+     * against the menu's existing root forest.
+    */
     public function testInsertingANewItemIsNotMeasuredAgainstTheRootForest(): void
     {
         $group = new MenuBuilderGroup();
         $group->maxDepth = 3;
 
-        // Products › Electronics, plus other top-level branches: a root
-        // forest that is already two levels deep.
+        // Products › Electronics, plus other top-level branches: a root forest that is already
+        // two levels deep.
         $rows = $this->rows(['Products' => null, 'Electronics' => 'Products', 'Services' => null]);
         $parentMap = Hierarchy::parentMap($rows);
         $childMap = Hierarchy::childMap($rows);
@@ -208,9 +190,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * The same guarantee at the helper the bug came through: 0 is the root
-     * set's key, never an item ID, so it has no subtree height of its own.
-     */
+     * The same guarantee at the helper the bug came through: 0 is the root set's key, never an item
+     * ID, so it has no subtree height of its own.
+    */
     public function testTheRootSentinelHasNoSubtreeHeight(): void
     {
         $rows = $this->rows(['A' => null, 'B' => 'A', 'C' => 'B']);
@@ -228,7 +210,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertTrue($group->allowsDepth(50));
     }
 
-    /** CASE 5 — move subtree: A > B > C moved under D, all of it travels. */
+    /**
+     * CASE 5 — move subtree: A > B > C moved under D, all of it travels.
+    */
     public function testMovingAnItemCarriesItsEntireSubtreeWithIt(): void
     {
         $rows = $this->rows(['A' => null, 'B' => 'A', 'C' => 'B', 'D' => null]);
@@ -239,10 +223,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Nothing below the moved item may be rewritten by the move: descendants
-     * reference their parent by id, so touching them is how a subtree gets
-     * flattened or loses its internal order.
-     */
+     * Nothing below the moved item may be rewritten by the move: descendants reference their parent
+     * by id, so touching them is how a subtree gets flattened or loses its internal order.
+    */
     public function testAMovePlanNeverRewritesTheMovedItemsDescendants(): void
     {
         $rows = $this->rows(['A' => null, 'B' => 'A', 'C' => 'B', 'D' => null]);
@@ -265,11 +248,8 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * CASE 6 — an item's group is fixed at creation, so a move can never
-     * change it. The service refuses the group change itself, and the
-     * endpoint refuses a payload whose groupId disagrees with the item's own
-     * rather than reordering against the wrong menu's sibling set.
-     */
+     * CASE 6 — an item's group is fixed at creation, so a move can never change it.
+    */
     public function testAnItemCanNeverBeMovedIntoAnotherGroup(): void
     {
         $this->assertFalse(MenuBuilderItemService::isGroupChangeAllowed(7, 8));
@@ -288,10 +268,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * A group's snapshot is queried by groupId, so a plan can only ever
-     * renumber rows inside that one group — an id from another menu posted
-     * in `siblingIds` isn't in the set and is dropped.
-     */
+     * A group's snapshot is queried by groupId, so a plan can only ever renumber rows inside that
+     * one group — an id from another menu posted in `siblingIds` isn't in the set and is dropped.
+    */
     public function testASiblingOrderFromAnotherGroupCannotReachThisGroupsRows(): void
     {
         $rows = $this->rows(['A' => null, 'B' => null]);
@@ -303,18 +282,11 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertSame([$this->id('B') => 0, $this->id('A') => 1], $plan['sortOrders']);
     }
 
-    // ---------------------------------------------------------------------
     // Stale / concurrent ordering
-    // ---------------------------------------------------------------------
 
     /**
-     * The posted order is a snapshot of one editor's screen. By the time it
-     * arrives, another editor may have deleted a row, added one, or moved
-     * one out of the set. It is therefore reconciled against the set's real
-     * membership rather than written as given — the result is always a
-     * permutation of what's actually there, which is what keeps the
-     * renumbering gap-free.
-     */
+     * The posted order is a snapshot of one editor's screen.
+    */
     public function testAStaleSiblingOrderCannotResurrectADeletedRow(): void
     {
         $current = [1, 2, 3];
@@ -334,10 +306,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * With no usable posted order at all — a keyboard move, a scripted call,
-     * or a payload the reconciliation emptied — the requested index still
-     * decides where the item lands.
-     */
+     * With no usable posted order at all — a keyboard move, a scripted call, or a payload the
+     * reconciliation emptied — the requested index still decides where the item lands.
+    */
     public function testTheRequestedIndexPlacesTheItemWhenThePostedOrderDoesNotNameIt(): void
     {
         $this->assertSame([4, 1, 2, 3], Hierarchy::resolveSiblingOrder([1, 2, 3, 4], [], 4, 0));
@@ -349,11 +320,8 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Only rows whose position actually changes are written. That is what
-     * keeps a drag inside a large sibling set from rewriting every row in it
-     * — and with it, what keeps two editors working in different corners of
-     * the same menu from overwriting rows neither of them touched.
-     */
+     * Only rows whose position actually changes are written.
+    */
     public function testOnlyTheRowsWhosePositionChangedAreWritten(): void
     {
         $current = [10 => 0, 11 => 1, 12 => 2, 13 => 3];
@@ -364,10 +332,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Two moves applied one after the other — which is what the group lock
-     * forces concurrent drags to do — leave a set that is still a complete,
-     * gap-free 0..n-1 sequence.
-     */
+     * Two moves applied one after the other — which is what the group lock forces concurrent
+     * drags to do — leave a set that is still a complete, gap-free 0..n-1 sequence.
+    */
     public function testSequentialMovesLeaveTheSiblingSetContiguous(): void
     {
         $rows = $this->rows(['A' => null, 'B' => null, 'C' => null, 'D' => null]);
@@ -381,10 +348,8 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * The second of two concurrent drags posts an order built before the
-     * first one committed. It must still land the item where the editor
-     * dropped it, and must not corrupt the set around it.
-     */
+     * The second of two concurrent drags posts an order built before the first one committed.
+    */
     public function testAMovePostedAgainstAStaleSiblingOrderStillLandsCorrectly(): void
     {
         $rows = $this->rows(['A' => null, 'B' => null, 'C' => null, 'D' => null]);
@@ -400,13 +365,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertContains('B', $this->outline($rows));
     }
 
-    // ---------------------------------------------------------------------
     // Scale
-    // ---------------------------------------------------------------------
 
-    /**
-     * @dataProvider treeSizeProvider
-     */
+    /** @dataProvider treeSizeProvider */
     public function testAFlatMenuStaysContiguousWhenTheLastItemIsDraggedToTheTop(int $size): void
     {
         $rows = $this->flatRows($size);
@@ -423,11 +384,11 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * A drag near the end of a large set must not rewrite the whole set —
-     * only the rows between the old and new position actually shift.
+     * A drag near the end of a large set must not rewrite the whole set — only the rows between
+     * the old and new position actually shift.
      *
      * @dataProvider treeSizeProvider
-     */
+    */
     public function testAMoveOnlyRewritesTheRowsItActuallyShifts(int $size): void
     {
         $rows = $this->flatRows($size);
@@ -439,11 +400,11 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Depth measurement over a deep chain must stay finite and correct at
-     * scale — this is the number max depth is checked against on every move.
+     * Depth measurement over a deep chain must stay finite and correct at scale — this is the
+     * number max depth is checked against on every move.
      *
      * @dataProvider treeSizeProvider
-     */
+    */
     public function testDepthAndSubtreeMathHoldOnADeeplyNestedMenu(int $size): void
     {
         $rows = [];
@@ -467,16 +428,11 @@ class MenuBuilderTreeTest extends TestCase
         return ['10 items' => [10], '100 items' => [100], '500 items' => [500]];
     }
 
-    // ---------------------------------------------------------------------
     // Transactions, locking, and the endpoint
-    // ---------------------------------------------------------------------
 
     /**
-     * A move is a reparent plus two renumberings. Committing any of that
-     * without the rest leaves a tree neither editor asked for, so it is one
-     * transaction — and the endpoint makes exactly one service call, rather
-     * than a move followed by a separate reorder that could fail on its own.
-     */
+     * A move is a reparent plus two renumberings.
+    */
     public function testAMoveIsASingleTransactionalServiceCall(): void
     {
         $move = $this->methodSource(MenuBuilderItemService::class, 'move');
@@ -492,12 +448,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Validation that runs before the transaction only ever proves a move
-     * was legal against a state that may already be gone. Two concurrent
-     * drags in one menu are enough to build a cycle out of two individually
-     * valid moves, so every hierarchy mutation takes a row lock on the group
-     * first and re-reads inside it.
-     */
+     * Validation that runs before the transaction only ever proves a move was legal against a state
+     * that may already be gone.
+    */
     public function testConcurrentMovesInTheSameGroupAreSerialisedByARowLock(): void
     {
         $lock = $this->methodSource(MenuBuilderItemService::class, 'lockGroup');
@@ -505,9 +458,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertStringContainsString('FOR UPDATE', $lock);
         $this->assertStringContainsString('getTransaction() === null', $lock, 'A lock outside a transaction would be released immediately.');
 
-        // Every path that can change where a row sits, not just the drag
-        // endpoint: the edit form's parent picker and a keep-children delete
-        // reparent rows too, and can race a drag just as easily.
+        // Every path that can change where a row sits, not just the drag endpoint: the edit form's
+        // parent picker and a keep-children delete reparent rows too, and can race a drag just as
+        // easily.
         foreach (['move', 'reorderSiblings', 'save', 'deleteById'] as $method) {
             $this->assertStringContainsString(
                 '$this->lockGroup(',
@@ -540,9 +493,7 @@ class MenuBuilderTreeTest extends TestCase
     
     /**
      * The endpoint is a mutation, and Craft only enforces CSRF on POST.
-     * Permission is `edit`, since a move only ever acts on an item that
-     * already exists.
-     */
+    */
     public function testTheReorderEndpointIsPostOnlyAndPermissionGated(): void
     {
         $this->assertStringContainsString(
@@ -557,9 +508,9 @@ class MenuBuilderTreeTest extends TestCase
 
     
     /**
-     * The tree is read with one flat query per group; a per-node query would
-     * turn a 500-item menu into 500 round trips on every CP page load.
-     */
+     * The tree is read with one flat query per group; a per-node query would turn a 500-item menu
+     * into 500 round trips on every CP page load.
+    */
     public function testTheHierarchyIsReadWithASingleQueryPerGroup(): void
     {
         $snapshot = $this->methodSource(MenuBuilderItemService::class, 'snapshotForGroup');
@@ -570,10 +521,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Ordering must never depend on what the database felt like returning:
-     * rows left sharing a sortOrder (legacy data, a hand-edited row) are
-     * broken by id, at every level.
-     */
+     * Ordering must never depend on what the database felt like returning: rows left sharing a
+     * sortOrder (legacy data, a hand-edited row) are broken by id, at every level.
+    */
     public function testSiblingOrderIsDeterministicWhenTwoRowsShareASortOrder(): void
     {
         $rows = [
@@ -589,22 +539,19 @@ class MenuBuilderTreeTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // helpers — a move applied to an in-memory group
-    // ---------------------------------------------------------------------
 
     /** @var array<string,int> */
     private array $ids = [];
 
     /**
-     * Everything MenuBuilderItemService::move() does to the data: plan the
-     * move from the current rows, write the new parentId, write the planned
-     * sortOrders. Nothing else in the service touches hierarchy columns.
+     * Everything MenuBuilderItemService::move() does to the data: plan the move from the current
+     * rows, write the new parentId, write the planned sortOrders.
      *
      * @param array<int,array{id:int,parentId:int|null,sortOrder:int}> $rows
      * @param int[] $requestedSiblingIds
      * @return array<int,array{id:int,parentId:int|null,sortOrder:int}>
-     */
+    */
     private function applyMove(array $rows, string $item, ?string $newParent, int $newSortOrder, array $requestedSiblingIds = []): array
     {
         $itemId = $this->id($item);
@@ -618,7 +565,7 @@ class MenuBuilderTreeTest extends TestCase
      * @param array<int,array{id:int,parentId:int|null,sortOrder:int}> $rows
      * @param array{parentId:int|null,sortOrders:array<int,int>} $plan
      * @return array<int,array{id:int,parentId:int|null,sortOrder:int}>
-     */
+    */
     private function apply(array $rows, int $itemId, ?int $newParentId, array $plan): array
     {
         return array_map(function(array $row) use ($itemId, $newParentId, $plan) {
@@ -635,13 +582,12 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Builds a group from a `title => parent title` map, numbering rows in
-     * declaration order within each sibling set — the state a freshly built
-     * menu is in.
+     * Builds a group from a `title => parent title` map, numbering rows in declaration order within
+     * each sibling set — the state a freshly built menu is in.
      *
      * @param array<string,string|null> $spec
      * @return array<int,array{id:int,parentId:int|null,sortOrder:int}>
-     */
+    */
     private function rows(array $spec): array
     {
         $this->ids = [];
@@ -685,12 +631,12 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Renders the group the way the CP does — depth-first, two spaces per
-     * level — so an expected tree reads as the tree.
+     * Renders the group the way the CP does — depth-first, two spaces per level — so an
+     * expected tree reads as the tree.
      *
      * @param array<int,array{id:int,parentId:int|null,sortOrder:int}> $rows
      * @return string[]
-     */
+    */
     private function outline(array $rows): array
     {
         $titles = array_flip($this->ids);
@@ -724,7 +670,7 @@ class MenuBuilderTreeTest extends TestCase
     /**
      * @param array<int,array{id:int,parentId:int|null,sortOrder:int}> $rows
      * @return int[]
-     */
+    */
     private function sortOrdersOfSiblings(array $rows, ?int $parentId): array
     {
         $byId = array_column($rows, 'sortOrder', 'id');
@@ -750,13 +696,11 @@ class MenuBuilderTreeTest extends TestCase
         ));
     }
 
-    // =====================================================================
-    // The node itself: copies, flattening and mega-menu columns
+    // ===================================================================== The node itself:
+    // copies, flattening and mega-menu columns
     // =====================================================================
 
-    // ---------------------------------------------------------------------
     // Immutability of the cached node tree
-    // ---------------------------------------------------------------------
 
     private function node(
         int $id,
@@ -821,7 +765,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertTrue($copy->isClickable);
     }
 
-    /** Otherwise a child's `parent` would still point into the cached tree. */
+    /**
+     * Otherwise a child's `parent` would still point into the cached tree.
+    */
     public function testWithChildrenRewiresChildParentsToTheCopy(): void
     {
         $child = $this->node(2);
@@ -831,10 +777,9 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Active state is the other half of the per-request pipeline: a copy
-     * starts clean so a previous request's marking can never survive on a
-     * cached node and leak through.
-     */
+     * Active state is the other half of the per-request pipeline: a copy starts clean so a previous
+     * request's marking can never survive on a cached node and leak through.
+    */
     public function testWithChildrenResetsActiveState(): void
     {
         $cached = $this->node(1);
@@ -864,9 +809,7 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertSame([1, 4], array_map(fn(MenuBuilderNode $n) => $n->id, iterator_to_array($tree)));
     }
 
-    // ---------------------------------------------------------------------
     // Mega-menu column grouping
-    // ---------------------------------------------------------------------
 
     public function testChildrenGroupedByConfiguredColumn(): void
     {
@@ -909,20 +852,17 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * The real-world shape this is for: one parent, four children, the
-     * editor splitting them across the columns they should appear in — and
-     * two of them left alone. Nothing about the tree changes; the grouping
-     * is read off it.
-     */
+     * The real-world shape this is for: one parent, four children, the editor splitting them across
+     * the columns they should appear in — and two of them left alone.
+    */
     public function testARealWorldMenuGroupsIntoTheColumnsTheEditorAssigned(): void
     {
         $products = $this->node(1, 'Products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 2));
         $products->children = [
             $this->node(2, 'Shoes', column: 1),
             $this->node(3, 'Clothing', column: 2),
-            // Never assigned a column, and assigned one the parent doesn't
-            // have: both are presentation mistakes, not reasons to drop an
-            // item out of the navigation.
+            // Never assigned a column, and assigned one the parent doesn't have: both are
+            // presentation mistakes, not reasons to drop an item out of the navigation.
             $this->node(4, 'Accessories', column: null),
             $this->node(5, 'Featured', column: 9),
         ];
@@ -939,7 +879,10 @@ class MenuBuilderTreeTest extends TestCase
         );
     }
 
-    /** Six is the ceiling MenuBuilderItem::validateMegaMenu() enforces; all six have to survive grouping. */
+    /**
+     * Six is the ceiling MenuBuilderItem::validateMegaMenu() enforces; all six have to survive
+     * grouping.
+    */
     public function testTheMaximumSupportedColumnCountGroupsIntoSixColumns(): void
     {
         $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 6));
@@ -959,11 +902,10 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Visibility is filtered per visitor, after the cache, by rebuilding the
-     * node with `withChildren()` — so the grouping a visitor gets has to be
-     * computed from *their* children, and a column nobody can see must not
-     * be left behind as an empty one.
-     */
+     * Visibility is filtered per visitor, after the cache, by rebuilding the node with
+     * `withChildren()` — so the grouping a visitor gets has to be computed from *their* children,
+     * and a column nobody can see must not be left behind as an empty one.
+    */
     public function testColumnGroupingFollowsPerVisitorVisibilityFiltering(): void
     {
         $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 2));
@@ -981,10 +923,10 @@ class MenuBuilderTreeTest extends TestCase
     }
 
     /**
-     * Grouping hands back the children themselves, not copies — which is
-     * what lets a mega-menu column render an item's icon, badge,
-     * description, image and "featured" flag without a second lookup.
-     */
+     * Grouping hands back the children themselves, not copies — which is what lets a mega-menu
+     * column render an item's icon, badge, description, image and "featured" flag without a second
+     * lookup.
+    */
     public function testColumnGroupingHandsBackTheChildNodesThemselves(): void
     {
         $child = $this->node(2, 'Shoes', column: 1, icon: 'fa fa-shoe', badge: 'New', description: 'Every shoe we make.', image: 42, featured: true);
@@ -1001,7 +943,9 @@ class MenuBuilderTreeTest extends TestCase
         $this->assertTrue($grouped->featured);
     }
 
-    /** A mega-menu parent with nothing under it groups into nothing at all. */
+    /**
+     * A mega-menu parent with nothing under it groups into nothing at all.
+    */
     public function testAMegaMenuParentWithNoChildrenHasNoColumns(): void
     {
         $parent = $this->node(1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));

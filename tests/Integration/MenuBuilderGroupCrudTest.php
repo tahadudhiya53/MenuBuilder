@@ -16,16 +16,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 
 /**
  * Menu CRUD against the real database.
- *
- * The unit suite covers what the group *model* refuses and asserts the shape
- * of the service's source, but it can never answer the questions that only a
- * database answers: whether a save round-trips through the columns, whether a
- * duplicate really copies the subtree, whether a delete really cascades, and
- * whether a rolled-back duplicate leaves nothing behind. Those are here.
- *
- * Every test builds and destroys its own menus, so this class never touches
- * the shared fixture in {@see CraftIntegrationTestCase}.
- */
+*/
 class MenuBuilderGroupCrudTest extends TestCase
 {
     /** @var int[] Menus created by the running test, torn down after it. */
@@ -82,9 +73,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         return $prefix . bin2hex(random_bytes(4));
     }
 
-    // ---------------------------------------------------------------------
     // Create
-    // ---------------------------------------------------------------------
 
     public function testASavedMenuIsReadableByIdHandleAndUid(): void
     {
@@ -100,11 +89,11 @@ class MenuBuilderGroupCrudTest extends TestCase
     }
 
     /**
-     * Every attribute the editor can set has to survive the trip through the
-     * columns and the settings bag — including the site restriction, which
-     * lives *inside* `settings` rather than in a column of its own, and the
-     * field layout, which is a row of Craft's that this menu only points at.
-     */
+     * Every attribute the editor can set has to survive the trip through the columns and the
+     * settings bag — including the site restriction, which lives *inside* `settings` rather than
+     * in a column of its own, and the field layout, which is a row of Craft's that this menu only
+     * points at.
+    */
     public function testEveryEditableAttributeRoundTripsThroughTheDatabase(): void
     {
         $secondSite = Craft::$app->getSites()->getPrimarySite()->id;
@@ -138,10 +127,8 @@ class MenuBuilderGroupCrudTest extends TestCase
     }
 
     /**
-     * A duplicated menu gets its **own** field layout row. Sharing one would
-     * mean editing either menu's fields silently rewrote the other's, and
-     * deleting either menu would take both layouts down.
-     */
+     * A duplicated menu gets its **own** field layout row.
+    */
     public function testDuplicatingAMenuCopiesItsFieldLayoutRatherThanSharingIt(): void
     {
         $original = $this->makeMenu($this->handle('fl'), function(MenuBuilderGroup $group) {
@@ -160,10 +147,8 @@ class MenuBuilderGroupCrudTest extends TestCase
     }
 
     /**
-     * Deleting a menu takes its field layout with it. A layout belongs to
-     * exactly one menu, so leaving it behind would mean an unreachable
-     * `fieldlayouts` row for every menu ever deleted.
-     */
+     * Deleting a menu takes its field layout with it.
+    */
     public function testDeletingAMenuDeletesItsFieldLayout(): void
     {
         $menu = $this->makeMenu($this->handle('fld'), function(MenuBuilderGroup $group) {
@@ -176,18 +161,15 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertTrue($this->menus()->deleteById((int)$menu->id));
         $this->created = array_values(array_diff($this->created, [(int)$menu->id]));
 
-        // Asked of the table, not of `Fields::getLayoutById()`: that
-        // memoizes, so a layout deleted in this request still comes back
-        // from it. Craft soft-deletes layouts, so "gone" means `dateDeleted`
-        // is set.
+        // Asked of the table, not of `Fields::getLayoutById()`: that memoizes, so a layout deleted
+        // in this request still comes back from it.
         $this->assertFalse($this->fieldLayoutExists($fieldLayoutId));
     }
 
     /**
-     * A one-field layout on the content element, built the way the CP's
-     * designer posts one: a tab holding a CustomField layout element that
-     * points at a real, saved Craft field.
-     */
+     * A one-field layout on the content element, built the way the CP's designer posts one: a tab
+     * holding a CustomField layout element that points at a real, saved Craft field.
+    */
     private function fieldLayoutExists(int $fieldLayoutId): bool
     {
         return (new \craft\db\Query())
@@ -228,9 +210,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Edit
-    // ---------------------------------------------------------------------
 
     public function testAnEditUpdatesTheExistingRowRatherThanInsertingAnother(): void
     {
@@ -245,9 +225,9 @@ class MenuBuilderGroupCrudTest extends TestCase
     }
 
     /**
-     * A menu's handle is part of how templates address it, so it has to be
-     * changeable — and the old handle has to stop resolving the moment it is.
-     */
+     * A menu's handle is part of how templates address it, so it has to be changeable — and the
+     * old handle has to stop resolving the moment it is.
+    */
     public function testRenamingTheHandleMovesTheMenuToTheNewHandle(): void
     {
         $old = $this->handle('was');
@@ -290,9 +270,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame([0, 1, 2], $order);
     }
 
-    // ---------------------------------------------------------------------
     // Validation
-    // ---------------------------------------------------------------------
 
     public function testASecondMenuCannotTakeAHandleAlreadyInUse(): void
     {
@@ -308,7 +286,9 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertNull($clash->id);
     }
 
-    /** Its *own* handle is not "already in use" — otherwise no menu could ever be re-saved. */
+    /**
+     * Its *own* handle is not "already in use" — otherwise no menu could ever be re-saved.
+    */
     public function testAMenuMayKeepItsOwnHandleOnEdit(): void
     {
         $menu = $this->makeMenu($this->handle('same'));
@@ -342,9 +322,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertNull($this->menus()->getById($id));
     }
 
-    // ---------------------------------------------------------------------
     // Duplicate
-    // ---------------------------------------------------------------------
 
     public function testDuplicatingCopiesTheMenuUnderAFreeHandle(): void
     {
@@ -417,9 +395,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertNull($this->menus()->duplicate(999999));
     }
 
-    // ---------------------------------------------------------------------
     // Delete
-    // ---------------------------------------------------------------------
 
     public function testDeletingAMenuTakesEveryItemInItWithIt(): void
     {
@@ -457,7 +433,9 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertFalse($this->menus()->deleteById(999999));
     }
 
-    /** A deleted menu's handle is free again, and the new menu is a new menu. */
+    /**
+     * A deleted menu's handle is free again, and the new menu is a new menu.
+    */
     public function testAHandleIsFreeAgainAfterItsMenuIsDeleted(): void
     {
         $handle = $this->handle('reuse');
@@ -473,9 +451,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame((int)$second->id, (int)$this->menus()->getByHandle($handle)->id);
     }
 
-    // ---------------------------------------------------------------------
     // Listing
-    // ---------------------------------------------------------------------
 
     public function testTheListingCanExcludeDisabledMenus(): void
     {
@@ -499,16 +475,12 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame(2, $this->menus()->countItems((int)$menu->id));
     }
 
-    // ---------------------------------------------------------------------
     // Project config
-    // ---------------------------------------------------------------------
 
     /**
-     * Menus are database-backed by design (see ARCHITECTURE.md): they are
-     * content-shaped, edited by people who do not deploy, and must not
-     * require a project-config sync to change. This is the assertion that
-     * keeps that decision honest as menus are created, edited and deleted.
-     */
+     * Menus are database-backed by design (see ARCHITECTURE.md): they are content-shaped, edited by
+     * people who do not deploy, and must not require a project-config sync to change.
+    */
     public function testNoMenuLifecycleOperationWritesToProjectConfig(): void
     {
         $projectConfig = Craft::$app->getProjectConfig();

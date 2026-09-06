@@ -9,23 +9,14 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 
 /**
- * Navigation groups: field-level validation on the model, plus the lifecycle
- * invariants of the service and controller that mutate them — every mutation
- * goes through the service, multi-record mutations run in a transaction,
- * every frontend-affecting write invalidates the cache, and the database is
- * the only place group configuration is written. Those regress silently,
- * because the happy path keeps working either way and only a partial failure,
- * a stale menu, or a second store quietly diverging exposes them.
- *
- * The DB-backed behaviour behind them (rows actually written, the cascade
- * actually firing) needs a booted Craft app and is verified manually — see
- * the manual test list in ARCHITECTURE.md.
- */
+ * Navigation groups: field-level validation on the model, plus the lifecycle invariants of the
+ * service and controller that mutate them — every mutation goes through the service, multi-record
+ * mutations run in a transaction, every frontend-affecting write invalidates the cache, and the
+ * database is the only place group configuration is written.
+*/
 class MenuBuilderGroupTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // Model validation
-    // ---------------------------------------------------------------------
 
     public function testNameAndHandleRequired(): void
     {
@@ -59,11 +50,8 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * `handle` and `cssClass` are varchar(255) columns. Without an explicit
-     * max, an over-long value got past the model and only failed at the
-     * database — or, on a non-strict MySQL, was silently truncated into a
-     * handle the user never typed (and, for a duplicate, into a collision).
-     */
+     * `handle` and `cssClass` are varchar(255) columns.
+    */
     public function testHandleLongerThanTheColumnIsRejected(): void
     {
         $group = $this->validGroup();
@@ -99,7 +87,9 @@ class MenuBuilderGroupTest extends TestCase
         $this->assertArrayHasKey('name', $group->getErrors());
     }
 
-    /** Descriptions live in a TEXT column, so they aren't length-capped. */
+    /**
+     * Descriptions live in a TEXT column, so they aren't length-capped.
+    */
     public function testLongDescriptionIsAccepted(): void
     {
         $group = $this->validGroup();
@@ -148,9 +138,9 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * A maxDepth of 1 is a flat list — the CP and the resolver both gate on
-     * allowsDepth(), so an off-by-one here would let children through.
-     */
+     * A maxDepth of 1 is a flat list — the CP and the resolver both gate on allowsDepth(), so an
+     * off-by-one here would let children through.
+    */
     public function testMaxDepthOfOneAllowsOnlyTopLevel(): void
     {
         $group = $this->validGroup();
@@ -169,7 +159,9 @@ class MenuBuilderGroupTest extends TestCase
         $this->assertFalse($group->allowsDepth(11));
     }
 
-    /** Disabling a group is a plain flag — it must not make the group invalid to save. */
+    /**
+     * Disabling a group is a plain flag — it must not make the group invalid to save.
+    */
     public function testDisabledGroupStillValidates(): void
     {
         $group = $this->validGroup();
@@ -196,10 +188,9 @@ class MenuBuilderGroupTest extends TestCase
 
     public function testUsesDefineRulesNotRules(): void
     {
-        // Craft 5 models must extend validation via defineRules(), not
-        // override rules() directly (see MenuBuilderItem's equivalent
-        // pattern) — a bare rules() override would silently bypass Model's
-        // own attachBehaviors()/EVENT_DEFINE_RULES hook.
+        // Craft 5 models must extend validation via defineRules(), not override rules() directly
+        // (see MenuBuilderItem's equivalent pattern) — a bare rules() override would silently
+        // bypass Model's own attachBehaviors()/EVENT_DEFINE_RULES hook.
         $reflection = new \ReflectionMethod(MenuBuilderGroup::class, 'defineRules');
         $this->assertSame(MenuBuilderGroup::class, $reflection->getDeclaringClass()->getName());
     }
@@ -288,9 +279,7 @@ class MenuBuilderGroupTest extends TestCase
         return $group;
     }
 
-    // ---------------------------------------------------------------------
     // Lifecycle: handle uniquification, transactions, cache invalidation
-    // ---------------------------------------------------------------------
 
     private const MAX_LENGTH = 255;
 
@@ -311,13 +300,12 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * The whole point of the suffix trimming: duplicating a group whose
-     * handle already fills the column must not produce a handle the column
-     * can't hold (which MySQL would either reject or silently truncate back
-     * into a collision with the original).
+     * The whole point of the suffix trimming: duplicating a group whose handle already fills the
+     * column must not produce a handle the column can't hold (which MySQL would either reject or
+     * silently truncate back into a collision with the original).
      *
      * @dataProvider suffixProvider
-     */
+    */
     public function testSuffixedHandleAlwaysFitsTheColumn(int $baseLength, int $suffix): void
     {
         $base = str_repeat('a', $baseLength);
@@ -343,11 +331,10 @@ class MenuBuilderGroupTest extends TestCase
         $this->assertSame('main2', $this->callPrivate('suffixedHandle', ['main', 2]));
     }
     /**
-     * The whole-cache flush exists for exactly one change — a site save or
-     * delete, which moves the base URL, language or existence every cached
-     * tree was resolved against (MenuBuilderElementService::handleSiteChange()).
-     * Nothing else in the plugin may reach for it.
-     */
+     * The whole-cache flush exists for exactly one change — a site save or delete, which moves
+     * the base URL, language or existence every cached tree was resolved against
+     * (MenuBuilderElementService::handleSiteChange()).
+    */
     public function testTheWholeCacheFlushIsReservedForSiteChanges(): void
     {
         $callers = [];
@@ -378,10 +365,9 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * Site restrictions ride inside the `settings` JSON bag rather than a
-     * column of their own (no migration needed), so the round-trip through
-     * that bag is what keeps them database-backed.
-     */
+     * Site restrictions ride inside the `settings` JSON bag rather than a column of their own (no
+     * migration needed), so the round-trip through that bag is what keeps them database-backed.
+    */
     public function testSiteIdsRoundTripThroughTheSettingsBag(): void
     {
         $this->assertSame('siteIds', MenuBuilderGroupService::SITE_IDS_KEY);
@@ -395,23 +381,21 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * Enable/disable is a mutation like any other, so it has to clear the
-     * same manageSettings bar the full edit form does — the `default` arm of
-     * the mapping, which a later action added without thinking would
-     * silently inherit.
-     */
+     * Enable/disable is a mutation like any other, so it has to clear the same manageSettings bar
+     * the full edit form does — the `default` arm of the mapping, which a later action added
+     * without thinking would silently inherit.
+    */
     public function testToggleRequiresManageSettings(): void
     {
         $this->assertSame('menuBuilder:manageSettings', GroupsController::requiredPermissionForAction('toggle'));
     }
 
     /**
-     * The full CRUD surface, so a lifecycle operation can't quietly go
-     * missing: create/update share `save`, and read, duplicate, delete and
-     * enable/disable each have their own action.
+     * The full CRUD surface, so a lifecycle operation can't quietly go missing: create/update share
+     * `save`, and read, duplicate, delete and enable/disable each have their own action.
      *
      * @dataProvider crudActionProvider
-     */
+    */
     public function testEveryLifecycleOperationHasAnActionThatDelegatesToTheService(string $action): void
     {
         $method = 'action' . ucfirst($action);
@@ -436,10 +420,9 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * A handle already in use must fail as a *field error* on the model, not
-     * as a database integrity exception — the unique index is the backstop,
-     * not the user-facing check.
-     */
+     * A handle already in use must fail as a *field error* on the model, not as a database
+     * integrity exception — the unique index is the backstop, not the user-facing check.
+    */
     public function testSaveRejectsAHandleAlreadyInUseBeforeWriting(): void
     {
         $source = $this->methodSource(MenuBuilderGroupService::class, 'save');
@@ -453,7 +436,9 @@ class MenuBuilderGroupTest extends TestCase
         );
     }
 
-    /** Validation is the model's job, and save() must not be able to skip it by default. */
+    /**
+     * Validation is the model's job, and save() must not be able to skip it by default.
+    */
     public function testSaveRunsModelValidationByDefault(): void
     {
         $runValidation = (new ReflectionMethod(MenuBuilderGroupService::class, 'save'))->getParameters()[1];
@@ -464,10 +449,9 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * The permission mapping fails closed: anything not explicitly listed —
-     * including an action added later — lands on the strictest of the three,
-     * rather than falling through ungated.
-     */
+     * The permission mapping fails closed: anything not explicitly listed — including an action
+     * added later — lands on the strictest of the three, rather than falling through ungated.
+    */
     public function testUnlistedActionsFallBackToManageSettings(): void
     {
         $this->assertSame(
@@ -476,15 +460,13 @@ class MenuBuilderGroupTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // The CP edit form's handle behaviour
-    // ---------------------------------------------------------------------
 
     /**
-     * Typing a name fills the handle in, the way every other Craft settings
-     * screen behaves, via Craft's own generator rather than a hand-rolled
-     * slugifier that would disagree with server-side handle validation.
-     */
+     * Typing a name fills the handle in, the way every other Craft settings screen behaves, via
+     * Craft's own generator rather than a hand-rolled slugifier that would disagree with
+     * server-side handle validation.
+    */
     public function testTheNewMenuFormGeneratesTheHandleFromTheName(): void
     {
         $form = $this->templateSource('src/templates/groups/_edit.twig');
@@ -495,10 +477,8 @@ class MenuBuilderGroupTest extends TestCase
     }
 
     /**
-     * Only on new menus. A saved handle is the public key used by Twig,
-     * GraphQL and the REST route, so renaming an existing menu must not
-     * rewrite it underneath the templates that reference it.
-     */
+     * Only on new menus.
+    */
     public function testTheHandleGeneratorIsWiredUpForNewMenusOnly(): void
     {
         $form = $this->templateSource('src/templates/groups/_edit.twig');
@@ -520,9 +500,7 @@ class MenuBuilderGroupTest extends TestCase
         ];
     }
 
-    /**
-     * @param array<int,mixed> $args
-     */
+    /** @param array<int,mixed> $args */
     private function callPrivate(string $method, array $args): mixed
     {
         return (new ReflectionMethod(MenuBuilderGroupService::class, $method))->invokeArgs(null, $args);

@@ -9,10 +9,9 @@ use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 /**
- * The Twig-facing representation of a resolved navigation item — hides the
- * database entirely (no IDs to join, no parentId, no sort columns). Built by
- * MenuBuilderResolver from a MenuBuilderItem + its ResolvedLink.
- */
+ * The Twig-facing representation of a resolved navigation item — hides the database entirely (no
+ * IDs to join, no parentId, no sort columns).
+*/
 class MenuBuilderNode
 {
     /** @var MenuBuilderNode[] */
@@ -45,85 +44,47 @@ class MenuBuilderNode
         public readonly ?int $image,
         public readonly bool $featured,
         public readonly int $level,
-        /** Mega-menu config for this node when it's the mega-menu parent, null otherwise — see MenuBuilderItem::$metadata['megaMenu']. */
+        /**
+         * Mega-menu config for this node when it's the mega-menu parent, null otherwise — see
+         * MenuBuilderItem::$metadata['megaMenu'].
+        */
         public readonly ?MenuBuilderMegaMenuConfig $megaMenu = null,
-        /** Which column this node belongs to under its mega-menu-enabled parent; meaningless otherwise. */
+        /**
+         * Which column this node belongs to under its mega-menu-enabled parent; meaningless
+         * otherwise.
+        */
         public readonly ?int $megaMenuColumn = null,
-        /** True when this node was synthesized from a dynamic navigation source rather than a persisted item — see MenuBuilderDynamicNavigationService. */
+        /**
+         * True when this node was synthesized from a dynamic navigation source rather than a
+         * persisted item — see MenuBuilderDynamicNavigationService.
+        */
         public readonly bool $isDynamic = false,
         /**
-         * The badge's style — one of BadgeHelper::STYLES or null for the
-         * default. Declared last, after the pre-existing defaulted
-         * parameters, so every existing positional construction of a node
-         * keeps working unchanged.
-         */
+         * The badge's style — one of BadgeHelper::STYLES or null for the default.
+        */
         public readonly ?string $badgeStyle = null,
         /**
-         * The `elements` row carrying this item's custom field content — a
-         * {@see \Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent}
-         * — or null when the menu defines no fields.
-         *
-         * An **ID**, not the values, and deliberately so: this node is what
-         * gets cached, and a Craft field's value can be a live element query
-         * (Matrix, relations) that has no meaning once serialised and no way
-         * to know when the elements behind it changed. Caching an ID instead
-         * means a menu's cache entry stays valid while its items' field
-         * content is always read fresh, through Craft's own element cache —
-         * the same reasoning that keeps an asset field's **ID** rather than
-         * its URL, one level up.
-         *
-         * Reads go through {@see custom()}, which batches every node in the
-         * tree into one query. Declared last, after the existing defaulted
-         * parameters, so every positional construction of a node keeps
-         * working unchanged.
-         */
+         * The `elements` row carrying this item's custom field content — a {@see
+         * \Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent} — or null when the menu
+         * defines no fields.
+        */
         public readonly ?int $contentId = null,
         /**
-         * The item's normalized mobile-presentation config — see
-         * {@see MobileHelper}. `[]` means "nothing configured", which is
-         * the state of every item that has never been touched on the
-         * mobile tab, so the common case costs nothing.
-         *
-         * This belongs in the cached node: it is a fact about the *item*,
-         * decided by an editor, and about nothing to do with the visitor,
-         * the request, or the device asking. No user agent is sniffed and
-         * no width is guessed anywhere in this plugin — a viewport is
-         * something the template or the stylesheet chooses, not something
-         * the server detects. That is what keeps one cache entry correct
-         * for both viewports (see ARCHITECTURE.md "Caching").
-         *
-         * Declared last, after the existing defaulted parameters, so every
-         * positional construction of a node keeps working unchanged.
+         * The item's normalized mobile-presentation config — see {@see MobileHelper}.
          *
          * @var array{visibility?: string, order?: int, collapsible?: bool, megaMenu?: string}
-         */
+        */
         public readonly array $mobile = [],
     ) {
     }
 
     /**
-     * A copy of this node carrying the given (already-copied) children,
-     * with each child's `parent` rewired to the copy.
-     *
-     * The per-request half of the pipeline — visibility filtering and
-     * active-state marking — writes to `children`, `isActive` and
-     * `isActiveAncestor`. Those nodes come out of
-     * MenuBuilderCacheService, so writing to them in place means writing
-     * to the cached tree: harmless with a serializing cache backend (every
-     * read hands back a fresh object graph), but a per-request visibility
-     * decision baked into a shared cache entry the moment the backend
-     * hands back the same instances. Copying here keeps the cached tree
-     * immutable by construction rather than by backend choice — the
-     * property ARCHITECTURE.md's cache boundary depends on.
+     * A copy of this node carrying the given (already-copied) children, with each child's `parent`
+     * rewired to the copy.
      *
      * @param MenuBuilderNode[] $children
      * @param bool $preserveActiveState Keep this node's already-marked active state on the copy.
-     *                                  False (the default) for the resolve pipeline, which copies
-     *                                  *before* marking. True for a copy made afterwards — see
-     *                                  {@see MenuBuilderTree::forViewport()}, which re-filters and
-     *                                  re-sorts a tree whose active state is already decided and
-     *                                  must survive.
-     */
+    */
     public function withChildren(array $children, bool $preserveActiveState = false): self
     {
         $copy = clone $this;
@@ -139,19 +100,9 @@ class MenuBuilderNode
     }
 
     /**
-     * The icon, as three read-only derived accessors over the single
-     * stored `icon` string — see {@see IconHelper} for the grammar.
-     *
-     * Derived rather than resolved into extra constructor state on
-     * purpose: the node is what gets cached, and an icon's *rendering*
-     * (an asset's URL, above all) can change without the item changing,
-     * so the tree caches the reference and templates resolve it per
-     * request through `craft.menuBuilder.iconAsset(node)`.
-     *
-     * `iconClass()` fails closed: a value that wouldn't validate today
-     * — a legacy row, a direct database write — reads back as null rather
-     * than reaching a template.
-     */
+     * The icon, as three read-only derived accessors over the single stored `icon` string — see
+     * {@see IconHelper} for the grammar.
+    */
     public function iconType(): ?string
     {
         return IconHelper::type($this->icon);
@@ -173,54 +124,38 @@ class MenuBuilderNode
     }
 
     /**
-     * The badge, as derived accessors over the two stored values
-     * (`badge` text + `metadata['badgeStyle']`) — see {@see BadgeHelper}.
-     *
-     * Text is deliberately *not* sanitized here: it is plain text and is
-     * escaped where it is rendered. The style is the half that reaches a
-     * `class` attribute, and {@see badgeClass()} fails closed on it, so an
-     * unknown style can never leave this object as markup.
-     *
-     * A style with no text is not a badge: {@see hasBadge()} is keyed off
-     * the text alone, and the bundled macro renders nothing without it.
-     */
+     * The badge, as derived accessors over the two stored values (`badge` text +
+     * `metadata['badgeStyle']`) — see {@see BadgeHelper}.
+    */
     public function hasBadge(): bool
     {
         return BadgeHelper::hasBadge($this->badge);
     }
 
-    /** The badge's class list: the base class plus a `--<style>` modifier for a known style. */
+    /**
+     * The badge's class list: the base class plus a `--<style>` modifier for a known style.
+    */
     public function badgeClass(): string
     {
         return BadgeHelper::cssClass($this->badgeStyle);
     }
 
     /**
-     * One custom field value by handle, or `$default` when this menu has no
-     * such field. The documented Twig entry point, unchanged from the
-     * plugin's own custom fields — but the value is now whatever the Craft
-     * field returns, so a Plain Text field gives a string, an Assets field
-     * gives a query you can chain, and a Matrix field gives its blocks:
-     *
-     *     {{ node.custom('subtitle') }}
-     *     {% set image = node.custom('promoImage').one() %}
-     *     {% for block in node.custom('promoBlocks').all() %}…{% endfor %}
-     *
-     * Fail-closed on the handle: a field the menu has since removed returns
-     * `$default` rather than throwing on a live page.
-     */
+     * One custom field value by handle, or `$default` when this menu has no such field.
+    */
     public function custom(string $handle, mixed $default = null): mixed
     {
-        // Short-circuited rather than delegated: a node with no content has
-        // no fields by definition, and this keeps a plain MenuBuilderNode
-        // readable without a booted plugin — which is what lets the node's
-        // own behaviour be unit-tested without a database.
+        // Short-circuited rather than delegated: a node with no content has no fields by
+        // definition, and this keeps a plain MenuBuilderNode readable without a booted plugin —
+        // which is what lets the node's own behaviour be unit-tested without a database.
         return $this->contentId === null
             ? $default
             : MenuBuilder::getInstance()->itemContent->valueFor($this->contentId, $handle, $default);
     }
 
-    /** Whether this item has a non-empty value for the given custom field. */
+    /**
+     * Whether this item has a non-empty value for the given custom field.
+    */
     public function hasCustom(string $handle): bool
     {
         return $this->contentId !== null
@@ -228,12 +163,11 @@ class MenuBuilderNode
     }
 
     /**
-     * Every custom field handle this node can answer to — what a template
-     * or a GraphQL query iterates when it wants the menu's fields without
-     * naming them.
+     * Every custom field handle this node can answer to — what a template or a GraphQL query
+     * iterates when it wants the menu's fields without naming them.
      *
      * @return string[]
-     */
+    */
     public function customHandles(): array
     {
         return $this->contentId === null
@@ -242,34 +176,19 @@ class MenuBuilderNode
     }
 
     /**
-     * The item's custom HTML attributes, re-checked at render time and
-     * stripped of anything unsafe or reserved — see
-     * {@see LinkAttributeHelper::filterHtmlAttributes()}. This is what the
-     * bundled macros render; `$htmlAttributes` remains the stored bag, for
-     * a template that wants to make its own decision about it.
-     *
-     * Derived rather than filtered into the constructor because the node is
-     * what gets cached: a rule tightened in a later release must apply to
-     * trees cached before it, the same way `iconClass()` fails closed on a
-     * legacy icon value.
+     * The item's custom HTML attributes, re-checked at render time and stripped of anything unsafe
+     * or reserved — see {@see LinkAttributeHelper::filterHtmlAttributes()}.
      *
      * @return array<string,string>
-     */
+    */
     public function safeHtmlAttributes(): array
     {
         return LinkAttributeHelper::filterHtmlAttributes($this->htmlAttributes);
     }
 
     /**
-     * Whether following this link leaves the current tab. The bundled macro
-     * emits `target` only when this is true, and adds a visually hidden
-     * "opens in a new tab" to the link's accessible name — a change of
-     * context a sighted user reads from the browser and a screen-reader
-     * user otherwise doesn't get told about at all (WCAG 3.2.5).
-     *
-     * Keyed off the resolved node, so a `target` on a heading — which
-     * renders no link — is not announced as opening anything.
-     */
+     * Whether following this link leaves the current tab.
+    */
     public function opensInNewTab(): bool
     {
         return $this->isClickable && $this->target === '_blank';
@@ -286,28 +205,20 @@ class MenuBuilderNode
     }
 
     /**
-     * The mobile-presentation accessors — derived reads over the single
-     * stored `mobile` bag, in the same shape and for the same reason as
-     * {@see iconClass()} and {@see badgeClass()}: the node is what gets
-     * cached, so a rule tightened in a later release has to apply to trees
-     * cached before it, and a value written straight into the database has
-     * to read back as the default rather than reach a template.
-     *
-     * None of these know what a breakpoint is. `mobileVisibility()` says
-     * which navigations an item belongs to; *when* a navigation is the
-     * mobile one is your stylesheet's decision, or your template's when it
-     * calls {@see MenuBuilderTree::forViewport()}.
-     */
+     * The mobile-presentation accessors — derived reads over the single stored `mobile` bag, in
+     * the same shape and for the same reason as {@see iconClass()} and {@see badgeClass()}: the
+     * node is what gets cached, so a rule tightened in a later release has to apply to trees cached
+     * before it, and a value written straight into the database has to read back as the default
+     * rather than reach a template.
+    */
     public function mobileVisibility(): string
     {
         return MobileHelper::visibility($this->mobile['visibility'] ?? null);
     }
 
     /**
-     * Whether this item belongs in the given viewport
-     * (`MobileHelper::VIEWPORT_*`). An unknown viewport keeps the item —
-     * see {@see MobileHelper::isVisibleOn()}.
-     */
+     * Whether this item belongs in the given viewport (`MobileHelper::VIEWPORT_*`).
+    */
     public function isVisibleOn(string $viewport): bool
     {
         return MobileHelper::isVisibleOn($viewport, $this->mobile);
@@ -325,12 +236,7 @@ class MenuBuilderNode
 
     /**
      * The item's mobile sort override, or null when it has none.
-     *
-     * Data, never a CSS `order`: applied by re-sorting the tree in
-     * {@see MenuBuilderTree::forViewport()}, so the DOM order and the
-     * visual order stay the same thing. See the {@see MobileHelper} class
-     * docblock for why the CSS route is a WCAG 1.3.2 / 2.4.3 failure.
-     */
+    */
     public function mobileOrder(): ?int
     {
         return MobileHelper::order($this->mobile['order'] ?? null);
@@ -338,14 +244,7 @@ class MenuBuilderNode
 
     /**
      * Whether this node's children are a collapsed disclosure on mobile.
-     *
-     * Derived, with the editor's override on top: a branch is a disclosure
-     * and a leaf is not, because a `<details>` around nothing is a control
-     * that opens an empty panel. An editor who turns it off is saying "this
-     * branch stays open on mobile", which is why
-     * {@see MobileHelper::collapsible()} distinguishes stored `false` from
-     * absence.
-     */
+    */
     public function isMobileCollapsible(): bool
     {
         if (!$this->hasChildren()) {
@@ -355,30 +254,30 @@ class MenuBuilderNode
         return MobileHelper::collapsible($this->mobile['collapsible'] ?? null) ?? true;
     }
 
-    /** How this node's mega-menu panel behaves on mobile — one of `MobileHelper::MEGA_*`. */
+    /**
+     * How this node's mega-menu panel behaves on mobile — one of `MobileHelper::MEGA_*`.
+    */
     public function mobileMegaMenuBehavior(): string
     {
         return MobileHelper::megaMenuBehavior($this->mobile['megaMenu'] ?? null);
     }
 
     /**
-     * The value for `data-mb-viewport`, or null when this item belongs to
-     * both viewports and the attribute would say nothing. The whole of the
-     * CSS contract — see {@see MobileHelper::viewportAttribute()}.
-     */
+     * The value for `data-mb-viewport`, or null when this item belongs to both viewports and the
+     * attribute would say nothing.
+    */
     public function viewportAttribute(): ?string
     {
         return MobileHelper::viewportAttribute($this->mobile);
     }
 
     /**
-     * Groups this node's already-resolved children by their
-     * `megaMenuColumn` (1-based; anything unset or out of range collapses
-     * into column 1) — pure grouping logic, no DB access, so it stays
-     * testable and cacheable as part of the resolved node itself.
+     * Groups this node's already-resolved children by their `megaMenuColumn` (1-based; anything
+     * unset or out of range collapses into column 1) — pure grouping logic, no DB access, so it
+     * stays testable and cacheable as part of the resolved node itself.
      *
      * @return array<int, MenuBuilderNode[]> Keyed by column number, ascending, only non-empty columns.
-     */
+    */
     public function megaMenuColumns(): array
     {
         $columns = [];

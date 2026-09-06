@@ -10,32 +10,18 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderFieldValue;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
- * The Navigation field against a **real booted Craft 5 application and a real
- * database**: does a selection actually round-trip through Craft's content
- * storage, and does `self::pages()->navigation($uid)` compile to a query that
- * matches it?
- *
- * The unit suite pins the field's *decisions* — what a value may be, when a
- * selection is invalid, what Twig gets. None of that proves the field is
- * wired into Craft correctly: a field with a wrong `dbType()`, a
- * `serializeValue()` that returns the wrong shape, or a `valueSql()` Craft
- * can't build a condition from would pass every unit test and still store
- * nothing and match nothing. That is what this file covers.
- */
+ * The Navigation field against a **real booted Craft 5 application and a real database**: does a
+ * selection actually round-trip through Craft's content storage, and does
+ * `self::pages()->navigation($uid)` compile to a query that matches it?
+*/
 class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
 {
-    // ---------------------------------------------------------------------
     // Storage
-    // ---------------------------------------------------------------------
 
     /**
-     * Craft 5 keeps custom field values in the `elements_sites.content` JSON
-     * column, keyed by the field **layout element's** UID (which is what lets
-     * one field appear twice in a layout). Asserting the raw column — rather
-     * than just reading the value back through the same field that wrote it —
-     * is what proves the value is really in Craft's content storage and not in
-     * some side channel of the field's own making.
-     */
+     * Craft 5 keeps custom field values in the `elements_sites.content` JSON column, keyed by the
+     * field **layout element's** UID (which is what lets one field appear twice in a layout).
+    */
     public function testTheSelectedUidIsStoredInCraftsContentColumn(): void
     {
         $entry = self::pages()->id(self::$entryIds['picks-main'])->one();
@@ -84,9 +70,9 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The end-to-end promise: a real entry, read back from a real database,
-     * resolves a real menu through the real resolver.
-     */
+     * The end-to-end promise: a real entry, read back from a real database, resolves a real menu
+     * through the real resolver.
+    */
     public function testAStoredSelectionResolvesARealTree(): void
     {
         $entry = self::pages()->id(self::$entryIds['picks-main'])->one();
@@ -101,7 +87,9 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
         $this->assertCount(2, $value, 'The value iterates the resolved tree’s top-level nodes.');
     }
 
-    /** Changing the selection overwrites the stored UID rather than accumulating. */
+    /**
+     * Changing the selection overwrites the stored UID rather than accumulating.
+    */
     public function testChangingTheSelectionOverwritesTheStoredValue(): void
     {
         $entry = self::pages()->id(self::$entryIds['picks-footer'])->one();
@@ -121,9 +109,7 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Query API
-    // ---------------------------------------------------------------------
 
     public function testQueryingByUidMatchesTheEntriesThatSelectedIt(): void
     {
@@ -159,10 +145,7 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
 
     /**
      * A deleted menu leaves its UID behind in every entry that selected it.
-     * That is deliberate — the value is what lets the CP say "the navigation
-     * this was set to no longer exists" instead of silently reading as empty
-     * — so the query has to keep matching it.
-     */
+    */
     public function testQueryingByADeletedMenusUidStillMatchesTheEntriesHoldingIt(): void
     {
         $this->assertSame(
@@ -180,7 +163,9 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
         $this->assertCount(0, $value);
     }
 
-    /** A disabled menu is a perfectly normal stored selection. */
+    /**
+     * A disabled menu is a perfectly normal stored selection.
+    */
     public function testQueryingByADisabledMenusUidMatches(): void
     {
         $this->assertSame(
@@ -224,11 +209,9 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
 
     /**
      * The condition has to be built by Craft's own content-query pipeline —
-     * `Field::queryCondition()` over `valueSql()`, reading the JSON content
-     * column — and not by anything MenuBuilder invented. If a future change
-     * broke that wiring, the queries above would still "pass" by matching
-     * nothing, so the generated SQL is asserted directly.
-     */
+     * `Field::queryCondition()` over `valueSql()`, reading the JSON content column — and not by
+     * anything MenuBuilder invented.
+    */
     public function testTheQueryUsesCraftsContentColumnPipeline(): void
     {
         $query = self::pages()->navigation((string)self::$mainMenu->uid);
@@ -252,12 +235,14 @@ class MenuBuilderFieldQueryTest extends CraftIntegrationTestCase
         );
     }
 
-    /** `dbType()` decides the column shape Craft builds the condition against. */
+    /**
+     * `dbType()` decides the column shape Craft builds the condition against.
+    */
     public function testTheFieldDeclaresAStringValueToCraft(): void
     {
         $this->assertSame('string', MenuBuilderField::dbType());
-        // Only a field *instance in a layout* can produce value SQL — a bare
-        // field has no content key to address.
+        // Only a field *instance in a layout* can produce value SQL — a bare field has no content
+        // key to address.
         $this->assertNotNull(
             self::$fieldInstance->getValueSql(),
             'Without value SQL, Craft cannot query the field at all.'

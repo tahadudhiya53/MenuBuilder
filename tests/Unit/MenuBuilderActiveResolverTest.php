@@ -58,9 +58,9 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * The phase's worked example: on /products/shoes, "Shoes" is active,
-     * "Products" is an active ancestor, and nothing else is either.
-     */
+     * The phase's worked example: on /products/shoes, "Shoes" is active, "Products" is an active
+     * ancestor, and nothing else is either.
+    */
     private function productsTree(): array
     {
         $shoes = $this->node(4, '/products/shoes', level: 3);
@@ -136,17 +136,10 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * The data-level guarantee behind `aria-current="page"`: exactly one node
-     * in the tree is `isActive`, so the attribute can only ever land on the
-     * link for the page actually being served — an active ancestor carries
-     * `isActiveAncestor` instead.
-     *
-     * The template half — that the bundled macro emits the attribute for
-     * `isActive` alone, and that nothing else can add a second one — is
-     * asserted against rendered markup in
-     * {@see MenuBuilderAccessibilityTest}, rather than by reading the
-     * template's source.
-     */
+     * The data-level guarantee behind `aria-current="page"`: exactly one node in the tree is
+     * `isActive`, so the attribute can only ever land on the link for the page actually being
+     * served — an active ancestor carries `isActiveAncestor` instead.
+    */
     public function testOnlyOneNodeInTheTreeIsActive(): void
     {
         [$products, $footwear, $shoes, $boots, $contact] = $this->productsTree();
@@ -191,10 +184,10 @@ class MenuBuilderActiveResolverTest extends TestCase
     // ------------------------------------------------------------------- URIs
 
     /**
-     * Craft's own Request::getFullUri() has no leading slash, while an item's
-     * URL almost always does — so this is the shape every real request takes,
-     * and the case that once regressed active state entirely.
-     */
+     * Craft's own Request::getFullUri() has no leading slash, while an item's URL almost always
+     * does — so this is the shape every real request takes, and the case that once regressed
+     * active state entirely.
+    */
     public function testCurrentUriWithoutLeadingSlashStillMatches(): void
     {
         $about = $this->node(2, '/about', level: 2);
@@ -271,10 +264,10 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * An anchor item is a jump to a position on a page, not a page of its own,
-     * so it never becomes the active item — and in particular a bare fragment
-     * must not collapse to "/" and light up on the homepage.
-     */
+     * An anchor item is a jump to a position on a page, not a page of its own, so it never becomes
+     * the active item — and in particular a bare fragment must not collapse to "/" and light up
+     * on the homepage.
+    */
     public function testAnchorOnlyItemIsNeverActive(): void
     {
         foreach (['', '/', '/#top', '/about'] as $currentUri) {
@@ -325,10 +318,9 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * A second site's own domain still counts as this install (it's in the
-     * internal-host list), so a cross-site link resolves active state normally
-     * when that site is the one being served.
-     */
+     * A second site's own domain still counts as this install (it's in the internal-host list), so
+     * a cross-site link resolves active state normally when that site is the one being served.
+    */
     public function testUrlOnAnotherSiteOfTheSameInstallMatchesThatSitesRequest(): void
     {
         $de = $this->node(1, 'https://de.example.test/produkte/schuhe', type: MenuBuilderItem::TYPE_ENTRY);
@@ -365,10 +357,9 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * "Disable link" leaves the item rendered as a label with no destination,
-     * and a rejected/blank custom URL resolves the same way — neither is a page
-     * that can be current.
-     */
+     * "Disable link" leaves the item rendered as a label with no destination, and a rejected/blank
+     * custom URL resolves the same way — neither is a page that can be current.
+    */
     public function testUnavailableOrEmptyLinkIsNeverActive(): void
     {
         $unavailable = $this->node(2, '/products/shoes', isLinkAvailable: false, level: 2);
@@ -394,9 +385,9 @@ class MenuBuilderActiveResolverTest extends TestCase
         $resolver->mark([$products, $contact], '/products/shoes', self::SITE_HOSTS);
         $this->assertSame([$shoes], $this->activeNodes([$products, $contact]));
 
-        // Marking again with a different URI must recompute every flag, not
-        // accumulate: the previously active node and its ancestors go back to
-        // false without the caller having to reset anything.
+        // Marking again with a different URI must recompute every flag, not accumulate: the
+        // previously active node and its ancestors go back to false without the caller having to
+        // reset anything.
         $resolver->mark([$products, $contact], '/products/boots', self::SITE_HOSTS);
 
         $this->assertSame([$boots], $this->activeNodes([$products, $contact]));
@@ -406,10 +397,10 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * The override has to be reachable from Twig
-     * (`craft.menuBuilder.get('main', '/products/shoes')`) — asserted on the
-     * signatures, since exercising the pipeline needs a booted Craft app.
-     */
+     * The override has to be reachable from Twig (`craft.menuBuilder.get('main',
+     * '/products/shoes')`) — asserted on the signatures, since exercising the pipeline needs a
+     * booted Craft app.
+    */
     public function testCurrentUriOverrideIsExposedThroughTheTwigApi(): void
     {
         foreach ([[MenuBuilderVariable::class, 'get'], [MenuBuilderResolver::class, 'getTree']] as [$class, $method]) {
@@ -422,10 +413,9 @@ class MenuBuilderActiveResolverTest extends TestCase
     }
 
     /**
-     * Host comparison is skipped when the caller can't know the host (a console
-     * request), rather than failing every absolute URL closed — the path
-     * comparison is all that's available there.
-     */
+     * Host comparison is skipped when the caller can't know the host (a console request), rather
+     * than failing every absolute URL closed — the path comparison is all that's available there.
+    */
     public function testAbsoluteUrlStillMatchesWhenNoInternalHostsAreKnown(): void
     {
         $entry = $this->node(1, 'https://example.test/news/latest');
@@ -439,10 +429,7 @@ class MenuBuilderActiveResolverTest extends TestCase
 
     /**
      * Active state is per-request and must never end up on the cached tree.
-     * MenuBuilderResolver marks the visibility-filtered copies produced by
-     * MenuBuilderNode::withChildren(); this asserts the originals — the objects
-     * MenuBuilderCacheService handed back — come out of a mark() pass untouched.
-     */
+    */
     public function testMarkingNeverWritesActiveStateBackOntoTheCachedNodes(): void
     {
         $cachedChild = $this->node(2, '/products/shoes', level: 2);

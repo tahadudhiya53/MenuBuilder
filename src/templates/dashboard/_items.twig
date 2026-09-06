@@ -12,19 +12,14 @@
 {% set canSelect = canEdit or canDelete %}
 {% set canReorder = canEdit and not isFiltered %}
 
-{# Ancestor connector columns still open above this level — see the
-   "Hierarchy connector" block in menu-builder-cp.css. A column stays open
-   while the item that owns it still has a sibling further down for its rail
-   to reach, so the rows of an intervening subtree can paint that span; a flat
-   list gives the siblings themselves no way to. MenuBuilderTree.syncRails()
-   recomputes exactly this on init and after every move and is the authority;
-   rendering it here is what avoids an unrailed first paint. #}
+{#
+   Ancestor connector columns still open above this level — see the "Hierarchy connector" block in
+   menu-builder-cp.css.
+#}
 {% set openColumns = openColumns ?? [] %}
 
 {% for item in items %}
-    {# The one label every control on this row refers to. An item's title is
-       optional, so falling back here (rather than in each aria-label) keeps
-       "Actions for" from trailing off into nothing on an untitled row. #}
+    {# The one label every control on this row refers to. #}
     {# `is not empty` would call a title of "0" empty, which is a real title. #}
     {% set itemLabel = (item.title is not null and item.title|trim != '')
         ? item.title
@@ -32,8 +27,10 @@
             ? "(uses linked element's title)"|t('menu-builder')
             : "(untitled)"|t('menu-builder')) %}
 
-    {# One lookup per row; healthy items are in the map too, so a missing key
-       means "not checked" rather than "fine". #}
+    {#
+       One lookup per row; healthy items are in the map too, so a missing key means "not checked"
+       rather than "fine".
+    #}
     {% set health = (itemHealth is defined and itemHealth[item.id] is defined) ? itemHealth[item.id] : null %}
 
     <li class="menu-builder-item{{ item.enabled ? '' : ' menu-builder-item-disabled' }}{{ item.hasChildren() ? ' menu-builder-item-has-children' : '' }}" data-id="{{ item.id }}" data-level="{{ level }}" data-parent-id="{{ parentId ?? '' }}" data-child-count="{{ item.children|length }}" data-no-children="{{ item.type == 'separator' ? '1' : '0' }}" data-title="{{ itemLabel }}" style="--mb-level: {{ level }}">
@@ -49,10 +46,11 @@
             {% endif %}
 
             {% if canReorder %}
-                {# Focusable and operable from the keyboard: arrow keys move the
-                   row through the same persistReorder() path a drag uses (see
-                   tree.js), so this isn't a mouse-only control wearing a
-                   button role. #}
+                {#
+                   Focusable and operable from the keyboard: arrow keys move the row through the
+                   same persistReorder() path a drag uses (see tree.js), so this isn't a mouse-only
+                   control wearing a button role.
+                #}
                 <a class="menu-builder-drag-handle move icon"
                    role="button"
                    tabindex="0"
@@ -60,9 +58,10 @@
                    aria-label="{{ 'Reorder {title}. Use the arrow keys to move it up, down, or in and out one level.'|t('menu-builder', { title: itemLabel }) }}"
                    aria-describedby="menu-builder-reorder-help"></a>
             {% elseif canEdit %}
-                {# Reordering is off while a search filters the tree — the rows
-                   on screen aren't the real sibling set. Keep the column so
-                   rows don't jump sideways when the search is cleared. #}
+                {#
+                   Reordering is off while a search filters the tree — the rows on screen aren't
+                   the real sibling set.
+                #}
                 <span class="menu-builder-drag-handle move icon is-disabled" aria-hidden="true" title="{{ 'Clear the search to reorder items.'|t('menu-builder') }}"></span>
             {% endif %}
 
@@ -74,11 +73,10 @@
                 {% endif %}
             </span>
 
-            {# The editor's own badge, previewed on the row so "does this item
-               have a badge, and which one" is answerable without opening the
-               slide-out. Escaped like anywhere else — the CP is not a place
-               where markup typed into a badge gets a second chance. The style
-               only ever contributes an allowlisted modifier class. #}
+            {#
+               The editor's own badge, previewed on the row so "does this item have a badge, and
+               which one" is answerable without opening the slide-out.
+            #}
             {% if item.hasBadge() %}
                 <span class="menu-builder-item-badge badge {{ item.badgeStyle() ? 'menu-builder-item-badge--' ~ item.badgeStyle() }}" title="{{ 'Badge'|t('menu-builder') }}">{{ item.badge }}</span>
             {% endif %}
@@ -90,22 +88,20 @@
             {% endif %}
 
             {% if not item.enabled %}
-                {# The `-disabled-flag` class is this badge's own hook: `-item-status`
-                   is shared with the mega-menu and link-health badges, so the
-                   JS that adds/removes this one on toggle needs a selector that
-                   can't collide with them (see tree.js `toggle()`). #}
+                {#
+                   The `-disabled-flag` class is this badge's own hook: `-item-status` is shared
+                   with the mega-menu and link-health badges, so the JS that adds/removes this one
+                   on toggle needs a selector that can't collide with them (see tree.js `toggle()`).
+                #}
                 <span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
             {% endif %}
 
-            {# Link health, from MenuBuilderLinkHealthService — the row says
-               *which* kind of problem it is (missing / disabled / unpublished
-               / not on this site / no URL / invalid link / dead dynamic
-               source) and, in the tooltip, what the front end is doing about
-               it. Every one of those strings comes from the health object,
-               which is built from a status and the item's own fallback
-               setting: nothing read off the linked element (title, URI, ID)
-               reaches this row, so a warning about content the viewer may not
-               be permitted to see discloses nothing about it. #}
+            {#
+               Link health, from MenuBuilderLinkHealthService — the row says which* kind of
+               problem it is (missing / disabled / unpublished / not on this site / no URL / invalid
+               link / dead dynamic source) and, in the tooltip, what the front end is doing about
+               it.
+            #}
             {% if health and not health.isHealthy() %}
                 <span class="menu-builder-item-status badge disabled-badge menu-builder-item-health-flag menu-builder-item-health--{{ health.status }}"
                       title="{{ health.message() }} {{ health.consequence() }}">
@@ -114,8 +110,10 @@
             {% endif %}
 
             {% if item.hasChildren() %}
-                {# `title` alone is not reliably announced, and a bare number
-                   read out on its own says nothing about what it counts. #}
+                {#
+                   `title` alone is not reliably announced, and a bare number read out on its own
+                   says nothing about what it counts.
+                #}
                 <span class="menu-builder-item-childcount light" title="{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}">
                     <span aria-hidden="true">{{ item.children|length }}</span>
                     <span class="visually-hidden">{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}</span>
@@ -138,16 +136,7 @@
                                 </li>
                             {% endif %}
                         </ul>
-                        {# The recovery route for an item whose linked element
-                           is gone. It opens the editor — where relinking, a
-                           fallback URL, and the enabled toggle all live, and
-                           where the same warning is spelled out in full —
-                           rather than guessing a replacement or quietly
-                           dropping the item. Disable and Delete stay in their
-                           usual places below; deliberately not repeated here,
-                           both because tree.js addresses the toggle entry by
-                           id and because a broken link should not lead with a
-                           destructive suggestion. #}
+                        {# The recovery route for an item whose linked element is gone. #}
                         {% if canEdit and health and health.needsElementRecovery() %}
                             <hr>
                             <ul>
@@ -178,9 +167,10 @@
     </li>
 
     {% if item.hasChildren() %}
-        {# This item's own column (level - 1) stays open for its descendants
-           only while it still has a sibling below to reach. Level-1 rows own
-           no column, hence the level check. #}
+        {#
+           This item's own column (level - 1) stays open for its descendants only while it still has
+           a sibling below to reach.
+        #}
         {% include "menu-builder/dashboard/_items" with {
             items: item.children,
             level: level + 1,

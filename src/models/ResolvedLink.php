@@ -3,16 +3,17 @@
 namespace Tahadudhiya\MenuBuilder\models;
 
 /**
- * The outcome of resolving a MenuBuilderItem's link type into an actual
- * (or unavailable) destination. Never persisted — computed fresh on every
- * resolve pass so deleted/disabled/moved elements are handled naturally.
- */
+ * The outcome of resolving a MenuBuilderItem's link type into an actual (or unavailable)
+ * destination.
+*/
 class ResolvedLink
 {
     public function __construct(
         public readonly ?string $url = null,
         public readonly bool $isAvailable = true,
-        /** The linked element's own title, used when the item has no explicit title override. */
+        /**
+         * The linked element's own title, used when the item has no explicit title override.
+        */
         public readonly ?string $label = null,
     ) {
     }

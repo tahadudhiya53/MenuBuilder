@@ -11,22 +11,15 @@ use yii\base\Action;
 use yii\web\Response;
 
 /**
- * The preview screen: one saved menu, rendered through the production Twig
- * macros for a simulated audience, device and site.
- *
- * Read-only in the strict sense — the only action is a GET that renders a
- * template, and MenuBuilderPreviewService performs no writes — so `view` is
- * the permission it needs, and there is no state-changing request here for
- * CSRF to protect. The controls are a GET form so a particular preview is a
- * shareable URL rather than hidden in a session.
- */
+ * The preview screen: one saved menu, rendered through the production Twig macros for a simulated
+ * audience, device and site.
+*/
 class PreviewController extends BaseMenuBuilderController
 {
     /**
-     * Preview renders a tree and changes nothing, so `view` covers all of
-     * it — the same answer, for the same reason, as the dashboard. Pure
-     * static so ControllerPermissionTest can check it without a booted app.
-     */
+     * Preview renders a tree and changes nothing, so `view` covers all of it — the same answer,
+     * for the same reason, as the dashboard.
+    */
     public static function requiredPermissionForAction(string $actionId): string
     {
         return 'menuBuilder:view';
@@ -74,9 +67,9 @@ class PreviewController extends BaseMenuBuilderController
 
         return $this->renderTemplate('menu-builder/preview/index', [
             'groups' => MenuBuilder::getInstance()->groups->getAll(),
-            // The service itself, so the markup panel can re-indent the
-            // captured output (MenuBuilderPreviewService::formatMarkup()) —
-            // a service, never a record, and read-only by construction.
+            // The service itself, so the markup panel can re-indent the captured output
+            // (MenuBuilderPreviewService::formatMarkup()) — a service, never a record, and
+            // read-only by construction.
             'previewService' => $preview,
             'group' => $group,
             'tree' => $tree,
@@ -88,9 +81,8 @@ class PreviewController extends BaseMenuBuilderController
             'itemCount' => count($items),
             'enabledCount' => $enabledCount,
             'disabledCount' => count($items) - $enabledCount,
-            // Split so the summary can say why the two numbers differ
-            // without implying a dynamic item's synthesised children are
-            // menu items the editor forgot about.
+            // Split so the summary can say why the two numbers differ without implying a dynamic
+            // item's synthesised children are menu items the editor forgot about.
             'previewedItemCount' => MenuBuilderPreviewService::countPersistedNodes($nodes),
             'dynamicNodeCount' => MenuBuilderPreviewService::countDynamicNodes($nodes),
         ] + $this->currentUserAffordances());

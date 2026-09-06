@@ -12,18 +12,13 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderBreadcrumbService;
 
 /**
  * Phase 19 — breadcrumbs.
- *
- * These tests deliberately do **not** stub active state: every trail is
- * built by running the real {@see MenuBuilderActiveResolver} over the tree
- * for a real URI first, exactly as MenuBuilderResolver::getTree() does, so a
- * breadcrumb can never pass here while disagreeing with the
- * `aria-current="page"` the same menu renders.
- *
- * No booted Craft app is needed: both services consume finished nodes.
- */
+*/
 class MenuBuilderBreadcrumbTest extends TestCase
 {
-    /** The request host and the current site's base-URL host — see MenuBuilderResolver::internalHosts(). */
+    /**
+     * The request host and the current site's base-URL host — see
+     * MenuBuilderResolver::internalHosts().
+    */
     private const SITE_HOSTS = ['example.test'];
 
     private function node(
@@ -68,14 +63,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * The phase's worked example, as an editor would build it:
-     *
-     *   Home
-     *   Products
-     *     Shoes
-     *       Running Shoes
-     *   Contact
-     */
+     * The phase's worked example, as an editor would build it: Home Products Shoes Running Shoes
+     * Contact
+    */
     private function shopMenu(): array
     {
         $running = $this->node(5, 'Running Shoes', '/products/shoes/running', level: 3);
@@ -88,11 +78,11 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * Resolves active state for `$currentUri` and returns the trail — the
-     * two pipeline steps a front-end request runs, in order.
+     * Resolves active state for `$currentUri` and returns the trail — the two pipeline steps a
+     * front-end request runs, in order.
      *
      * @param MenuBuilderNode[] $topLevelNodes
-     */
+    */
     private function trailFor(array $topLevelNodes, string $currentUri, array $hosts = self::SITE_HOSTS): array
     {
         (new MenuBuilderActiveResolver())->mark($topLevelNodes, $currentUri, $hosts);
@@ -125,7 +115,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
         );
     }
 
-    /** Root first, current page last — the order a breadcrumb is read in. */
+    /**
+     * Root first, current page last — the order a breadcrumb is read in.
+    */
     public function testTrailIsOrderedRootFirst(): void
     {
         $nodes = $this->shopMenu();
@@ -142,7 +134,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
         $this->assertFalse($trail->isEmpty());
     }
 
-    /** Hierarchy information: each crumb keeps its own depth, and the trail is iterable in Twig. */
+    /**
+     * Hierarchy information: each crumb keeps its own depth, and the trail is iterable in Twig.
+    */
     public function testCrumbsCarryTheirDepthAndAreIterable(): void
     {
         $nodes = $this->shopMenu();
@@ -160,7 +154,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
         $this->assertSame([1, 2, 3], $levels);
     }
 
-    /** Active state: only the last crumb is the current page; the rest are its ancestors. */
+    /**
+     * Active state: only the last crumb is the current page; the rest are its ancestors.
+    */
     public function testOnlyTheLastCrumbIsTheCurrentPage(): void
     {
         $nodes = $this->shopMenu();
@@ -180,12 +176,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * The whole point of deriving the trail from the menu: the crumbs follow
-     * the hierarchy the editor built, not the URL's segments. "Running Shoes"
-     * sits directly under "Home" here, and its trail says so even though its
-     * URL has three segments — a URL-splitting implementation would have
-     * invented "Products" and "Shoes" crumbs that this menu never had.
-     */
+     * The whole point of deriving the trail from the menu: the crumbs follow the hierarchy the
+     * editor built, not the URL's segments.
+    */
     public function testTrailFollowsTheMenuHierarchyAndNotTheUrlSegments(): void
     {
         $running = $this->node(5, 'Running Shoes', '/products/shoes/running', level: 2);
@@ -194,7 +187,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
         $this->assertSame(['Home', 'Running Shoes'], $this->trailFor([$home], '/products/shoes/running'));
     }
 
-    /** A heading is a real crumb — it just isn't a link (MenuBuilderNode::$isClickable). */
+    /**
+     * A heading is a real crumb — it just isn't a link (MenuBuilderNode::$isClickable).
+    */
     public function testNonClickableAncestorIsStillACrumb(): void
     {
         $shoes = $this->node(4, 'Shoes', '/products/shoes', level: 2);
@@ -213,9 +208,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * The same URL placed twice in one menu: the first in document order
-     * wins, so the answer is stable across requests.
-     */
+     * The same URL placed twice in one menu: the first in document order wins, so the answer is
+     * stable across requests.
+    */
     public function testDuplicateCurrentPageResolvesToTheFirstInDocumentOrder(): void
     {
         $utilityContact = $this->node(9, 'Contact us', '/contact', level: 2);
@@ -229,21 +224,17 @@ class MenuBuilderBreadcrumbTest extends TestCase
     // ----------------------------------------------------- nothing to report
 
     /**
-     * No matching item: the page simply isn't in this menu. An empty trail,
-     * never a trail guessed from `/legal/privacy`.
-     */
+     * No matching item: the page simply isn't in this menu.
+    */
     public function testNoMatchingItemYieldsAnEmptyTrail(): void
     {
         $this->assertSame([], $this->trailFor($this->shopMenu(), '/legal/privacy'));
     }
 
     /**
-     * A missing item — an item deleted since, or one whose branch was never
-     * added — is not in the resolved tree at all, so the page it used to
-     * cover has no trail. (The resolver's fail-closed drop of a cached node
-     * whose item is gone is covered by MenuBuilderCacheIntegrationTest; here
-     * it is the *breadcrumb* consequence that matters.)
-     */
+     * A missing item — an item deleted since, or one whose branch was never added — is not in
+     * the resolved tree at all, so the page it used to cover has no trail.
+    */
     public function testPageWhoseItemIsMissingFromTheTreeYieldsAnEmptyTrail(): void
     {
         $nodes = $this->shopMenu();
@@ -256,11 +247,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
 
     /**
      * A disabled item never reaches the resolved tree
-     * (`MenuBuilderItemService::getTree(includeDisabled: false)`), and its
-     * descendants go with it — so neither the disabled page nor a page
-     * beneath it has a trail. Modelled here as what the resolver hands over:
-     * the branch absent.
-     */
+     * (`MenuBuilderItemService::getTree(includeDisabled: false)`), and its descendants go with it
+     * — so neither the disabled page nor a page beneath it has a trail.
+    */
     public function testDisabledItemAndItsDescendantsHaveNoTrail(): void
     {
         $home = $this->node(1, 'Home', '/');
@@ -272,11 +261,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * An unpublished (or deleted, or disabled) linked element whose item is
-     * set to keep the item resolves to an unavailable link. It cannot be the
-     * current page — there is no page — so it yields no trail even when the
-     * request path looks like the one it used to have.
-     */
+     * An unpublished (or deleted, or disabled) linked element whose item is set to keep the item
+     * resolves to an unavailable link.
+    */
     public function testUnpublishedElementPageYieldsAnEmptyTrail(): void
     {
         $draft = $this->node(6, 'Draft product', '/products/draft', level: 2, type: MenuBuilderItem::TYPE_ENTRY, isLinkAvailable: false);
@@ -286,10 +273,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * The same item as an *ancestor*, though, is still part of the path the
-     * editor built: it stays in the trail as an unlinked crumb rather than
-     * silently shortening the chain.
-     */
+     * The same item as an *ancestor*, though, is still part of the path the editor built: it stays
+     * in the trail as an unlinked crumb rather than silently shortening the chain.
+    */
     public function testUnpublishedElementAncestorStaysInTheTrailAsAnUnlinkedCrumb(): void
     {
         $child = $this->node(7, 'Care guide', '/products/draft/care', level: 3);
@@ -308,10 +294,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * A tree resolved with active-state marking turned off — what the
-     * control-panel preview asks for, because it doesn't simulate a page —
-     * has no current page, and therefore no trail.
-     */
+     * A tree resolved with active-state marking turned off — what the control-panel preview asks
+     * for, because it doesn't simulate a page — has no current page, and therefore no trail.
+    */
     public function testUnmarkedTreeYieldsAnEmptyTrail(): void
     {
         $tree = new MenuBuilderTree(new MenuBuilderGroup(), $this->shopMenu());
@@ -329,14 +314,19 @@ class MenuBuilderBreadcrumbTest extends TestCase
 
     // ------------------------------------------------------------ custom URLs
 
-    /** A root-relative custom URL is matched the way the menu matches it — query and trailing slash and all. */
+    /**
+     * A root-relative custom URL is matched the way the menu matches it — query and trailing
+     * slash and all.
+    */
     public function testCustomUrlItemTrailIgnoresTrailingSlashesAndQueryStrings(): void
     {
         $this->assertSame(['Products', 'Shoes'], $this->trailFor($this->shopMenu(), '/products/shoes/'));
         $this->assertSame(['Products', 'Shoes'], $this->trailFor($this->shopMenu(), 'products/shoes?page=2#top'));
     }
 
-    /** An absolute custom URL on this site's own host is this site's page. */
+    /**
+     * An absolute custom URL on this site's own host is this site's page.
+    */
     public function testAbsoluteCustomUrlOnThisHostYieldsATrail(): void
     {
         $shoes = $this->node(4, 'Shoes', 'https://example.test/products/shoes', level: 2);
@@ -346,11 +336,10 @@ class MenuBuilderBreadcrumbTest extends TestCase
     }
 
     /**
-     * An external custom URL that happens to share a path with the request is
-     * somebody else's page, so it is not the current page and there is no
-     * trail — the breadcrumb inherits the active resolver's host rule rather
-     * than restating it.
-     */
+     * An external custom URL that happens to share a path with the request is somebody else's page,
+     * so it is not the current page and there is no trail — the breadcrumb inherits the active
+     * resolver's host rule rather than restating it.
+    */
     public function testExternalCustomUrlWithAMatchingPathYieldsNoTrail(): void
     {
         $shoes = $this->node(4, 'Shoes', 'https://shop.example.com/products/shoes', level: 2);
@@ -359,7 +348,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
         $this->assertSame([], $this->trailFor([$products], '/products/shoes'));
     }
 
-    /** A `mailto:` item is not a page, and a fragment-only anchor is not one either. */
+    /**
+     * A `mailto:` item is not a page, and a fragment-only anchor is not one either.
+    */
     public function testNonNavigableItemsNeverStartATrail(): void
     {
         $mail = $this->node(10, 'Email us', 'mailto:hello@example.test');
@@ -372,10 +363,8 @@ class MenuBuilderBreadcrumbTest extends TestCase
     // ------------------------------------------------------------- multi-site
 
     /**
-     * Sibling sites share path structure — `/contact` exists on English and
-     * German. While the English site is being served, the German item is not
-     * the current page, so it cannot start a German trail.
-     */
+     * Sibling sites share path structure — `/contact` exists on English and German.
+    */
     public function testSiblingSitePathDoesNotProduceATrail(): void
     {
         $german = $this->node(20, 'Kontakt', 'https://de.example.test/contact', level: 2);
@@ -384,7 +373,10 @@ class MenuBuilderBreadcrumbTest extends TestCase
         $this->assertSame([], $this->trailFor([$international], 'https://example.test/contact'));
     }
 
-    /** The same item, on the site it belongs to: the request host is that site's host, so the trail is built. */
+    /**
+     * The same item, on the site it belongs to: the request host is that site's host, so the trail
+     * is built.
+    */
     public function testCrossSiteItemHasATrailOnItsOwnSite(): void
     {
         $german = $this->node(20, 'Kontakt', 'https://de.example.test/contact', level: 2);
@@ -398,9 +390,9 @@ class MenuBuilderBreadcrumbTest extends TestCase
 
     /**
      * A console request knows no host, so host comparison is skipped there
-     * (MenuBuilderResolver::getTree passes no hosts) — the breadcrumb behaves
-     * the same as the menu's own active state rather than differently.
-     */
+     * (MenuBuilderResolver::getTree passes no hosts) — the breadcrumb behaves the same as the
+     * menu's own active state rather than differently.
+    */
     public function testConsoleRequestWithoutHostsMatchesOnPathAlone(): void
     {
         $this->assertSame(['Products', 'Shoes'], $this->trailFor($this->shopMenu(), '/products/shoes', []));

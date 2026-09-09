@@ -12,21 +12,12 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderLinkHealth;
 
 /**
- * Link health: what the CP tells an editor about a menu item whose link
- * doesn't work, and what it is careful not to tell them.
- *
- * The service half (two queries per element type, current site vs. any site)
- * needs a booted Craft app and a database and so isn't covered here — see
- * "manual testing required" in the phase report. Everything that *decides*
- * anything is pure and is covered: the element-status mapping, the
- * non-element checks, the front-end consequence, the summary, and the
- * no-disclosure property.
- */
+ * Link health: what the CP tells an editor about a menu item whose link doesn't work, and what it
+ * is careful not to tell them.
+*/
 class MenuBuilderLinkHealthTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // Element-backed items
-    // ---------------------------------------------------------------------
 
     public function testALiveEntryWithAUrlIsHealthy(): void
     {
@@ -37,11 +28,9 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * The element resolves, but there is nothing to put in an href — an entry
-     * in a section with no URI format, an asset in a volume with no public
-     * base URL. ElementLinkResolver falls back on exactly this case, so the
-     * CP has to flag it rather than call it healthy.
-     */
+     * The element resolves, but there is nothing to put in an href — an entry in a section with
+     * no URI format, an asset in a volume with no public base URL.
+    */
     public function testALiveElementWithNoUrlIsFlagged(): void
     {
         $this->assertSame(
@@ -67,10 +56,10 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * Pending (post date in the future) and expired (expiry date passed) are
-     * both "enabled but not live" — the editor's fix is a date, not a switch,
-     * which is why they don't share the "disabled" wording.
-     */
+     * Pending (post date in the future) and expired (expiry date passed) are both "enabled but not
+     * live" — the editor's fix is a date, not a switch, which is why they don't share the
+     * "disabled" wording.
+    */
     public function testAPendingOrExpiredEntryIsReportedAsUnpublished(): void
     {
         $this->assertSame(
@@ -93,10 +82,9 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * An unknown or absent status must not read as healthy: the front end
-     * would drop or unlink the item, and a silent omission is the thing this
-     * screen exists to explain.
-     */
+     * An unknown or absent status must not read as healthy: the front end would drop or unlink the
+     * item, and a silent omission is the thing this screen exists to explain.
+    */
     public function testAnUnknownStatusFailsVisible(): void
     {
         $this->assertSame(
@@ -111,11 +99,10 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * A restored (un-trashed, re-enabled) element needs no invalidation step
-     * of its own: health is recomputed from the element's current status
-     * every time, so the same call that said "missing" says "healthy" the
-     * moment the element is back.
-     */
+     * A restored (un-trashed, re-enabled) element needs no invalidation step of its own: health is
+     * recomputed from the element's current status every time, so the same call that said "missing"
+     * says "healthy" the moment the element is back.
+    */
     public function testARestoredElementIsHealthyAgain(): void
     {
         $this->assertSame(
@@ -130,11 +117,10 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * The CP must never flag a link the front end would happily emit, or pass
-     * one it would refuse — both come from
-     * ElementLinkResolver::isPubliclyAvailable(), and this is the pin that
-     * they still share it.
-     */
+     * The CP must never flag a link the front end would happily emit, or pass one it would refuse
+     * — both come from ElementLinkResolver::isPubliclyAvailable(), and this is the pin that they
+     * still share it.
+    */
     public function testAvailabilityAgreesWithTheResolver(): void
     {
         // An entry that is merely "enabled" (not live) is not linkable.
@@ -159,17 +145,14 @@ class MenuBuilderLinkHealthTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Custom URLs, anchors, structural types, dynamic sources
-    // ---------------------------------------------------------------------
 
     /**
-     * External URLs are judged on their shape only — this phase adds no HTTP
-     * crawling, so a reachable and an unreachable https:// URL are both
-     * healthy here.
+     * External URLs are judged on their shape only — this phase adds no HTTP crawling, so a
+     * reachable and an unreachable https:// URL are both healthy here.
      *
      * @dataProvider healthyUrlProvider
-     */
+    */
     public function testAValidCustomUrlIsHealthy(string $url): void
     {
         $item = new MenuBuilderItem(['type' => MenuBuilderItem::TYPE_URL, 'customUrl' => $url]);
@@ -177,9 +160,7 @@ class MenuBuilderLinkHealthTest extends TestCase
         $this->assertSame(MenuBuilderLinkHealth::STATUS_HEALTHY, MenuBuilderLinkHealth::forNonElementItem($item));
     }
 
-    /**
-     * @return array<string,array{string}>
-     */
+    /** @return array<string,array{string}> */
     public static function healthyUrlProvider(): array
     {
         return [
@@ -192,9 +173,7 @@ class MenuBuilderLinkHealthTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider invalidUrlProvider
-     */
+    /** @dataProvider invalidUrlProvider */
     public function testAnUnsafeOrMalformedCustomUrlIsFlagged(?string $url): void
     {
         $item = new MenuBuilderItem(['type' => MenuBuilderItem::TYPE_URL, 'customUrl' => $url]);
@@ -203,13 +182,12 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * The unsafe ones matter as much as the malformed ones: a `javascript:`
-     * URL in the database resolves to nothing on the front end
-     * (UrlLinkResolver re-checks it), so without this the item would vanish
-     * from the menu with no explanation anywhere in the CP.
+     * The unsafe ones matter as much as the malformed ones: a `javascript:` URL in the database
+     * resolves to nothing on the front end (UrlLinkResolver re-checks it), so without this the item
+     * would vanish from the menu with no explanation anywhere in the CP.
      *
      * @return array<string,array{string|null}>
-     */
+    */
     public static function invalidUrlProvider(): array
     {
         return [
@@ -240,7 +218,9 @@ class MenuBuilderLinkHealthTest extends TestCase
         $this->assertSame(MenuBuilderLinkHealth::STATUS_INVALID_URL, MenuBuilderLinkHealth::forNonElementItem($malformed));
     }
 
-    /** A heading and a separator are supposed to have no destination. */
+    /**
+     * A heading and a separator are supposed to have no destination.
+    */
     public function testStructuralTypesAreAlwaysHealthy(): void
     {
         foreach ([MenuBuilderItem::TYPE_NONCLICKABLE, MenuBuilderItem::TYPE_SEPARATOR] as $type) {
@@ -274,9 +254,7 @@ class MenuBuilderLinkHealthTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // What the front end does about it
-    // ---------------------------------------------------------------------
 
     public function testTheConsequenceFollowsTheItemsFallbackBehaviour(): void
     {
@@ -295,10 +273,10 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * A fallback URL the resolver would refuse (unsafe scheme, empty) must
-     * not be described as a working fallback — ElementLinkResolver re-checks
-     * it and emits nothing, so the item renders as plain text.
-     */
+     * A fallback URL the resolver would refuse (unsafe scheme, empty) must not be described as a
+     * working fallback — ElementLinkResolver re-checks it and emits nothing, so the item renders
+     * as plain text.
+    */
     public function testAnUnusableFallbackUrlIsNotPromised(): void
     {
         $health = new MenuBuilderLinkHealth(
@@ -331,7 +309,9 @@ class MenuBuilderLinkHealthTest extends TestCase
         $this->assertFalse(MenuBuilderLinkHealth::isFallbackUsable($notConfigured));
     }
 
-    /** A disabled item renders nowhere, so no fallback wording applies to it. */
+    /**
+     * A disabled item renders nowhere, so no fallback wording applies to it.
+    */
     public function testADisabledItemSaysSoInsteadOfDescribingAFallback(): void
     {
         $health = new MenuBuilderLinkHealth(
@@ -350,16 +330,12 @@ class MenuBuilderLinkHealthTest extends TestCase
         $this->assertTrue(MenuBuilderLinkHealth::healthy()->isHealthy());
     }
 
-    // ---------------------------------------------------------------------
     // Recovery actions
-    // ---------------------------------------------------------------------
 
     /**
-     * The remove / disable / replace / fallback affordances are offered only
-     * where the element is genuinely gone. A disabled or unpublished element
-     * comes back on its own, and pushing "delete this menu item" at a state
-     * that resolves itself is how a menu loses items it should have kept.
-     */
+     * The remove / disable / replace / fallback affordances are offered only where the element is
+     * genuinely gone.
+    */
     public function testRecoveryActionsAreOfferedOnlyWhenTheElementIsGone(): void
     {
         $offered = [];
@@ -376,9 +352,7 @@ class MenuBuilderLinkHealthTest extends TestCase
         ], $offered);
     }
 
-    // ---------------------------------------------------------------------
     // Summary
-    // ---------------------------------------------------------------------
 
     public function testTheSummaryCountsOnlyItemsThatNeedAttention(): void
     {
@@ -405,21 +379,11 @@ class MenuBuilderLinkHealthTest extends TestCase
         $this->assertSame([], $summary['byStatus']);
     }
 
-    // ---------------------------------------------------------------------
     // Disclosure
-    // ---------------------------------------------------------------------
 
     /**
-     * The warning must not leak the content it is about. An editor who can
-     * see a menu is not thereby entitled to the title, URI, slug or ID of a
-     * disabled, unpublished or deleted element — a menu warning is not an
-     * authorization check, and the CP tree is visible to anyone with
-     * `menuBuilder:view`.
-     *
-     * The guarantee is structural rather than a string audit: the object
-     * carries no element data to leak. If a future change adds an element
-     * title or URI to it "just for the message", this test fails.
-     */
+     * The warning must not leak the content it is about.
+    */
     public function testTheHealthObjectCarriesNoElementData(): void
     {
         $properties = array_map(
@@ -437,10 +401,9 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * The other half of the same guarantee: the wording depends on the status
-     * alone, so two items pointing at completely different content get
-     * byte-identical text.
-     */
+     * The other half of the same guarantee: the wording depends on the status alone, so two items
+     * pointing at completely different content get byte-identical text.
+    */
     public function testTheWordingIsIdenticalForEveryItemInTheSameState(): void
     {
         $first = new MenuBuilderLinkHealth(MenuBuilderLinkHealth::STATUS_MISSING, MenuBuilderItem::FALLBACK_HIDE);
@@ -452,10 +415,9 @@ class MenuBuilderLinkHealthTest extends TestCase
     }
 
     /**
-     * Every status is explained, and no explanation contains anything that
-     * could only have come from the element: no digits (IDs, dates), no
-     * slashes (URIs, URLs), no angle brackets.
-     */
+     * Every status is explained, and no explanation contains anything that could only have come
+     * from the element: no digits (IDs, dates), no slashes (URIs, URLs), no angle brackets.
+    */
     public function testEveryStatusHasSafeGenericWording(): void
     {
         foreach (MenuBuilderLinkHealth::STATUSES as $status) {

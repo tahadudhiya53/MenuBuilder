@@ -8,17 +8,14 @@ use Tahadudhiya\MenuBuilder\helpers\MenuBuilderHierarchyHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
- * MenuBuilderItem validation — everything the model decides about its own
- * data before it reaches the database.
- *
- * Covers the per-type field rules, the per-item options (state, link
- * behaviour, appearance, accessibility, custom attributes), fail-closed shape
- * validation of the metadata bag (mega menu and dynamic source), and the URL
- * scheme denylist that keeps an executable scheme out of a rendered href.
- */
+ * MenuBuilderItem validation — everything the model decides about its own data before it reaches
+ * the database.
+*/
 class MenuBuilderItemModelTest extends TestCase
 {
-    /** The simplest item that validates, as a starting point for each case. */
+    /**
+     * The simplest item that validates, as a starting point for each case.
+    */
     private function urlItem(): MenuBuilderItem
     {
         $item = new MenuBuilderItem();
@@ -38,9 +35,7 @@ class MenuBuilderItemModelTest extends TestCase
         return $item;
     }
 
-    // ---------------------------------------------------------------------
     // Per-type field rules
-    // ---------------------------------------------------------------------
 
     public function testTitleRequiredUnlessSeparator(): void
     {
@@ -62,11 +57,8 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * An element-backed item may keep its title blank only when it
-     * disappears with its element. The other two fallbacks keep the item on
-     * the page after the element is gone, and a blank title has nothing left
-     * to inherit from at that point.
-     */
+     * An element-backed item may keep its title blank only when it disappears with its element.
+    */
     public function testElementItemMayLeaveTitleBlankWhenItIsHiddenOnFallback(): void
     {
         $item = new MenuBuilderItem();
@@ -265,10 +257,10 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * A non-clickable heading/separator must never become clickable just
-     * because a customUrl or a stale clickable=true value is present on the
-     * item — isLinkable() is authoritative regardless of those values.
-     */
+     * A non-clickable heading/separator must never become clickable just because a customUrl or a
+     * stale clickable=true value is present on the item — isLinkable() is authoritative
+     * regardless of those values.
+    */
     public function testNonClickableAndSeparatorStayUnlinkableEvenWithCustomUrl(): void
     {
         $heading = new MenuBuilderItem();
@@ -311,10 +303,7 @@ class MenuBuilderItemModelTest extends TestCase
 
     public function testVisibilityAllowsUnrecognizedTypeForThirdPartyRules(): void
     {
-        // Types this model doesn't know the shape of (e.g. registered via
-        // MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES)
-        // aren't rejected here — they're validated by their own rule class
-        // at evaluation time instead.
+        // Types this model doesn't know the shape of (e.g.
         $item = $this->validUrlItem([['type' => 'thirdPartyRule', 'anything' => 'goes']]);
 
         $this->assertTrue($item->validate());
@@ -338,7 +327,10 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertArrayHasKey('visibility', $invalid->getErrors());
     }
 
-    /** Bool/float must not slip through via a permissive `(string)` cast — `true` casts to `"1"`, which looks like a valid ID. */
+    /**
+     * Bool/float must not slip through via a permissive `(string)` cast — `true` casts to `"1"`,
+     * which looks like a valid ID.
+    */
     public function testVisibilityIdListRejectsInvalidPhpTypes(): void
     {
         foreach ([true, false, 1.5, null, ['nested']] as $badValue) {
@@ -366,13 +358,10 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * An empty restriction list is rejected at save time rather than stored:
-     * the rules fail closed on one (see UserGroupRule/SiteRule/
-     * EnvironmentRule), so accepting it would persist an item that silently
-     * never renders. Rejecting it keeps the model and the rules in agreement
-     * and gives the editor or importer an actual error. "No restriction" is
-     * the absence of the rule.
-     */
+     * An empty restriction list is rejected at save time rather than stored: the rules fail closed
+     * on one (see UserGroupRule/SiteRule/ EnvironmentRule), so accepting it would persist an item
+     * that silently never renders.
+    */
     public function testVisibilityEmptyGroupIdsIsRejected(): void
     {
         $this->assertFalse($this->validUrlItem([['type' => 'userGroup', 'groupIds' => []]])->validate());
@@ -392,11 +381,11 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * The CP form only ever emits a rule when the editor actually picked
-     * something (ItemsController::buildVisibilityRules), so a well-formed
-     * restriction must still validate — this is the counterpart to the three
-     * rejection tests above, guarding against over-tightening them.
-     */
+     * The CP form only ever emits a rule when the editor actually picked something
+     * (ItemsController::buildVisibilityRules), so a well-formed restriction must still validate —
+     * this is the counterpart to the three rejection tests above, guarding against over-tightening
+     * them.
+    */
     public function testVisibilityWellFormedRestrictionsRemainValid(): void
     {
         foreach ([
@@ -427,7 +416,9 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertArrayHasKey('visibility', $item->getErrors());
     }
 
-    /** Malformed, non-string persisted values must fail closed rather than throw. */
+    /**
+     * Malformed, non-string persisted values must fail closed rather than throw.
+    */
     public function testVisibilityDateRangeRejectsNonStringDateValues(): void
     {
         foreach ([true, ['nested' => 'array'], 12345] as $badValue) {
@@ -438,7 +429,9 @@ class MenuBuilderItemModelTest extends TestCase
         }
     }
 
-    /** DateTime would otherwise silently normalize this to March 2 instead of rejecting it. */
+    /**
+     * DateTime would otherwise silently normalize this to March 2 instead of rejecting it.
+    */
     public function testVisibilityDateRangeRejectsInvalidCalendarDates(): void
     {
         $item = $this->validUrlItem([['type' => 'dateRange', 'start' => '2026-02-30']]);
@@ -486,11 +479,10 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * Validation must inspect the same field the resolver renders (the
-     * anchor field, `customUrl`, before the CSS-targeting `handle`) —
-     * otherwise a malformed anchor rides along unvalidated behind a
-     * perfectly valid handle.
-     */
+     * Validation must inspect the same field the resolver renders (the anchor field, `customUrl`,
+     * before the CSS-targeting `handle`) — otherwise a malformed anchor rides along unvalidated
+     * behind a perfectly valid handle.
+    */
     public function testAMalformedAnchorFieldFailsValidationEvenWithAValidHandle(): void
     {
         $item = new MenuBuilderItem();
@@ -516,15 +508,13 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertTrue($item->validate(), json_encode($item->getErrors()));
     }
 
-    // ---------------------------------------------------------------------
     // enabled / disabled: a disabled item takes its subtree with it
-    // ---------------------------------------------------------------------
 
     public function testDisabledParentDoesNotPromoteItsChildrenToRoots(): void
     {
-        // What MenuBuilderItemService::getTree() sees once the query has
-        // dropped the disabled parent (id 2): the grandchild's parent chain
-        // no longer reaches a root, so neither row belongs in the tree.
+        // What MenuBuilderItemService::getTree() sees once the query has dropped the disabled
+        // parent (id 2): the grandchild's parent chain no longer reaches a root, so neither row
+        // belongs in the tree.
         $rows = [
             ['id' => 1, 'parentId' => null, 'sortOrder' => 1],
             ['id' => 3, 'parentId' => 2, 'sortOrder' => 2],
@@ -584,9 +574,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertSame([1, 2, 3, 4], array_keys(MenuBuilderHierarchyHelper::idsReachableFromRoots($rows)));
     }
 
-    // ---------------------------------------------------------------------
     // clickable
-    // ---------------------------------------------------------------------
 
     public function testClickableRequiresLinkableTypeExplicitFlagAndUrl(): void
     {
@@ -615,9 +603,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertTrue($this->urlItem()->isLinkable());
     }
 
-    // ---------------------------------------------------------------------
     // target / rel
-    // ---------------------------------------------------------------------
 
     public function testTargetIsWhitelisted(): void
     {
@@ -643,8 +629,8 @@ class MenuBuilderItemModelTest extends TestCase
 
     public function testCombineRelDedupesTokensAcrossFields(): void
     {
-        // The nofollow checkbox plus a hand-typed "nofollow noreferrer" in the
-        // custom rel field — what ItemsController::buildRel() has to merge.
+        // The nofollow checkbox plus a hand-typed "nofollow noreferrer" in the custom rel field —
+        // what ItemsController::buildRel() has to merge.
         $this->assertSame(
             'nofollow noreferrer',
             LinkAttributeHelper::combineRel(['nofollow', null, 'nofollow noreferrer'])
@@ -670,9 +656,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertArrayHasKey('rel', $item->getErrors());
     }
 
-    // ---------------------------------------------------------------------
     // title / title fallback
-    // ---------------------------------------------------------------------
 
     public function testExplicitTitleIsNeverOverwrittenByTheElementLabel(): void
     {
@@ -680,9 +664,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertSame('Our Online Shop', LinkAttributeHelper::resolveTitle('', 'Our Online Shop'));
     }
 
-    // ---------------------------------------------------------------------
     // CSS class / HTML id / ARIA label / title attribute
-    // ---------------------------------------------------------------------
 
     public function testHtmlIdRejectsWhitespaceAndQuoteCharacters(): void
     {
@@ -744,13 +726,9 @@ class MenuBuilderItemModelTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // custom HTML attributes
-    // ---------------------------------------------------------------------
 
-    /**
-     * @return array<string,array{array<string,string>}>
-     */
+    /** @return array<string,array{array<string,string>}> */
     public static function unsafeAttributeProvider(): array
     {
         return [
@@ -772,7 +750,7 @@ class MenuBuilderItemModelTest extends TestCase
     /**
      * @dataProvider unsafeAttributeProvider
      * @param array<string,string> $attributes
-     */
+    */
     public function testUnsafeHtmlAttributesAreRejected(array $attributes): void
     {
         $this->assertNotSame([], LinkAttributeHelper::validateHtmlAttributes($attributes));
@@ -791,9 +769,8 @@ class MenuBuilderItemModelTest extends TestCase
             'data-index' => '2',
             'aria-describedby' => 'nav-help',
             'xlink:href' => '#icon',
-            // `data:` stays allowed: it has legitimate uses on a data-*
-            // attribute, and a *link's* data: URL is refused separately by
-            // MenuBuilderItem::isPermissiveUrl().
+            // `data:` stays allowed: it has legitimate uses on a data-* attribute, and a *link's*
+            // data: URL is refused separately by MenuBuilderItem::isPermissiveUrl().
             'data-thumb' => 'data:image/png;base64,iVBORw0KGgo=',
         ];
 
@@ -813,9 +790,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertNotSame([], LinkAttributeHelper::validateHtmlAttributes($parsed));
     }
 
-    // ---------------------------------------------------------------------
     // fallback behaviour
-    // ---------------------------------------------------------------------
 
     public function testFallbackBehaviorIsWhitelisted(): void
     {
@@ -856,9 +831,7 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertTrue($item->validate(), json_encode($item->getErrors()));
     }
 
-    // ---------------------------------------------------------------------
     // Metadata bag: mega menu and dynamic source
-    // ---------------------------------------------------------------------
 
     public function testMegaMenuEnabledRequiresValidColumnsRange(): void
     {
@@ -882,12 +855,11 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * The flags are read straight out of a JSON bag, so a string "true" or a
-     * string "3" written by anything other than the editor has to be
-     * rejected rather than quietly coerced — `buildMegaMenuConfig()` and
-     * `megaMenuColumns()` both test for `is_int`, and a stored string would
-     * silently fall back to one column at render time.
-     */
+     * The flags are read straight out of a JSON bag, so a string "true" or a string "3" written by
+     * anything other than the editor has to be rejected rather than quietly coerced —
+     * `buildMegaMenuConfig()` and `megaMenuColumns()` both test for `is_int`, and a stored string
+     * would silently fall back to one column at render time.
+    */
     public function testMegaMenuFlagsMustBeRealBooleansAndIntegers(): void
     {
         $item = $this->urlItem();
@@ -902,10 +874,9 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * Mega-menu config is presentation layered on the hierarchy, not an item
-     * type: any item may carry it, and an item may be both a mega-menu
-     * parent and a member of its own parent's column.
-     */
+     * Mega-menu config is presentation layered on the hierarchy, not an item type: any item may
+     * carry it, and an item may be both a mega-menu parent and a member of its own parent's column.
+    */
     public function testAnyItemMayBeBothAMegaMenuParentAndAColumnMember(): void
     {
         $item = $this->urlItem();
@@ -996,13 +967,9 @@ class MenuBuilderItemModelTest extends TestCase
         $this->assertFalse($item->validate());
     }
 
-    // ---------------------------------------------------------------------
     // URL schemes that execute instead of navigating
-    // ---------------------------------------------------------------------
 
-    /**
-     * @return array<string,array{string}>
-     */
+    /** @return array<string,array{string}> */
     public static function dangerousUrlProvider(): array
     {
         return [
@@ -1019,17 +986,13 @@ class MenuBuilderItemModelTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider dangerousUrlProvider
-     */
+    /** @dataProvider dangerousUrlProvider */
     public function testExecutableSchemesAreRejected(string $url): void
     {
         $this->assertFalse(MenuBuilderItem::isPermissiveUrl($url), "Expected rejected: $url");
     }
 
-    /**
-     * @dataProvider dangerousUrlProvider
-     */
+    /** @dataProvider dangerousUrlProvider */
     public function testACustomUrlWithAnExecutableSchemeFailsValidation(string $url): void
     {
         $item = new MenuBuilderItem();
@@ -1043,9 +1006,9 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * The same denylist guards `fallbackUrl`, which becomes the rendered
-     * href whenever a linked element is unavailable.
-     */
+     * The same denylist guards `fallbackUrl`, which becomes the rendered href whenever a linked
+     * element is unavailable.
+    */
     public function testAFallbackUrlWithAnExecutableSchemeFailsValidation(): void
     {
         $item = new MenuBuilderItem();
@@ -1060,9 +1023,9 @@ class MenuBuilderItemModelTest extends TestCase
     }
 
     /**
-     * The denylist matches the scheme, not the substring — a path or query
-     * that merely contains one of these words is an ordinary URL.
-     */
+     * The denylist matches the scheme, not the substring — a path or query that merely contains
+     * one of these words is an ordinary URL.
+    */
     public function testLegitimateUrlsThatMentionADeniedSchemeStillPass(): void
     {
         $safe = [

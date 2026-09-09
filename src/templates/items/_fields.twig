@@ -33,30 +33,19 @@
 {{ redirectInput('menu-builder/' ~ group.handle) }}
 {{ csrfInput() }}
 
-{# `items/edit` needs only `view`, so this partial can be rendered for someone
-   who may not save. One disabled fieldset makes every control inside it
-   genuinely inert rather than threading a flag through every field call.
-   `canEdit` defaults to true so any caller that doesn't pass it (the
-   slide-out renders the same partial) behaves exactly as before. #}
+{# `items/edit` needs only `view`, so this partial can be rendered for someone who may not save. #}
 <fieldset class="menu-builder-fieldset"{{ (canEdit ?? true) ? '' : ' disabled' }}>
 
-{# Link health for this item, computed by ItemsController from
-   MenuBuilderLinkHealthService. Shown first because it explains why the
-   editor is here at all, and because the two fields that fix it — the element
-   picker and the fallback behaviour — are further down the same form.
-
-   It is worded entirely from the health status and this item's own fallback
-   setting. Nothing about the linked element is read here or by the health
-   object, so an editor without access to the (disabled, unpublished, or
-   deleted) content learns nothing about it beyond "this link doesn't work". #}
+{# Link health for this item, computed by ItemsController from MenuBuilderLinkHealthService. #}
 {% if health is defined and health and not health.isHealthy() %}
     <div class="menu-builder-notice warning menu-builder-health-notice" role="status">
         <p><strong>{{ health.label() }}</strong> — {{ health.message() }}</p>
         <p class="light">{{ health.consequence() }}</p>
         {% if health.needsElementRecovery() %}
-            {# Four safe ways out, none of which this screen takes on the
-               editor's behalf: MenuBuilder never discards a menu item because
-               the thing it pointed at went away. #}
+            {#
+               Four safe ways out, none of which this screen takes on the editor's behalf:
+               MenuBuilder never discards a menu item because the thing it pointed at went away.
+            #}
             <ul class="menu-builder-health-actions">
                 <li>{{ "Pick different content below to relink this item."|t('menu-builder') }}</li>
                 <li>{{ "Or set the fallback behaviour to a fallback URL, so it keeps working."|t('menu-builder') }}</li>
@@ -170,14 +159,11 @@
                 { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
             ],
         }) }}
-        {# One picker per source type, all posting the same `dynamicSourceId`
-           the controller already reads — item-fields.js shows the one that
-           matches and disables the rest, exactly as the link-type sections
-           work, so a hidden picker's value can never be submitted.
-
-           This used to be a bare number field asking the editor to go and
-           look an internal ID up under Settings first. Nothing about the
-           stored value changed. #}
+        {#
+           One picker per source type, all posting the same `dynamicSourceId` the controller already
+           reads — item-fields.js shows the one that matches and disables the rest, exactly as the
+           link-type sections work, so a hidden picker's value can never be submitted.
+        #}
         <div data-dynamic-source="entries">
             {{ forms.selectField({
                 label: "Section"|t('menu-builder'),
@@ -213,12 +199,12 @@
                     |merge(craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values),
             }) }}
         </div>
-        {# Blank means "no limit stored", which
-           MenuBuilderDynamicNavigationService::normalizeConfig() reads as the
-           maximum — that is the state a quick-added dynamic item starts in, so
-           showing a made-up 10 here would report a value the item doesn't have.
-           The cap comes from MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT rather
-           than being written out again. #}
+        {#
+           Blank means "no limit stored", which
+           MenuBuilderDynamicNavigationService::normalizeConfig() reads as the maximum — that is
+           the state a quick-added dynamic item starts in, so showing a made-up 10 here would report
+           a value the item doesn't have.
+        #}
         {{ forms.textField({
             label: "Limit"|t('menu-builder'),
             instructions: "How many children to pull in. Leave blank for the maximum ({max}), which is enforced server-side regardless of what's entered here."|t('menu-builder', { max: dynamicSourceMaxLimit }),
@@ -243,7 +229,10 @@
         }) }}
     </div>
 
-    {# Non-clickable headings and separators can never carry a link — no UI exposes one, and isLinkable() is authoritative regardless. #}
+    {#
+       Non-clickable headings and separators can never carry a link — no UI exposes one, and
+       isLinkable() is authoritative regardless.
+    #}
     <input type="hidden" name="clickable" id="clickableField" value="{{ item.type not in ['nonclickable', 'separator'] ? '1' : '' }}">
 
     {% if isNew %}
@@ -262,7 +251,10 @@
         on: item.enabled,
     }) }}
 
-    {# Target/rel/fallback only make sense for types that can actually produce a link — never for a non-clickable heading or a structural separator. #}
+    {#
+       Target/rel/fallback only make sense for types that can actually produce a link — never for
+       a non-clickable heading or a structural separator.
+    #}
     <div data-link-section="entry,category,asset,url,anchor" class="menu-builder-link-section">
         {{ forms.selectField({
             label: "Open in"|t('menu-builder'),
@@ -350,9 +342,10 @@
             elements: iconAssetElement ? [iconAssetElement] : [],
         }) }}
     </div>
-    {# Badge text is free text and is escaped where it renders, so no
-       character is rejected here; the style beside it is a closed enum
-       because that half reaches a class attribute. See helpers/BadgeHelper. #}
+    {#
+       Badge text is free text and is escaped where it renders, so no character is rejected here;
+       the style beside it is a closed enum because that half reaches a class attribute.
+    #}
     {{ forms.textField({
         label: "Badge"|t('menu-builder'),
         instructions: "A short flag shown beside the label — NEW, SALE, BETA. Leave blank for no badge."|t('menu-builder'),
@@ -506,38 +499,11 @@
 </div>
 
 {% if group.hasCustomFields() and item.content is not null %}
-{# This menu's Craft field layout, rendered by Craft itself.
-
-   `createForm()` builds the real inputs for whatever the layout holds —
-   Matrix, relations, third-party fields, conditions and all — namespaced
-   under `fields[...]`, which is exactly what ItemsController hands back to
-   `setFieldValuesFromRequest('fields')` on save. Nothing here knows what any
-   individual field is, which is the point: adding a field type to the site
-   adds it to menus with no change to this plugin.
-
-   One collapsible card per layout tab rather than `form.render()`, so a
-   menu's fields sit alongside the item's built-in sections instead of
-   introducing a second tab strip inside a slide-out. #}
+{# This menu's Craft field layout, rendered by Craft itself. #}
 {% set fieldLayoutForm = item.content.fieldLayout.createForm(item.content, not canEdit) %}
 
 {% for tab in fieldLayoutForm.tabs %}
-    {# Two nested elements on purpose.
-
-       The outer one is this page's own collapsible card, so a menu's fields
-       sit alongside the item's built-in sections.
-
-       The inner one is Craft's: `flex-fields` is what gives its field
-       markup its layout, and `data-layout-tab` is what its conditional-fields
-       JS looks for when it re-evaluates which fields belong on screen. Both
-       are copied from FieldLayoutForm::render(), which is bypassed here
-       because it hides every tab but the first — right for a tab strip,
-       wrong for a stack of cards.
-
-       Every tab in `fieldLayoutForm.tabs` is shown: createForm() has already
-       dropped the tabs whose conditions don't match the item, and it never
-       sets `FieldLayoutFormTab::$visible` at all — that property is only
-       initialized on Craft's own element-editor path, so reading it here is
-       an "accessed before initialization" fatal. #}
+    {# Two nested elements on purpose. #}
     <div data-mb-section="fields-{{ loop.index }}" data-mb-description="{{ "Set the custom fields configured for this menu."|t('menu-builder') }}">
         <h2>{{ tab.name }}</h2>
         <div id="{{ tab.getId() }}"
@@ -549,10 +515,7 @@
     </div>
 {% endfor %}
 
-{# Errors raised against the content element as a whole. Per-field errors are
-   rendered by Craft beside their own inputs; these are the ones
-   MenuBuilderItemContentService copied onto the item under `fields.*` that
-   have no input to sit beside. #}
+{# Errors raised against the content element as a whole. #}
 {% for attribute, errors in item.getErrors() %}
     {% if attribute starts with 'fields.' %}
         {% for error in errors %}

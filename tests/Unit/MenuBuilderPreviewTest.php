@@ -18,19 +18,7 @@ use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
  * Control-panel preview.
- *
- * Preview is a *simulation*, which makes two things worth pinning: that the
- * simulation can only ever narrow or match what a real visitor would see
- * (an editor-supplied query param must never widen it), and that simulating
- * changes nothing — no writes, and nothing left behind in the shared cache
- * or in the request's current site.
- *
- * Everything decided by MenuBuilderPreviewOptions is pure, so the whole
- * security-relevant surface is exercised here without a booted Craft app;
- * the parts that need one (site switching, element resolution) are pinned
- * structurally against the source, the same way MenuBuilderVisibilityTest
- * pins the cache/visibility ordering.
- */
+*/
 class MenuBuilderPreviewTest extends TestCase
 {
     private const ALLOWED_SITES = [1, 2];
@@ -50,9 +38,7 @@ class MenuBuilderPreviewTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Defaults, and what an unrecognised option does
-    // ---------------------------------------------------------------------
 
     public function testAPreviewWithNoOptionsIsALoggedOutDesktopVisitorOnTheDefaultSite(): void
     {
@@ -65,10 +51,9 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * The narrowest audience is the fallback on purpose: an unrecognised
-     * value must never be the one that reveals more than a real visitor
-     * would see.
-     */
+     * The narrowest audience is the fallback on purpose: an unrecognised value must never be the
+     * one that reveals more than a real visitor would see.
+    */
     public function testAnUnrecognisedAudienceFallsBackToLoggedOut(): void
     {
         foreach ([null, '', 'admin', 'ADMIN', ['userGroup'], 7, true] as $value) {
@@ -96,9 +81,7 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertFalse($this->normalize(['device' => 'desktop'])->isMobile());
     }
 
-    // ---------------------------------------------------------------------
     // Placement — a preview control, never a stored setting
-    // ---------------------------------------------------------------------
 
     public function testPlacementDefaultsToBothAndHonoursEachKnownValue(): void
     {
@@ -119,9 +102,7 @@ class MenuBuilderPreviewTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // The audience → VisibilityContext mapping
-    // ---------------------------------------------------------------------
 
     public function testTheLoggedOutAudienceIsAnAnonymousVisitor(): void
     {
@@ -148,10 +129,9 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * Group IDs are meaningless outside the group audience, and carrying
-     * them anyway would let a `loggedIn` preview quietly pass a `userGroup`
-     * visibility rule.
-     */
+     * Group IDs are meaningless outside the group audience, and carrying them anyway would let a
+     * `loggedIn` preview quietly pass a `userGroup` visibility rule.
+    */
     public function testGroupIdsAreIgnoredUnlessTheAudienceIsAUserGroup(): void
     {
         $options = new MenuBuilderPreviewOptions(
@@ -180,9 +160,7 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame('UTC', $context->timezone?->getName());
     }
 
-    // ---------------------------------------------------------------------
     // The user-group allowlist
-    // ---------------------------------------------------------------------
 
     public function testAUserGroupOutsideTheAllowlistIsDropped(): void
     {
@@ -192,10 +170,9 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * "A user group" with nothing selectable left is exactly "some logged-in
-     * user" — so it says so, rather than being a third audience that behaves
-     * identically but reads differently.
-     */
+     * "A user group" with nothing selectable left is exactly "some logged-in user" — so it says
+     * so, rather than being a third audience that behaves identically but reads differently.
+    */
     public function testAUserGroupAudienceWithNoUsableGroupBecomesTheLoggedInAudience(): void
     {
         foreach ([[], ['99'], null, 'userGroup', ['3' => 'x'], [true], [3.0], ['3abc'], [0], [-1]] as $value) {
@@ -207,10 +184,10 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * One malformed entry must not be quietly dropped while its neighbours
-     * are honoured — ConfigHelper::strictIdList() rejects the whole list, so
-     * the audience falls back rather than half-applying.
-     */
+     * One malformed entry must not be quietly dropped while its neighbours are honoured —
+     * ConfigHelper::strictIdList() rejects the whole list, so the audience falls back rather than
+     * half-applying.
+    */
     public function testAMalformedGroupListIsRejectedWholesaleRatherThanFiltered(): void
     {
         $options = $this->normalize(['audience' => 'userGroup', 'userGroupIds' => ['3', true]]);
@@ -219,7 +196,10 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame([], $options->userGroupIds);
     }
 
-    /** Craft's checkboxSelect posts an empty padding value; that one value is expected, not malformed. */
+    /**
+     * Craft's checkboxSelect posts an empty padding value; that one value is expected, not
+     * malformed.
+    */
     public function testTheCheckboxSelectPaddingValueDoesNotInvalidateTheSelection(): void
     {
         $options = $this->normalize(['audience' => 'userGroup', 'userGroupIds' => ['', '4']]);
@@ -228,9 +208,7 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame([4], $options->userGroupIds);
     }
 
-    // ---------------------------------------------------------------------
     // The site allowlist
-    // ---------------------------------------------------------------------
 
     public function testASiteInsideTheAllowlistIsHonoured(): void
     {
@@ -239,10 +217,10 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * The site decides which site's content the tree resolves against, so an
-     * arbitrary ID must not be honoured just because it parses as an int —
-     * that would be a read of another site's content through a preview.
-     */
+     * The site decides which site's content the tree resolves against, so an arbitrary ID must not
+     * be honoured just because it parses as an int — that would be a read of another site's
+     * content through a preview.
+    */
     public function testASiteOutsideTheAllowlistFallsBackToTheDefault(): void
     {
         foreach (['99', 99, '0', '-1', 'abc', '', null, true, ['2'], '2abc'] as $value) {
@@ -261,9 +239,7 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame(5, $options->siteId, '…and the first allowed site is used when there is no default at all.');
     }
 
-    // ---------------------------------------------------------------------
     // The "N of M items" summary
-    // ---------------------------------------------------------------------
 
     public function testPersistedAndDynamicNodesAreCountedSeparately(): void
     {
@@ -286,16 +262,11 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertSame(0, MenuBuilderPreviewService::countDynamicNodes([]));
     }
 
-    // ---------------------------------------------------------------------
     // Preview changes nothing
-    // ---------------------------------------------------------------------
 
     /**
-     * The one promise the whole feature rests on. Asserted against the
-     * source because there is no database here to observe a write with —
-     * and because a write added to this service later would be a bug nobody
-     * would think to look for.
-     */
+     * The one promise the whole feature rests on.
+    */
     public function testThePreviewServicePerformsNoWrites(): void
     {
         $source = $this->sourceOf(MenuBuilderPreviewService::class);
@@ -306,11 +277,9 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * Switching Craft's current site is what makes "preview another site"
-     * mean anything, and it is request-scoped — but only if it is always put
-     * back. Without the `finally`, an exception mid-resolve would leave the
-     * rest of the control-panel request rendering as a different site.
-     */
+     * Switching Craft's current site is what makes "preview another site" mean anything, and it is
+     * request-scoped — but only if it is always put back.
+    */
     public function testTheSimulatedSiteIsAlwaysRestored(): void
     {
         $source = $this->sourceOf(MenuBuilderPreviewService::class);
@@ -326,11 +295,8 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * A simulated audience must enter the pipeline where the real one does:
-     * after the shared cache. Passing it any earlier would bake one
-     * previewer's audience into an entry every visitor then reads — the same
-     * invariant MenuBuilderVisibilityTest pins for the request path.
-     */
+     * A simulated audience must enter the pipeline where the real one does: after the shared cache.
+    */
     public function testTheSimulatedAudienceIsAppliedAfterTheSharedCacheRead(): void
     {
         $source = $this->sourceOf(MenuBuilderResolver::class);
@@ -349,7 +315,9 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertStringNotContainsString('$context', $cachedPayload, 'The cached payload must not be built from the simulated audience.');
     }
 
-    /** The override is optional, so every existing caller of getTree() is unaffected. */
+    /**
+     * The override is optional, so every existing caller of getTree() is unaffected.
+    */
     public function testTheResolverAcceptsAnOptionalSimulatedContext(): void
     {
         $parameters = (new ReflectionMethod(MenuBuilderResolver::class, 'getTree'))->getParameters();
@@ -368,7 +336,9 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertTrue($type->allowsNull());
     }
 
-    /** A generic presentation preview must not invent a current page. */
+    /**
+     * A generic presentation preview must not invent a current page.
+    */
     public function testThePreviewExplicitlyDisablesActiveState(): void
     {
         $source = $this->sourceOf(MenuBuilderPreviewService::class);
@@ -377,9 +347,7 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertStringNotContainsString('$options->uri', $source);
     }
 
-    // ---------------------------------------------------------------------
     // The screen itself
-    // ---------------------------------------------------------------------
 
     public function testPreviewRequiresOnlyTheViewPermission(): void
     {
@@ -402,10 +370,10 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * The preview surface is the shipped front-end renderer, not a
-     * control-panel copy of it — otherwise what an editor verifies here and
-     * what a visitor receives could drift apart silently.
-     */
+     * The preview surface is the shipped front-end renderer, not a control-panel copy of it —
+     * otherwise what an editor verifies here and what a visitor receives could drift apart
+     * silently.
+    */
     public function testThePreviewScreenRendersThroughTheShippedMacros(): void
     {
         $template = $this->previewTemplate();
@@ -415,28 +383,24 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * The markup panel exists to show attributes as text. Printing it
-     * unescaped would render it a second time instead — and `|raw` anywhere
-     * on this screen would put editor-authored titles, badges and classes
-     * into the page unescaped.
-     */
+     * The markup panel exists to show attributes as text.
+    */
     public function testThePreviewScreenNeverPrintsAnythingRaw(): void
     {
         $this->assertStringNotContainsString('|raw', $this->previewTemplate());
         $this->assertStringNotContainsString('|raw', $this->stageTemplate());
 
-        // The panel prints the formatted source one line at a time through
-        // `{{ }}`, so Twig's autoescaping is what turns it into text —
-        // MenuBuilderPreviewRenderTest proves that behaviourally.
+        // The panel prints the formatted source one line at a time through `{{ }}`, so Twig's
+        // autoescaping is what turns it into text — MenuBuilderPreviewRenderTest proves that
+        // behaviourally.
         $this->assertStringContainsString('previewService.formatMarkup(previewMarkup|trim)', $this->previewTemplate());
         $this->assertStringContainsString('{{ line }}', $this->previewTemplate());
     }
 
     /**
-     * The visual preview is the point of the screen; the markup panel is a
-     * secondary inspection tool. If the source ever came first again, the
-     * screen would be a debug view with a preview attached.
-     */
+     * The visual preview is the point of the screen; the markup panel is a secondary inspection
+     * tool.
+    */
     public function testTheVisualStageComesBeforeTheMarkupInspector(): void
     {
         $template = $this->previewTemplate();
@@ -453,13 +417,12 @@ class MenuBuilderPreviewTest extends TestCase
     }
 
     /**
-     * The stage is chrome. The moment it starts reading nodes it becomes a
-     * second renderer, and the preview stops being evidence of anything.
-     */
+     * The stage is chrome.
+    */
     public function testTheStageAddsChromeWithoutInspectingNodes(): void
     {
-        // Comments stripped: they *describe* the node contract at length,
-        // which is the opposite of using it.
+        // Comments stripped: they *describe* the node contract at length, which is the opposite of
+        // using it.
         $stage = (string)preg_replace('/\{#.*?#\}/s', '', $this->stageTemplate());
 
         foreach (['node.', 'nodes', 'megaMenuColumns', 'isActive', 'iconAsset', 'hasBadge', 'children'] as $needle) {
@@ -469,14 +432,11 @@ class MenuBuilderPreviewTest extends TestCase
 
     
     
-    // ---------------------------------------------------------------------
     // Regression: the front-end API is untouched
-    // ---------------------------------------------------------------------
 
     /**
-     * `craft.menuBuilder.get()` is the documented front-end entry point. The
-     * preview added an argument to the *resolver*, deliberately not to this.
-     */
+     * `craft.menuBuilder.get()` is the documented front-end entry point.
+    */
     public function testTheTwigApiIsUnchangedByPreview(): void
     {
         $parameters = (new ReflectionMethod(MenuBuilderVariable::class, 'get'))->getParameters();
@@ -490,7 +450,9 @@ class MenuBuilderPreviewTest extends TestCase
         $this->assertStringContainsString('resolver->getTree($groupHandle, $currentUri)', $source, 'A front-end render still asks for the current request\'s audience.');
     }
 
-    /** Read-only screen: the controls are a GET form, so there is no mutation to protect. */
+    /**
+     * Read-only screen: the controls are a GET form, so there is no mutation to protect.
+    */
     public function testThePreviewControlsAreAReadOnlyGetForm(): void
     {
         $template = $this->previewTemplate();
@@ -516,9 +478,7 @@ class MenuBuilderPreviewTest extends TestCase
         return (string)file_get_contents((string)(new ReflectionClass($class))->getFileName());
     }
 
-    /**
-     * @param MenuBuilderNode[] $children
-     */
+    /** @param MenuBuilderNode[] $children */
     private function node(int $id, array $children = [], bool $isDynamic = false): MenuBuilderNode
     {
         $node = new MenuBuilderNode(

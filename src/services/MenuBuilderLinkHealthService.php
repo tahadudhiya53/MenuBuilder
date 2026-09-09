@@ -10,36 +10,16 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderLinkHealth;
 
 /**
- * Answers "will this menu item's link work, and if not, why" for the control
- * panel. Internal link health only — nothing here makes an HTTP request, and
- * an external `https://` URL is judged on its shape alone (see
- * {@see MenuBuilderLinkHealth::forNonElementItem()}).
- *
- * This service is the *lookup* half; the classification and every word shown
- * to an editor live in {@see MenuBuilderLinkHealth}, which is pure. All this
- * does is find out, in as few queries as possible, three things per linked
- * element: does it still exist anywhere, does it exist on the site being
- * looked at, and — if so — what is its status and does it have a URL.
- *
- * **Nothing is stored and nothing is written.** Health is computed on demand
- * exactly like `ResolvedLink`, so a restored entry is healthy again on the
- * next page load with no invalidation step of its own, and a "broken" flag
- * can never outlive the breakage. It is also deliberately kept out of the
- * cached front-end tree: the cache is shared between users and sites (see
- * ARCHITECTURE.md, "Caching"), and this is a per-site, CP-only read.
- */
+ * Answers "will this menu item's link work, and if not, why" for the control panel.
+*/
 class MenuBuilderLinkHealthService extends Component
 {
     /**
-     * Health for every item in a menu, keyed by item ID — healthy ones
-     * included, so a caller can tell "checked and fine" from "not checked".
-     *
-     * Cost is bounded by element *type*, not by item count: two queries per
-     * element type present in the menu (existence anywhere, then the current
-     * site's rows), regardless of how many items link to how many elements.
+     * Health for every item in a menu, keyed by item ID — healthy ones included, so a caller can
+     * tell "checked and fine" from "not checked".
      *
      * @return array<int,MenuBuilderLinkHealth>
-     */
+    */
     public function getForGroup(int $groupId): array
     {
         return $this->getForItems(MenuBuilder::getInstance()->items->getFlatForGroup($groupId));
@@ -48,7 +28,7 @@ class MenuBuilderLinkHealthService extends Component
     /**
      * @param MenuBuilderItem[] $items
      * @return array<int,MenuBuilderLinkHealth>
-     */
+    */
     public function getForItems(array $items): array
     {
         $statuses = $this->elementStatuses($items);
@@ -66,23 +46,20 @@ class MenuBuilderLinkHealthService extends Component
     }
 
     /**
-     * One item's health — the slide-out / edit screen's entry point. Same
-     * answer as {@see getForItems()} would give for it, by construction:
-     * both go through the same two private methods.
-     */
+     * One item's health — the slide-out / edit screen's entry point.
+    */
     public function getForItem(MenuBuilderItem $item): MenuBuilderLinkHealth
     {
         return $this->build($item, $this->statusFor($item, $this->elementStatuses([$item])));
     }
 
     /**
-     * Item IDs whose linked element no longer exists — the narrow question
-     * this service's predecessor (MenuBuilderItemService::getOrphanedItemIds())
-     * answered, now derived from the same single classification everything
-     * else uses rather than from a second copy of the lookup.
+     * Item IDs whose linked element no longer exists — the narrow question this service's
+     * predecessor (MenuBuilderItemService::getOrphanedItemIds()) answered, now derived from the
+     * same single classification everything else uses rather than from a second copy of the lookup.
      *
      * @return array<int,true>
-     */
+    */
     public function getMissingElementItemIds(int $groupId): array
     {
         $missing = [];
@@ -97,9 +74,9 @@ class MenuBuilderLinkHealthService extends Component
     }
 
     /**
-     * Wraps a classified status in the item's own fallback configuration, so
-     * the warning can say what the front end is doing about it right now.
-     */
+     * Wraps a classified status in the item's own fallback configuration, so the warning can say
+     * what the front end is doing about it right now.
+    */
     private function build(MenuBuilderItem $item, string $status): MenuBuilderLinkHealth
     {
         return new MenuBuilderLinkHealth(
@@ -112,15 +89,14 @@ class MenuBuilderLinkHealthService extends Component
 
     /**
      * @param array<string,array<int,string>> $statuses Per-type element status map, see {@see elementStatuses()}.
-     */
+    */
     private function statusFor(MenuBuilderItem $item, array $statuses): string
     {
         $nonElement = MenuBuilderLinkHealth::forNonElementItem($item);
 
         if ($nonElement !== null) {
-            // A dynamic item's *config* was checked above; whether the
-            // section / category group / volume it names still exists needs
-            // the app, so it is checked here.
+            // A dynamic item's *config* was checked above; whether the section / category group /
+            // volume it names still exists needs the app, so it is checked here.
             if ($item->type === MenuBuilderItem::TYPE_DYNAMIC && $nonElement === MenuBuilderLinkHealth::STATUS_HEALTHY) {
                 return $this->dynamicSourceExists($item)
                     ? MenuBuilderLinkHealth::STATUS_HEALTHY
@@ -130,9 +106,7 @@ class MenuBuilderLinkHealthService extends Component
             return $nonElement;
         }
 
-        // Element-backed. A missing elementId can't happen through the model
-        // (it is `required` for these types) but a directly-written row can
-        // hold one, and it is the same breakage from the editor's side.
+        // Element-backed.
         if ($item->elementId === null) {
             return MenuBuilderLinkHealth::STATUS_MISSING;
         }
@@ -143,23 +117,9 @@ class MenuBuilderLinkHealthService extends Component
     /**
      * Resolves every element-backed item in one pass, grouped by type.
      *
-     * Two queries per type, because "gone" and "not here" are different
-     * warnings with different fixes and one query can't tell them apart:
-     *
-     * 1. `site('*')->unique()` — does the element exist on *any* site? A no
-     *    means deleted (soft or hard: the trash is excluded by the query's
-     *    own defaults, exactly as ElementLinkResolver relies on).
-     * 2. the current site's rows — the status the front end would see here,
-     *    and whether there is a URL to link to. Missing from this set while
-     *    present in the first means the element exists but was never
-     *    propagated to this site.
-     *
-     * Drafts and revisions are excluded by the queries' defaults; a menu
-     * item's elementId never points at one.
-     *
      * @param MenuBuilderItem[] $items
      * @return array<string,array<int,string>> item type => element ID => health status
-     */
+    */
     private function elementStatuses(array $items): array
     {
         $idsByType = [];
@@ -215,11 +175,8 @@ class MenuBuilderLinkHealthService extends Component
     }
 
     /**
-     * `getUrl()` is not a plain accessor — an asset in a misconfigured volume
-     * throws from it. A CP screen listing every item in a menu must not 500
-     * because one of them does, and "we couldn't get a URL for this" is
-     * precisely the warning STATUS_NO_URL exists to show.
-     */
+     * `getUrl()` is not a plain accessor — an asset in a misconfigured volume throws from it.
+    */
     private function hasUrl(ElementInterface $element): bool
     {
         try {
@@ -230,12 +187,8 @@ class MenuBuilderLinkHealthService extends Component
     }
 
     /**
-     * Whether a dynamic item's source container still exists. The config
-     * itself is normalized by the same code the render-time query uses
-     * ({@see MenuBuilderDynamicNavigationService::normalizeConfig()}), so a
-     * config that would produce nothing at render time can't be reported
-     * healthy here.
-     */
+     * Whether a dynamic item's source container still exists.
+    */
     private function dynamicSourceExists(MenuBuilderItem $item): bool
     {
         $stored = $item->metadata['dynamicSource'] ?? null;

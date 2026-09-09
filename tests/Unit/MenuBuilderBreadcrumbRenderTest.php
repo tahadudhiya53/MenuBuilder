@@ -7,21 +7,17 @@ use PHPUnit\Framework\TestCase;
 require_once __DIR__ . '/NavMacroRendering.php';
 
 /**
- * What `_macros/breadcrumbs.twig` actually emits, asserted against the DOM a
- * browser receives — the breadcrumb counterpart to
- * {@see MenuBuilderAccessibilityTest}, sharing the same harness so both
- * macros are tested against the same definition of "the markup the front end
- * gets".
- *
- * The trail itself (which nodes, in which order) is
- * {@see MenuBuilderBreadcrumbTest}'s subject; this file only asks what the
- * markup promises assistive technology about them.
- */
+ * What `_macros/breadcrumbs.twig` actually emits, asserted against the DOM a browser receives —
+ * the breadcrumb counterpart to {@see MenuBuilderAccessibilityTest}, sharing the same harness so
+ * both macros are tested against the same definition of "the markup the front end gets".
+*/
 class MenuBuilderBreadcrumbRenderTest extends TestCase
 {
     use NavMacroRendering;
 
-    /** Products › Shoes › Running Shoes, the last being the page being served. */
+    /**
+     * Products › Shoes › Running Shoes, the last being the page being served.
+    */
     private function trailNodes(): array
     {
         return [
@@ -48,7 +44,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         $this->assertSame('You are here', $this->query($html, '//nav')[0]->getAttribute('aria-label'));
     }
 
-    /** An ordered list, because the order of a trail is its meaning. */
+    /**
+     * An ordered list, because the order of a trail is its meaning.
+    */
     public function testTrailIsAnOrderedList(): void
     {
         $html = $this->renderBreadcrumbs($this->trailNodes());
@@ -61,7 +59,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         );
     }
 
-    /** `aria-current="page"` identifies the page being served — the last crumb, and nothing else. */
+    /**
+     * `aria-current="page"` identifies the page being served — the last crumb, and nothing else.
+    */
     public function testOnlyTheLastCrumbIsMarkedAsTheCurrentPage(): void
     {
         $html = $this->renderBreadcrumbs($this->trailNodes());
@@ -74,9 +74,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
     }
 
     /**
-     * With `linkCurrent = false` the last crumb is plain text — still the
-     * current page, because that is `aria-current`'s job and not the anchor's.
-     */
+     * With `linkCurrent = false` the last crumb is plain text — still the current page, because
+     * that is `aria-current`'s job and not the anchor's.
+    */
     public function testCurrentCrumbCanBeRenderedWithoutALink(): void
     {
         $html = $this->renderBreadcrumbs($this->trailNodes(), linkCurrent: false);
@@ -88,7 +88,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         $this->assertSame('Running Shoes', trim($current[0]->textContent));
     }
 
-    /** A non-clickable crumb is a label, never a fake link — the same rule the menu itself obeys. */
+    /**
+     * A non-clickable crumb is a label, never a fake link — the same rule the menu itself obeys.
+    */
     public function testNonClickableCrumbRendersNoAnchor(): void
     {
         $html = $this->renderBreadcrumbs([
@@ -103,19 +105,26 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         $this->assertSame('Products', trim($this->query($html, '//ol/li[1]/span')[0]->textContent));
     }
 
-    /** An empty trail renders nothing at all — never an empty landmark to go and discover. */
+    /**
+     * An empty trail renders nothing at all — never an empty landmark to go and discover.
+    */
     public function testEmptyTrailRendersNothing(): void
     {
         $this->assertSame('', trim($this->renderBreadcrumbs([])));
     }
 
-    /** A missing/disabled menu (`craft.menuBuilder.breadcrumbs()` returned null) renders nothing either. */
+    /**
+     * A missing/disabled menu (`craft.menuBuilder.breadcrumbs()` returned null) renders nothing
+     * either.
+    */
     public function testMissingMenuRendersNothing(): void
     {
         $this->assertSame('', trim($this->renderBreadcrumbsForMissingMenu()));
     }
 
-    /** No separator characters in the markup: a screen reader would read every one of them out. */
+    /**
+     * No separator characters in the markup: a screen reader would read every one of them out.
+    */
     public function testNoTextSeparatorsBetweenCrumbs(): void
     {
         $html = $this->renderBreadcrumbs($this->trailNodes());
@@ -129,7 +138,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         }
     }
 
-    /** A crumb that opens a new tab says so, using the tree macros' one definition of that phrase. */
+    /**
+     * A crumb that opens a new tab says so, using the tree macros' one definition of that phrase.
+    */
     public function testNewTabCrumbAnnouncesItself(): void
     {
         $html = $this->renderBreadcrumbs([
@@ -143,7 +154,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         $this->assertStringContainsString('(opens in a new tab)', $link->textContent);
     }
 
-    /** Editor-supplied attributes go through the same filter the menu uses. */
+    /**
+     * Editor-supplied attributes go through the same filter the menu uses.
+    */
     public function testUnsafeCustomAttributesAreDropped(): void
     {
         $html = $this->renderBreadcrumbs([
@@ -157,7 +170,9 @@ class MenuBuilderBreadcrumbRenderTest extends TestCase
         $this->assertSame('ok', $link->getAttribute('data-test'));
     }
 
-    /** The item's own CSS class reaches its crumb, alongside the macro's own hooks. */
+    /**
+     * The item's own CSS class reaches its crumb, alongside the macro's own hooks.
+    */
     public function testCrumbCarriesItemAndStateClasses(): void
     {
         $html = $this->renderBreadcrumbs([

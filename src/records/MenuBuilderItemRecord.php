@@ -36,7 +36,7 @@ use craft\db\ActiveRecord;
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid
- */
+*/
 class MenuBuilderItemRecord extends ActiveRecord
 {
     public static function tableName(): string

@@ -16,31 +16,14 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 
 /**
- * The single entry point Twig talks to (via MenuBuilderVariable). Pipeline:
- * load raw tree -> resolve links (cached) -> filter visibility (fresh,
- * per-request) -> mark active state (fresh) -> return a MenuBuilderTree.
- */
+ * The single entry point Twig talks to (via MenuBuilderVariable).
+*/
 class MenuBuilderResolver extends Component
 {
     /**
-     * @param VisibilityContext|null $context The audience to resolve for. Defaults to the
-     *                                        current request's — the only caller that passes
-     *                                        one is MenuBuilderPreviewService, which
-     *                                        substitutes a *simulated* audience.
-     *
-     *                                        It is taken here, after the cached step, rather
-     *                                        than plumbed into it, because that is the same
-     *                                        boundary the real context observes: visibility is
-     *                                        filtered per request and never written into a
-     *                                        shared cache entry, so a preview reads exactly the
-     *                                        entry a visitor reads and cannot leave its
-     *                                        simulated audience behind in one (see
-     *                                        ARCHITECTURE.md "Caching" and "Preview").
-     * @param bool $markActive Whether to compare the tree with a current page. The generic
-     *                         control-panel preview disables this because it no longer
-     *                         simulates a particular page; front-end callers keep the
-     *                         existing active-state behaviour by default.
-     */
+     * @param VisibilityContext|null $context The audience to resolve for.
+     * @param bool $markActive Whether to compare the tree with a current page.
+    */
     public function getTree(
         string $groupHandle,
         ?string $currentUri = null,
@@ -56,9 +39,8 @@ class MenuBuilderResolver extends Component
         $visibilityService = MenuBuilder::getInstance()->visibility;
         $context ??= $visibilityService->buildContext();
 
-        // Group-level site restriction (MenuBuilderGroup::$siteIds) gates the
-        // whole menu before any items are loaded — the coarse counterpart to
-        // the per-item `site` visibility rule.
+        // Group-level site restriction (MenuBuilderGroup::$siteIds) gates the whole menu before any
+        // items are loaded — the coarse counterpart to the per-item `site` visibility rule.
         if (!$group->isAvailableForSite($context->currentSiteId)) {
             return null;
         }
@@ -68,18 +50,13 @@ class MenuBuilderResolver extends Component
             fn() => $this->buildResolvedNodes($group->id)
         );
 
-        // One query for every custom field value the menu is about to
-        // render, before any template asks for the first one. Registered on
-        // both cache paths, because the cached payload carries content IDs
-        // rather than values (see MenuBuilderNode::$contentId) — a warm
-        // menu still has to read its fields. Costs nothing for a menu whose
-        // items have no content: preload([]) does not query.
+        // One query for every custom field value the menu is about to render, before any template
+        // asks for the first one.
         MenuBuilder::getInstance()->itemContent->preload($this->contentIds($resolvedNodes));
 
-        // Two columns per row, not a hydrated MenuBuilderItem per row: the
-        // per-request pass below reads nothing else from the persisted item,
-        // and this is the one query every cache *hit* still pays for. See
-        // MenuBuilderItemService::getVisibilityRulesForGroup().
+        // Two columns per row, not a hydrated MenuBuilderItem per row: the per-request pass below
+        // reads nothing else from the persisted item, and this is the one query every cache *hit*
+        // still pays for.
         $visibilityById = MenuBuilder::getInstance()->items->getVisibilityRulesForGroup($group->id, includeDisabled: false);
 
         $filtered = $this->filterVisible($resolvedNodes, $visibilityById, $visibilityService, $context);
@@ -101,71 +78,38 @@ class MenuBuilderResolver extends Component
     }
 
     /**
-     * The hosts MenuBuilderActiveResolver treats as "the site being served"
-     * when deciding whether an absolute item URL can be the current page: the
-     * host actually being requested, plus the *current* site's own base-URL
-     * host.
-     *
-     * The base URL matters because an element link is built from it, and it
-     * isn't always spelled the same way as the request (`www.` vs bare, a
-     * base URL behind a proxy). Without it a legitimately internal absolute
-     * URL would stop matching; with only the request host it would be
-     * indistinguishable from a link to somebody else's site.
-     *
-     * Deliberately *not* every site's base URL. Sibling sites of the same
-     * install routinely share a path structure — `/contact` exists on
-     * English, German and French — and a URL on another site's domain is by
-     * definition not the page currently being served, so admitting those
-     * hosts marked the German link as the current page while English was
-     * being rendered (`aria-current="page"` on the wrong link, and the wrong
-     * branch styled open). A cross-site link still resolves active state
-     * normally on the site it points at: the request host is that site's
-     * host then, and it's always in this list.
-     *
-     * Pure + static (the base URL is gathered by
-     * {@see currentSiteBaseUrl()} and passed in) so the multi-site half of
-     * active state is unit-testable without a booted Craft app, the same
-     * reasoning as ElementLinkResolver::isPubliclyAvailable().
+     * The hosts MenuBuilderActiveResolver treats as "the site being served" when deciding whether
+     * an absolute item URL can be the current page: the host actually being requested, plus the
+     * *current* site's own base-URL host.
      *
      * @return string[]
-     */
+    */
     public static function internalHosts(?string $requestHost, ?string $currentSiteBaseUrl): array
     {
         return array_values(array_filter([$requestHost, $currentSiteBaseUrl], fn(?string $host) => $host !== null));
     }
 
     /**
-     * The base URL of the site being rendered, or null when it has none (a
-     * site with no base URL can't produce an absolute element URL to match
-     * against in the first place).
-     */
+     * The base URL of the site being rendered, or null when it has none (a site with no base URL
+     * can't produce an absolute element URL to match against in the first place).
+    */
     private function currentSiteBaseUrl(): ?string
     {
         return Craft::$app->getSites()->getCurrentSite()->getBaseUrl();
     }
 
     /**
-     * Builds the link-resolved node tree for caching. Visibility is
-     * intentionally NOT applied here — it depends on the current user/date
-     * and must never be baked into a shared cache entry.
-     *
-     * Custom field *values* are not cached either, and for a sharper
-     * reason: a Craft field's value can be a live element query, which has
-     * no meaning once serialised. Each node carries the ID of its content
-     * element instead, and getTree() batches those into one read per
-     * request — see MenuBuilderNode::$contentId.
+     * Builds the link-resolved node tree for caching.
      *
      * @return MenuBuilderNode[]
-     */
+    */
     private function buildResolvedNodes(int $groupId): array
     {
         $items = MenuBuilder::getInstance()->items->getTree($groupId, includeDisabled: false);
         $linkResolver = MenuBuilder::getInstance()->linkResolver;
 
-        // One query for every entry/category/asset the menu links to, before
-        // convert() starts asking for them one at a time. Released in the
-        // `finally` because the resolvers outlive this build (they're
-        // memoized per request) but the elements shouldn't.
+        // One query for every entry/category/asset the menu links to, before convert() starts
+        // asking for them one at a time.
         $linkResolver->preload($items);
 
         try {
@@ -178,7 +122,7 @@ class MenuBuilderResolver extends Component
     /**
      * @param MenuBuilderItem[] $items
      * @return MenuBuilderNode[]
-     */
+    */
     private function convert(array $items, int $level, ?MenuBuilderNode $parent): array
     {
         $nodes = [];
@@ -209,9 +153,9 @@ class MenuBuilderResolver extends Component
                 ariaLabel: $item->ariaLabel,
                 titleAttribute: $item->titleAttribute,
                 icon: $item->icon,
-                // Fail-closed reads, not raw column values: a badge written
-                // straight into the database normalizes here, and an unknown
-                // style becomes "no style" rather than a class list.
+                // Fail-closed reads, not raw column values: a badge written straight into the
+                // database normalizes here, and an unknown style becomes "no style" rather than a
+                // class list.
                 badge: BadgeHelper::text($item->badge),
                 description: $item->description,
                 image: $item->image,
@@ -220,18 +164,10 @@ class MenuBuilderResolver extends Component
                 megaMenu: $megaMenuConfig,
                 megaMenuColumn: $this->intOrNull($item->metadata['megaMenuColumn'] ?? null),
                 badgeStyle: BadgeHelper::style($item->metadata['badgeStyle'] ?? null),
-                // The ID only. Values are read per request through
-                // MenuBuilderItemContentService, so a cached menu never
-                // serves stale field content and never has to serialise an
-                // element query into a cache entry.
+                // The ID only.
                 contentId: $item->contentId,
-                // Cacheable for the same reason the mega-menu config is: it
-                // is a property of the item, not of the visitor or the
-                // device asking. Nothing here is a breakpoint and nothing
-                // sniffs a user agent — MenuBuilderTree::forViewport() and
-                // the `data-mb-viewport` attribute are where a viewport is
-                // *chosen*, by the template or the stylesheet. One cache
-                // entry therefore serves both viewports.
+                // Cacheable for the same reason the mega-menu config is: it is a property of the
+                // item, not of the visitor or the device asking.
                 mobile: MobileHelper::config($item->metadata),
             );
 
@@ -267,15 +203,11 @@ class MenuBuilderResolver extends Component
     }
 
     /**
-     * Synthesizes MenuBuilderNode[] from a `dynamic` item's configured
-     * source (MenuBuilderDynamicNavigationService) — never persisted as
-     * MenuBuilderItem rows. These carry no visibility config of their own
-     * (there's nothing to configure per-element); they're already
-     * site/status-scoped by the query itself, same boundary a real
-     * entry/category/asset link would respect.
+     * Synthesizes MenuBuilderNode[] from a `dynamic` item's configured source
+     * (MenuBuilderDynamicNavigationService) — never persisted as MenuBuilderItem rows.
      *
      * @return MenuBuilderNode[]
-     */
+    */
     private function buildDynamicChildren(MenuBuilderItem $item, int $level, MenuBuilderNode $parent): array
     {
         $config = is_array($item->metadata['dynamicSource'] ?? null) ? $item->metadata['dynamicSource'] : [];
@@ -295,10 +227,9 @@ class MenuBuilderResolver extends Component
     {
         $url = method_exists($element, 'getUrl') ? $element->getUrl() : null;
         $title = (string)($element->title ?? '');
-        // A synthesized child is always "linkable" and always clickable when
-        // it has a URL — there is no editor-set `clickable` flag to respect —
-        // but it goes through the same helper so a blank URL is treated the
-        // same way here as on a persisted item.
+        // A synthesized child is always "linkable" and always clickable when it has a URL — there
+        // is no editor-set `clickable` flag to respect — but it goes through the same helper so a
+        // blank URL is treated the same way here as on a persisted item.
         $isClickable = LinkAttributeHelper::isClickable(true, true, $url);
 
         return new MenuBuilderNode(
@@ -327,39 +258,25 @@ class MenuBuilderResolver extends Component
     }
 
     /**
-     * Visibility rules live on the persisted item, not the cached
-     * MenuBuilderNode, so re-check against the current rules — read once by
-     * getTree() rather than re-queried per node.
+     * Visibility rules live on the persisted item, not the cached MenuBuilderNode, so re-check
+     * against the current rules — read once by getTree() rather than re-queried per node.
      *
      * @param MenuBuilderNode[] $nodes
      * @param array<int,array> $visibilityById Visibility rule bags, keyed by item ID.
      * @return MenuBuilderNode[]
-     */
+    */
     private function filterVisible(array $nodes, array $visibilityById, MenuBuilderVisibilityService $visibilityService, VisibilityContext $context): array
     {
         $filtered = [];
 
         foreach ($nodes as $node) {
-            // A dynamic-navigation child's `id` is a Craft element ID, not a
-            // MenuBuilderItem ID — looking it up in $itemsById could
-            // collide with an unrelated real item that happens to share the
-            // same numeric ID, and apply that item's visibility rules to
-            // the wrong node. Synthetic nodes carry no visibility config of
-            // their own (see MenuBuilderResolver::buildDynamicChildren()),
-            // so they're always visible here — they're already
-            // site/status-scoped by the query that produced them.
+            // A dynamic-navigation child's `id` is a Craft element ID, not a MenuBuilderItem ID —
+            // looking it up in $itemsById could collide with an unrelated real item that happens to
+            // share the same numeric ID, and apply that item's visibility rules to the wrong node.
             if (!$node->isDynamic) {
-                // A cached node whose persisted item is gone from the fresh
-                // read — deleted, or disabled since the tree was cached —
-                // is hidden rather than passed through unchecked: its
-                // visibility rules are exactly what can't be evaluated any
-                // more. Invalidation should already have prevented this
-                // (MenuBuilderCacheService), so this is the fail-closed
-                // backstop for a stale entry that outlived its item.
-                //
-                // array_key_exists(), not `?? null`: an item with no rules
-                // at all is a present key holding an empty bag, and must not
-                // read as a missing row.
+                // A cached node whose persisted item is gone from the fresh read — deleted, or
+                // disabled since the tree was cached — is hidden rather than passed through
+                // unchecked: its visibility rules are exactly what can't be evaluated any more.
                 if (!array_key_exists($node->id, $visibilityById)) {
                     continue;
                 }
@@ -369,11 +286,9 @@ class MenuBuilderResolver extends Component
                 }
             }
 
-            // withChildren() rather than `$node->children = ...`: these
-            // nodes came from the cache, and the filtered result is then
-            // active-state marked, so writing either back onto them would
-            // put per-request state on shared objects. See
-            // MenuBuilderNode::withChildren().
+            // withChildren() rather than `$node->children = ...`: these nodes came from the cache,
+            // and the filtered result is then active-state marked, so writing either back onto them
+            // would put per-request state on shared objects.
             $filtered[] = $node->withChildren(
                 $this->filterVisible($node->children, $visibilityById, $visibilityService, $context)
             );
@@ -385,13 +300,9 @@ class MenuBuilderResolver extends Component
     /**
      * Every content element ID in a node tree, for one batched read.
      *
-     * Walks the resolved nodes rather than the items because it runs on
-     * cache hits too, where the items were never loaded — the cached
-     * payload is the only thing that knows which content the menu needs.
-     *
      * @param MenuBuilderNode[] $nodes
      * @return int[]
-     */
+    */
     private function contentIds(array $nodes): array
     {
         $ids = [];

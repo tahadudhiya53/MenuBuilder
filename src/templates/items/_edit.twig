@@ -4,20 +4,17 @@
 {% set itemLabel = (item.title is not null and item.title|trim != '') ? item.title : "(untitled)"|t('menu-builder') %}
 {% set title = isNew ? "New menu item"|t('menu-builder') : itemLabel %}
 
-{# Read-only when the viewer may look but not save: `items/edit` needs only
-   `view`, and this route is deep-linkable, so it has to render without
-   offering a Save the save action would refuse. #}
+{#
+   Read-only when the viewer may look but not save: `items/edit` needs only `view`, and this route
+   is deep-linkable, so it has to render without offering a Save the save action would refuse.
+#}
 {% set fullPageForm = canEdit %}
 {% set crumbs = [
     { label: "Menus"|t('menu-builder'), url: url('menu-builder') },
     { label: group.name, url: url('menu-builder/' ~ group.handle) },
 ] %}
 
-{# Delete lives in the action-button menu rather than in a <form> of its own.
-   It used to be a nested <form>, which is invalid HTML: the parser drops the
-   inner start tag, so its `onsubmit` confirmation never ran and the button
-   ended up submitting the page form. Craft's own formActions mechanism posts
-   the page form to a different action, with a confirmation, and no nesting. #}
+{# Delete lives in the action-button menu rather than in a <form> of its own. #}
 {% set formActions = canDelete and not isNew ? [
     {
         label: "Delete menu item"|t('menu-builder'),

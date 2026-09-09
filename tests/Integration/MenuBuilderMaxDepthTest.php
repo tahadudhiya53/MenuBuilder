@@ -6,18 +6,8 @@ use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
- * Max-depth enforcement through the real save/move path, against a real
- * database.
- *
- * The pure depth arithmetic is covered by MenuBuilderTreeTest; what only a
- * booted install can prove is what the *service* does with it — and that is
- * where the bug this suite was written for lived: an insert passed `0` for
- * the not-yet-existing item's ID, which is `childMap()`'s key for the root
- * set, so the new item was charged for the height of every existing root
- * branch. On the real three-level menu of the phase 30 simulation
- * (Products › Electronics › Phones, maxDepth 3) the third level could not be
- * created at all.
- */
+ * Max-depth enforcement through the real save/move path, against a real database.
+*/
 class MenuBuilderMaxDepthTest extends CraftIntegrationTestCase
 {
     private function nest(int $groupId, string $title, ?int $parentId): MenuBuilderItem
@@ -46,9 +36,8 @@ class MenuBuilderMaxDepthTest extends CraftIntegrationTestCase
         $electronics = $this->nest((int)$menu->id, 'Electronics', (int)$products->id);
         $this->assertNotNull($electronics->id, json_encode($electronics->getErrors()));
 
-        // A second root branch, so the root forest is not the only thing in
-        // the menu — the regression only showed up once other branches had
-        // height of their own.
+        // A second root branch, so the root forest is not the only thing in the menu — the
+        // regression only showed up once other branches had height of their own.
         $services = $this->nest((int)$menu->id, 'Services', null);
         $this->nest((int)$menu->id, 'Consulting', (int)$services->id);
 
@@ -101,8 +90,8 @@ class MenuBuilderMaxDepthTest extends CraftIntegrationTestCase
         // A leaf under a root item is level 2 — fine.
         $this->assertTrue(MenuBuilder::getInstance()->items->move((int)$c->id, (int)$a->id, 1));
 
-        // A + its child under another item would be level 3 — refused, and
-        // the descendants are what makes it so.
+        // A + its child under another item would be level 3 — refused, and the descendants are
+        // what makes it so.
         $this->assertFalse(MenuBuilder::getInstance()->items->move((int)$a->id, (int)$b->id, 0));
     }
 

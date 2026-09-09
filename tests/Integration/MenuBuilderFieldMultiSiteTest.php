@@ -9,19 +9,7 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
  * The Navigation field on a **real two-site install**.
- *
- * Three separate questions live here, and the suite keeps them apart because
- * they have different answers:
- *
- * 1. **Where the value lives** — shared across sites, or one per site. That's
- *    Craft's translation method, and the fixture has one instance of each.
- * 2. **Whether the selected menu is available on the element's site** — a
- *    MenuBuilder group-level site restriction, reported by
- *    `isAvailableForSite()` and (on a translatable field only) by validation.
- * 3. **Which site the tree is resolved for** — the site of the *current
- *    request*, which is the documented limitation this suite pins so that
- *    changing it has to be deliberate.
- */
+*/
 class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
 {
     private int $originalSiteId;
@@ -34,8 +22,7 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
 
     protected function tearDown(): void
     {
-        // Site state is global; leaking it would make every later test depend
-        // on execution order.
+        // Site state is global; leaking it would make every later test depend on execution order.
         Craft::$app->getSites()->setCurrentSite($this->originalSiteId);
         parent::tearDown();
     }
@@ -45,15 +32,11 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         return Craft::$app->getSites()->getPrimarySite()->id;
     }
 
-    // ---------------------------------------------------------------------
-    // 1. Shared vs per-site values
-    // ---------------------------------------------------------------------
+    // 1.
 
     /**
-     * The default: one selection covers every site. This is what a single
-     * shared navigation wants, and it means the value propagates to a new site
-     * without anyone re-picking it.
-     */
+     * The default: one selection covers every site.
+    */
     public function testAnUntranslatableFieldHasTheSameSelectionOnEverySite(): void
     {
         $primary = self::pages($this->primarySiteId())->id(self::$entryIds['picks-main'])->one();
@@ -67,7 +50,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         $this->assertSame((string)self::$mainMenu->uid, $secondary->getFieldValue(self::FIELD_HANDLE)->groupUid);
     }
 
-    /** And a shared field cannot be given a different value per site. */
+    /**
+     * And a shared field cannot be given a different value per site.
+    */
     public function testAnUntranslatableFieldsValueIsCopiedBackAcrossSites(): void
     {
         $secondary = self::pages(self::$secondSiteId)->id(self::$entryIds['picks-main'])->one();
@@ -87,7 +72,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         $this->assertTrue(Craft::$app->getElements()->saveElement($primary));
     }
 
-    /** A translatable instance is genuinely per-site. */
+    /**
+     * A translatable instance is genuinely per-site.
+    */
     public function testATranslatableFieldHoldsADifferentSelectionPerSite(): void
     {
         $secondary = self::pages(self::$secondSiteId)->id(self::$entryIds['picks-primary-only'])->one();
@@ -109,7 +96,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         );
     }
 
-    /** Each site's value is queryable independently. */
+    /**
+     * Each site's value is queryable independently.
+    */
     public function testQueryingATranslatableFieldIsScopedToTheSiteQueried(): void
     {
         $this->assertSame(
@@ -130,9 +119,7 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         );
     }
 
-    // ---------------------------------------------------------------------
-    // 2. Group-level site restriction
-    // ---------------------------------------------------------------------
+    // 2.
 
     public function testAvailabilityIsReportedForTheElementsOwnSite(): void
     {
@@ -154,10 +141,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A restricted menu resolves to no tree on a site it isn't available on —
-     * the group-level site gate in `MenuBuilderResolver::getTree()`, reached
-     * through the field.
-     */
+     * A restricted menu resolves to no tree on a site it isn't available on — the group-level
+     * site gate in `MenuBuilderResolver::getTree()`, reached through the field.
+    */
     public function testARestrictedMenuResolvesToNoTreeOnASiteItIsNotAvailableOn(): void
     {
         $entry = self::pages($this->primarySiteId())->id(self::$entryIds['picks-primary-only'])->one();
@@ -179,9 +165,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Site mismatch is a validation error on a translatable field, where the
-     * author can pick a different menu for this site — and only there.
-     */
+     * Site mismatch is a validation error on a translatable field, where the author can pick a
+     * different menu for this site — and only there.
+    */
     public function testSiteMismatchFailsValidationOnATranslatableField(): void
     {
         $entry = self::pages(self::$secondSiteId)->id(self::$entryIds['picks-primary-only'])->one();
@@ -197,10 +183,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The same selection on the same site is *not* an error on the shared
-     * field: one value covers every site, so the restriction could never be
-     * satisfied and the error would be unfixable.
-     */
+     * The same selection on the same site is *not* an error on the shared field: one value covers
+     * every site, so the restriction could never be satisfied and the error would be unfixable.
+    */
     public function testSiteMismatchIsNotAnErrorOnAnUntranslatableField(): void
     {
         $entry = self::pages(self::$secondSiteId)->id(self::$entryIds['picks-primary-only'])->one();
@@ -216,7 +201,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         );
     }
 
-    /** A deleted menu is an error on any site, translatable or not. */
+    /**
+     * A deleted menu is an error on any site, translatable or not.
+    */
     public function testADeletedMenuFailsValidationOnEverySite(): void
     {
         foreach ([$this->primarySiteId(), self::$secondSiteId] as $siteId) {
@@ -232,26 +219,13 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
         }
     }
 
-    // ---------------------------------------------------------------------
-    // 3. The cross-site rendering limitation
-    // ---------------------------------------------------------------------
+    // 3.
 
     /**
-     * **Regression test for a documented limitation, not for a bug.**
-     *
-     * `getTree()` resolves for the site of the *current request* — the site
-     * whose element URLs, titles and cache entry a page is being built from —
-     * and not for the site of the element the value came from. Those coincide
-     * on every ordinary page. They diverge when a template renders an element
-     * fetched from another site (`craft.entries.site('secondary')` inside a
-     * primary-site request), and this test pins that divergence so a future
-     * change to it is a deliberate decision rather than an accident.
-     *
-     * Resolving for an arbitrary site would mean plumbing a site ID through
-     * the resolver, the link resolvers and the cache key — a change to the
-     * resolve pipeline, which is explicitly out of scope for this phase. See
-     * ARCHITECTURE.md "Known limitations".
-     */
+     * **Regression test for a documented limitation, not for a bug.** `getTree()` resolves for the
+     * site of the *current request* — the site whose element URLs, titles and cache entry a page
+     * is being built from — and not for the site of the element the value came from.
+    */
     public function testATreeResolvesForTheRequestsSiteNotTheElementsSite(): void
     {
         // A secondary-site element, read while the primary site is current.
@@ -278,9 +252,9 @@ class MenuBuilderFieldMultiSiteTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The other half of the same limitation: the tree that comes back is the
-     * *current* site's tree, so it is built from that site's resolver state.
-     */
+     * The other half of the same limitation: the tree that comes back is the *current* site's tree,
+     * so it is built from that site's resolver state.
+    */
     public function testTheResolvedTreeBelongsToTheCurrentSite(): void
     {
         Craft::$app->getSites()->setCurrentSite(self::$secondSiteId);

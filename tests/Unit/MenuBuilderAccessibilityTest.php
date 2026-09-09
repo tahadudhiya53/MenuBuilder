@@ -11,35 +11,16 @@ require_once __DIR__ . '/NavMacroRendering.php';
 
 /**
  * What the rendered navigation promises assistive technology.
- *
- * Every assertion here runs against markup produced by the plugin's real
- * macros (see {@see NavMacroRendering}), because an accessibility guarantee
- * is a property of what the browser receives, not of what the template
- * source looks like.
- *
- * The rule this file exists to hold: **an attribute must describe something
- * that is true.** `aria-current="page"` on one link only, because only one
- * link can be the page being served; `aria-expanded` only where something
- * expands and something keeps the attribute in step; no `aria-haspopup` on a
- * panel of ordinary links, because that announces a menu widget with keyboard
- * behaviour these links do not have. An attribute that overstates is worse
- * than none: it sends a screen-reader user looking for a control that isn't
- * there.
- *
- * The other half is that editor-authored data cannot forge any of it. A
- * custom-attributes bag is the one editor value whose *keys* reach markup
- * where an attribute name goes, so it is re-checked at render time and
- * filtered — see {@see LinkAttributeHelper::filterHtmlAttributes()}.
- */
+*/
 class MenuBuilderAccessibilityTest extends TestCase
 {
     use NavMacroRendering;
 
-    // ---------------------------------------------------------------------
     // The navigation landmark
-    // ---------------------------------------------------------------------
 
-    /** A menu is a landmark, named after itself, so a page with two of them is navigable. */
+    /**
+     * A menu is a landmark, named after itself, so a page with two of them is navigable.
+    */
     public function testTheNavigationIsALandmarkNamedAfterTheMenu(): void
     {
         $html = $this->renderNavLandmark([$this->node(1, title: 'Home', url: '/')]);
@@ -51,7 +32,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(1, $this->query($html, '//nav/ul/li/a[@href="/"]'));
     }
 
-    /** A template can name the landmark itself — "Utility links", not a second "Main". */
+    /**
+     * A template can name the landmark itself — "Utility links", not a second "Main".
+    */
     public function testAnExplicitLabelWinsOverTheMenuName(): void
     {
         $html = $this->renderNavLandmark([$this->node(1, title: 'Home', url: '/')], label: 'Utility links');
@@ -60,10 +43,8 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * An empty menu renders nothing at all. An empty landmark is something a
-     * screen-reader user has to navigate to in order to discover it was
-     * empty.
-     */
+     * An empty menu renders nothing at all.
+    */
     public function testAnEmptyMenuRendersNoLandmarkAtAll(): void
     {
         $html = $this->renderNavLandmark([]);
@@ -72,10 +53,10 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The menu's own attributes reach the landmark, but the ones that would
-     * unname it, un-label it or take its role away do not: a `role="banner"`
-     * typed into a menu's attributes bag would stop it being a navigation.
-     */
+     * The menu's own attributes reach the landmark, but the ones that would unname it, un-label it
+     * or take its role away do not: a `role="banner"` typed into a menu's attributes bag would stop
+     * it being a navigation.
+    */
     public function testTheMenusOwnAttributesReachTheLandmarkButCannotRedefineIt(): void
     {
         $html = $this->renderNavLandmark([$this->node(1, title: 'Home', url: '/')], [
@@ -98,15 +79,12 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertStringNotContainsString('alert(1)', $html);
     }
 
-    // ---------------------------------------------------------------------
     // aria-current
-    // ---------------------------------------------------------------------
 
     /**
-     * `aria-current="page"` is the answer to "am I on this page", and only
-     * one link in a tree can be. An ancestor of the active item is styled as
-     * an open branch and says nothing about being the current page.
-     */
+     * `aria-current="page"` is the answer to "am I on this page", and only one link in a tree can
+     * be.
+    */
     public function testAriaCurrentPageLandsOnTheActiveLinkAndNowhereElse(): void
     {
         $html = $this->renderNav([
@@ -131,7 +109,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertStringContainsString('is-active', $ancestorItem->getAttribute('class'), 'An open branch is styled by class, not announced by ARIA.');
     }
 
-    /** Nothing is the current page when nothing matches the request. */
+    /**
+     * Nothing is the current page when nothing matches the request.
+    */
     public function testNoLinkIsMarkedCurrentWhenNothingIsActive(): void
     {
         $html = $this->renderNav([
@@ -143,10 +123,9 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * A heading is not a page, so it never claims to be the current one —
-     * even if the resolver somehow marked it active. `aria-current` lives on
-     * the `<a>` branch of the macro alone.
-     */
+     * A heading is not a page, so it never claims to be the current one — even if the resolver
+     * somehow marked it active.
+    */
     public function testANonClickableHeadingNeverCarriesAriaCurrent(): void
     {
         $html = $this->renderNav([
@@ -157,7 +136,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(1, $this->query($html, '//li/span'));
     }
 
-    /** An editor cannot type a second current page into an item's attributes bag. */
+    /**
+     * An editor cannot type a second current page into an item's attributes bag.
+    */
     public function testACustomAttributeCannotForgeAriaCurrent(): void
     {
         $html = $this->renderNav([
@@ -171,15 +152,11 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertSame('/news', $current[0]->getAttribute('href'), 'The active item is the only current page.');
     }
 
-    // ---------------------------------------------------------------------
     // Links, headings and keyboard reachability
-    // ---------------------------------------------------------------------
 
     /**
      * A heading is a `<span>`: no `href`, no `role="link"`, no `tabindex`.
-     * A focusable element that does nothing when activated is a dead stop on
-     * the Tab path.
-     */
+    */
     public function testAHeadingIsNotFocusableAndNotAFakeLink(): void
     {
         $html = $this->renderNav([
@@ -195,10 +172,9 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * Nothing in the macro takes a link out of the keyboard's path or
-     * reorders it: no `tabindex` is emitted anywhere, and one an editor
-     * types is dropped.
-     */
+     * Nothing in the macro takes a link out of the keyboard's path or reorders it: no `tabindex` is
+     * emitted anywhere, and one an editor types is dropped.
+    */
     public function testNoLinkIsGivenATabindex(): void
     {
         $html = $this->renderNav([
@@ -210,7 +186,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(0, $this->query($html, '//*[@tabindex]'));
     }
 
-    /** A visible link that is hidden from a screen reader is a link half the audience can't use. */
+    /**
+     * A visible link that is hidden from a screen reader is a link half the audience can't use.
+    */
     public function testAVisibleLinkCannotBeHiddenFromAssistiveTechnology(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/', htmlAttributes: ['aria-hidden' => 'true'])]);
@@ -218,16 +196,11 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertSame('', $this->query($html, '//a')[0]->getAttribute('aria-hidden'));
     }
 
-    // ---------------------------------------------------------------------
     // Opening in a new tab
-    // ---------------------------------------------------------------------
 
     /**
-     * A new tab is a change of context a sighted user reads from the
-     * browser. It has to be in the link's accessible name for everyone else
-     * (WCAG 3.2.5) — and hidden by the macro itself, so it doesn't become
-     * visible text in a theme with no visually-hidden helper.
-     */
+     * A new tab is a change of context a sighted user reads from the browser.
+    */
     public function testALinkThatOpensANewTabSaysSoInItsAccessibleName(): void
     {
         $html = $this->renderNav([
@@ -245,7 +218,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertStringContainsString('clip-path:inset(50%)', $hint->getAttribute('style'), 'The hint is hidden without needing the theme’s CSS.');
     }
 
-    /** A same-tab link says nothing, and doesn't carry the default `target` either. */
+    /**
+     * A same-tab link says nothing, and doesn't carry the default `target` either.
+    */
     public function testASameTabLinkCarriesNoTargetAndNoHint(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/')]);
@@ -254,7 +229,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertStringNotContainsString('opens in a new tab', $html);
     }
 
-    /** A heading opens nothing, whatever `target` its row happens to carry. */
+    /**
+     * A heading opens nothing, whatever `target` its row happens to carry.
+    */
     public function testAHeadingNeverAnnouncesANewTab(): void
     {
         $html = $this->renderNav([
@@ -264,26 +241,12 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertStringNotContainsString('opens in a new tab', $html);
     }
 
-    // ---------------------------------------------------------------------
     // Mega menus: one state, owned by the browser
-    // ---------------------------------------------------------------------
 
     /**
-     * **The regression this section exists for.** A disclosure has two things
-     * that must never disagree: whether the panel is on screen, and what the
-     * markup says about it. Splitting those across an `aria-expanded`
-     * attribute (owned by whatever script is running) and a CSS rule (owned
-     * by the theme) is what produced a panel opened on `:hover` while the
-     * button still said `aria-expanded="false"` — and no amount of scripting
-     * from inside the plugin could guarantee otherwise.
-     *
-     * `<details>` removes the second state rather than trying to synchronise
-     * it: `open` *is* the rendering and *is* the accessible state. So the
-     * check is structural — there is no disclosure attribute in this markup
-     * that could be out of step with anything, and the panel is *inside* the
-     * element that owns the state, not a sibling a stylesheet can reveal on
-     * its own.
-     */
+     * **The regression this section exists for.** A disclosure has two things that must never
+     * disagree: whether the panel is on screen, and what the markup says about it.
+    */
     public function testAMegaMenuHasNoDisclosureStateThatCouldContradictWhatIsOnScreen(): void
     {
         $html = $this->renderNav([$this->megaParent()]);
@@ -304,10 +267,9 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The native disclosure structure, which is what makes the browser's
-     * guarantee apply: `<summary>` first, panel after it, both inside one
-     * `<details>`.
-     */
+     * The native disclosure structure, which is what makes the browser's guarantee apply:
+     * `<summary>` first, panel after it, both inside one `<details>`.
+    */
     public function testAMegaMenuIsANativeDisclosure(): void
     {
         $html = $this->renderNav([$this->megaParent()]);
@@ -325,11 +287,8 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The item's label is already on screen, as the link or heading beside
-     * the disclosure. Repeating it would put two controls with the same name
-     * next to each other, with nothing to say which one opens the panel — so
-     * the summary's name says what it does, over a decorative caret.
-     */
+     * The item's label is already on screen, as the link or heading beside the disclosure.
+    */
     public function testTheSummaryNamesWhatItDoesInsteadOfRepeatingTheLabel(): void
     {
         $html = $this->renderNav([$this->megaParent()]);
@@ -345,7 +304,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertSame('Explore', trim($this->query($html, '//li/a')[0]->textContent), 'The item still renders its own label, once.');
     }
 
-    /** An ARIA label set on the item is what the summary and the panel are named after. */
+    /**
+     * An ARIA label set on the item is what the summary and the panel are named after.
+    */
     public function testTheSummaryUsesTheItemsAriaLabelWhenItHasOne(): void
     {
         $node = $this->megaParent();
@@ -364,7 +325,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertSame('Explore our products', $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]')[0]->getAttribute('aria-label'));
     }
 
-    /** The panel's contents are links, not menu items: no roles that change what keys mean. */
+    /**
+     * The panel's contents are links, not menu items: no roles that change what keys mean.
+    */
     public function testAMegaMenuPanelContainsOrdinaryLinks(): void
     {
         $html = $this->renderNav([$this->megaParent()]);
@@ -382,11 +345,9 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * A mega menu inside a mega-menu column is just another `<details>` —
-     * each one owns its own state, and neither claims anything about the
-     * other. Nesting is where a hand-maintained `aria-expanded` goes wrong
-     * first.
-     */
+     * A mega menu inside a mega-menu column is just another `<details>` — each one owns its own
+     * state, and neither claims anything about the other.
+    */
     public function testANestedMegaMenuIsItsOwnIndependentDisclosure(): void
     {
         $inner = $this->node(5, title: 'Guides', url: '/guides', level: 2, megaMenuColumn: 1, megaMenu: new MenuBuilderMegaMenuConfig(columns: 1), children: [
@@ -407,10 +368,10 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The escape hatch for a theme that opens its panels its own way: no
-     * `<details>`, no summary, and — the point — no state claimed on the
-     * plugin's behalf that the theme would then have to keep true.
-     */
+     * The escape hatch for a theme that opens its panels its own way: no `<details>`, no summary,
+     * and — the point — no state claimed on the plugin's behalf that the theme would then have
+     * to keep true.
+    */
     public function testTheNoDisclosureModeClaimsNoStateAtAll(): void
     {
         $html = $this->renderNav([$this->megaParent()], disclosure: 'none');
@@ -429,13 +390,8 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * A disclosure control has to disclose something. A mega-menu parent can
-     * legitimately end up with no children — the config was set before the
-     * children were added, or every child is hidden from *this* visitor by a
-     * visibility rule, which is filtered per request before any macro sees
-     * the tree. Rendering the `<details>` anyway would put a control in the
-     * Tab order whose whole job is to open an empty `role="group"`.
-     */
+     * A disclosure control has to disclose something.
+    */
     public function testAMegaMenuParentWithNothingToShowRendersNoDisclosureAtAll(): void
     {
         $childless = $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
@@ -454,7 +410,10 @@ class MenuBuilderAccessibilityTest extends TestCase
         }
     }
 
-    /** Same guarantee for a template that calls the renderer itself, without `render()` in front of it. */
+    /**
+     * Same guarantee for a template that calls the renderer itself, without `render()` in front of
+     * it.
+    */
     public function testCallingTheMegaMenuRendererDirectlyOnAChildlessNodeRendersNothing(): void
     {
         $childless = $this->node(1, title: 'Products', url: '/products', megaMenu: new MenuBuilderMegaMenuConfig(columns: 3));
@@ -465,11 +424,10 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The per-visitor case of the same rule: a panel whose every child is
-     * hidden from this visitor is filtered down to a childless parent
-     * (MenuBuilderResolver::filterVisible() rebuilds the node with
-     * `withChildren()`), and must then render no disclosure either.
-     */
+     * The per-visitor case of the same rule: a panel whose every child is hidden from this visitor
+     * is filtered down to a childless parent (MenuBuilderResolver::filterVisible() rebuilds the
+     * node with `withChildren()`), and must then render no disclosure either.
+    */
     public function testAPanelEmptiedByVisibilityFilteringRendersNoDisclosure(): void
     {
         $filtered = $this->megaParent()->withChildren([]);
@@ -480,7 +438,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(0, $this->query($html, '//div[contains(@class, "menu-builder-megamenu-panel")]'));
     }
 
-    /** The mode reaches every level of the tree, not only the node it was called on. */
+    /**
+     * The mode reaches every level of the tree, not only the node it was called on.
+    */
     public function testTheDisclosureModeIsThreadedThroughTheWholeTree(): void
     {
         $nested = $this->node(1, title: 'Explore', url: '/explore', children: [
@@ -493,27 +453,15 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The bundled script is an enhancement over the native element, never
-     * the thing that makes the markup honest — so what is checked here is
-     * that it owns no state of its own. It sets `details.open`, which *is*
-     * the state, and writes no `aria-expanded`/`data-*` copy of it that
-     * could drift.
-     *
-     * Its keyboard behaviour (Escape, arrows, Home/End) is browser
-     * behaviour and is verified manually — see README.md → Accessibility. There is no
-     * JavaScript test runner in this plugin, and adding npm + a DOM
-     * implementation to a Craft plugin that ships five hand-written scripts
-     * would be a build system bought for one file; what that would buy is
-     * coverage of *keys*, not of the guarantee, which is exactly the part
-     * `<details>` moved into the browser.
-     */
+     * The bundled script is an enhancement over the native element, never the thing that makes the
+     * markup honest — so what is checked here is that it owns no state of its own.
+    */
     public function testTheBundledScriptOwnsNoStateOfItsOwn(): void
     {
         $bundle = (string)file_get_contents(__DIR__ . '/../../src/web/assets/nav/NavAsset.php');
 
-        // Comments stripped first: this is about what the script *does*, and
-        // its docblock necessarily talks about the attribute it refuses to
-        // write.
+        // Comments stripped first: this is about what the script *does*, and its docblock
+        // necessarily talks about the attribute it refuses to write.
         $script = (string)preg_replace(
             ['~/\*.*?\*/~s', '~^\s*//.*$~m'],
             '',
@@ -530,20 +478,10 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The one rule a stylesheet has to obey, checked against the only
-     * stylesheet this plugin ships: **nothing may make a mega-menu panel
-     * visible while its `<details>` is closed.**
-     *
-     * This is where the bug actually lived. The control panel's preview
-     * opened mega panels with `li:hover > … > .menu-builder-megamenu-panel {
-     * display: grid }` while the disclosure state was maintained separately —
-     * so the plugin's own screen demonstrated a panel that was open to the
-     * eye and closed to a screen reader. A DOM test can't catch that, because
-     * the divergence lives in CSS; so the CSS is read the way a browser
-     * reads it, and every rule that gives a disclosure panel a box has to be
-     * scoped to `details[open]`. The explicitly disclosure-free `--static`
-     * variant may be laid out directly because it has no closed state.
-     */
+     * The one rule a stylesheet has to obey, checked against the only stylesheet this plugin ships:
+     * **nothing may make a mega-menu panel visible while its `<details>` is closed.** This is where
+     * the bug actually lived.
+    */
     public function testNoStylesheetRuleRevealsAPanelWhoseDisclosureIsClosed(): void
     {
         $css = (string)file_get_contents(__DIR__ . '/../../src/web/assets/cp/menu-builder-cp.css');
@@ -581,19 +519,14 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertGreaterThan(0, $checked, 'Expected the preview stylesheet to style an open panel at all.');
     }
 
-    // ---------------------------------------------------------------------
     // Custom attributes cannot inject behaviour
-    // ---------------------------------------------------------------------
 
     /**
-     * The bag reaches markup where an *attribute name* goes, which is the
-     * one editor-authored position Twig's escaping does not make safe. It is
-     * re-checked at render time, so a row that never passed save-time
-     * validation — an import, a direct database write, a row older than the
-     * rule — still can't emit a handler.
+     * The bag reaches markup where an *attribute name* goes, which is the one editor-authored
+     * position Twig's escaping does not make safe.
      *
      * @dataProvider dangerousAttributeProvider
-     */
+    */
     public function testDangerousCustomAttributesNeverReachTheMarkup(array $attributes, string $needle): void
     {
         foreach ([
@@ -611,9 +544,7 @@ class MenuBuilderAccessibilityTest extends TestCase
         }
     }
 
-    /**
-     * @return array<string,array{array<string,string>,string}>
-     */
+    /** @return array<string,array{array<string,string>,string}> */
     public static function dangerousAttributeProvider(): array
     {
         return [
@@ -627,7 +558,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         ];
     }
 
-    /** Ordinary custom attributes still work — this filters, it doesn't ban the feature. */
+    /**
+     * Ordinary custom attributes still work — this filters, it doesn't ban the feature.
+    */
     public function testHarmlessCustomAttributesStillRender(): void
     {
         $html = $this->renderNav([
@@ -646,14 +579,12 @@ class MenuBuilderAccessibilityTest extends TestCase
     }
 
     /**
-     * The macro's own attributes are not overridable from the bag. A second
-     * `href` is not merely ignored by the browser — on a heading, which has
-     * none of its own, it would turn a label into a link.
-     */
+     * The macro's own attributes are not overridable from the bag.
+    */
     public function testTheAttributesTheMacroOwnsCannotBeOverridden(): void
     {
-        // Named explicitly as well as swept, so tightening or renaming the
-        // constant can't quietly stop covering the states that matter.
+        // Named explicitly as well as swept, so tightening or renaming the constant can't quietly
+        // stop covering the states that matter.
         foreach (['aria-expanded', 'aria-controls', 'aria-haspopup', 'aria-current', 'aria-hidden', 'tabindex'] as $state) {
             $this->assertContains($state, LinkAttributeHelper::RESERVED_ATTRIBUTES);
         }
@@ -673,11 +604,11 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertCount(0, $this->query($html, '//a'), 'A heading cannot be turned into a link by an attributes bag.');
     }
 
-    // ---------------------------------------------------------------------
     // Icons and badges as screen-reader content
-    // ---------------------------------------------------------------------
 
-    /** A decorative icon is not read out; the item's title is the name. */
+    /**
+     * A decorative icon is not read out; the item's title is the name.
+    */
     public function testIconsAreHiddenFromScreenReaders(): void
     {
         $html = $this->renderNav([
@@ -690,7 +621,9 @@ class MenuBuilderAccessibilityTest extends TestCase
         $this->assertSame('Home', trim($this->query($html, '//a')[0]->textContent), 'The icon contributes nothing to the name.');
     }
 
-    /** A badge is part of the name it belongs to — "Products New", not a word on its own. */
+    /**
+     * A badge is part of the name it belongs to — "Products New", not a word on its own.
+    */
     public function testABadgeIsPartOfTheItemsAccessibleName(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Products', url: '/products', badge: 'New')]);

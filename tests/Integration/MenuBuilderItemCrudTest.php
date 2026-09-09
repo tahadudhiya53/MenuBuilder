@@ -10,18 +10,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 
 /**
  * Item CRUD, hierarchy and ordering against the real database.
- *
- * The unit suite exercises the *plan* a move produces (see
- * MenuBuilderTreeTest, which drives `MenuBuilderHierarchyHelper` over
- * in-memory snapshots) and the rules the item model enforces. What it cannot
- * do is run the plan: whether the rows it names are actually written, whether
- * a refused move rolls back cleanly, whether a delete really takes the
- * subtree, and whether the sibling set is still contiguous afterwards. That
- * is this class.
- *
- * Each test works in a menu of its own, deleted afterwards — the cascading
- * foreign key takes the items with it.
- */
+*/
 class MenuBuilderItemCrudTest extends TestCase
 {
     private MenuBuilderGroup $menu;
@@ -67,7 +56,9 @@ class MenuBuilderItemCrudTest extends TestCase
         return $item;
     }
 
-    /** Titles of the given level, in stored order. */
+    /**
+     * Titles of the given level, in stored order.
+    */
     private function titlesUnder(?int $parentId): array
     {
         $titles = [];
@@ -99,9 +90,7 @@ class MenuBuilderItemCrudTest extends TestCase
         return $orders;
     }
 
-    // ---------------------------------------------------------------------
     // Create
-    // ---------------------------------------------------------------------
 
     public function testASavedItemIsReadableBack(): void
     {
@@ -117,10 +106,9 @@ class MenuBuilderItemCrudTest extends TestCase
     }
 
     /**
-     * Presentation, accessibility, link behaviour, visibility and the two
-     * JSON bags all have to survive one round trip — a column that silently
-     * drops its value only shows up here.
-     */
+     * Presentation, accessibility, link behaviour, visibility and the two JSON bags all have to
+     * survive one round trip — a column that silently drops its value only shows up here.
+    */
     public function testEveryPersistedPropertyRoundTripsThroughTheDatabase(): void
     {
         $item = $this->add('Everything', configure: function(MenuBuilderItem $item) {
@@ -180,9 +168,7 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertSame(['Shoes', 'Hats'], $this->titlesUnder((int)$parent->id));
     }
 
-    // ---------------------------------------------------------------------
     // Edit
-    // ---------------------------------------------------------------------
 
     public function testAnEditUpdatesTheRowRatherThanAddingOne(): void
     {
@@ -222,10 +208,10 @@ class MenuBuilderItemCrudTest extends TestCase
     }
 
     /**
-     * An item belongs to a menu, and the check has to short-circuit *before*
-     * the insert — the foreign key would refuse the row anyway, but as an
-     * exception rather than as a field error the editor can read.
-     */
+     * An item belongs to a menu, and the check has to short-circuit *before* the insert — the
+     * foreign key would refuse the row anyway, but as an exception rather than as a field error the
+     * editor can read.
+    */
     public function testAnItemNamingAMenuThatDoesNotExistIsRefusedWithAFieldError(): void
     {
         $orphan = new MenuBuilderItem();
@@ -264,9 +250,7 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertTrue($this->items()->getById((int)$a->id)->enabled);
     }
 
-    // ---------------------------------------------------------------------
     // Hierarchy
-    // ---------------------------------------------------------------------
 
     public function testTheTreeNestsChildrenUnderTheirParent(): void
     {
@@ -325,18 +309,17 @@ class MenuBuilderItemCrudTest extends TestCase
     }
 
     /**
-     * `maxDepth` is measured against the deepest row of the subtree being
-     * moved, not against the item itself — otherwise a one-level move could
-     * push a grandchild past the limit.
-     */
+     * `maxDepth` is measured against the deepest row of the subtree being moved, not against the
+     * item itself — otherwise a one-level move could push a grandchild past the limit.
+    */
     public function testMaxDepthIsEnforcedAgainstTheWholeMovingSubtree(): void
     {
         $top = $this->add('Top');
         $branch = $this->add('Branch');
         $this->add('Leaf', (int)$branch->id);
 
-        // Capped only now: the two-level tree above is already at the limit,
-        // so it could not have been built under it.
+        // Capped only now: the two-level tree above is already at the limit, so it could not have
+        // been built under it.
         $this->menu->maxDepth = 2;
         $this->assertTrue(MenuBuilder::getInstance()->groups->save($this->menu));
 
@@ -357,9 +340,7 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertSame((int)$top->id, (int)$this->items()->getById((int)$leaf->id)->parentId);
     }
 
-    // ---------------------------------------------------------------------
     // Ordering / moving
-    // ---------------------------------------------------------------------
 
     public function testMovingASiblingToTheTopRewritesTheWholeSet(): void
     {
@@ -437,9 +418,7 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertSame($before, $this->titlesUnder(null));
     }
 
-    // ---------------------------------------------------------------------
     // Duplicate
-    // ---------------------------------------------------------------------
 
     public function testDuplicatingAnItemCopiesItAlongsideTheOriginal(): void
     {
@@ -455,11 +434,9 @@ class MenuBuilderItemCrudTest extends TestCase
     }
 
     /**
-     * The copy is a whole new subtree, and every level of it is suffixed —
-     * not just the item that was duplicated. That is deliberate: a copied
-     * branch that read identically to the original would be impossible to
-     * tell apart in the tree view.
-     */
+     * The copy is a whole new subtree, and every level of it is suffixed — not just the item that
+     * was duplicated.
+    */
     public function testDuplicatingAParentCopiesItsWholeSubtree(): void
     {
         $parent = $this->add('Products');
@@ -497,9 +474,7 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertNull($this->items()->duplicate(999999));
     }
 
-    // ---------------------------------------------------------------------
     // Delete
-    // ---------------------------------------------------------------------
 
     public function testDeletingAnItemTakesItsDescendantsByDefault(): void
     {
@@ -525,8 +500,7 @@ class MenuBuilderItemCrudTest extends TestCase
 
         $this->assertNull($this->items()->getById((int)$parent->id));
         $this->assertNull($this->items()->getById((int)$child->id)->parentId);
-        // Only the direct children are promoted — the rest of the subtree
-        // stays hung off them.
+        // Only the direct children are promoted — the rest of the subtree stays hung off them.
         $this->assertSame((int)$child->id, (int)$this->items()->getById((int)$grandchild->id)->parentId);
     }
 

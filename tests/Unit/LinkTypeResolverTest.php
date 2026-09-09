@@ -17,26 +17,14 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderDynamicNavigationService;
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
 
 /**
- * Link resolution for every item type: the registry that maps a type to its
- * resolver, and each resolver's own decisions.
- *
- * An unregistered type resolves to ResolvedLink::unavailable(), which the
- * default `hide` fallback then drops from every rendered menu — a silent
- * disappearance rather than a loud failure — so the registry is checked in
- * both directions. ElementLinkResolver's element query needs a booted Craft
- * app and is covered by manual testing; its two pure decisions (is this
- * element publicly available on this site, and what happens when it is not)
- * are covered here.
- */
+ * Link resolution for every item type: the registry that maps a type to its resolver, and each
+ * resolver's own decisions.
+*/
 class LinkTypeResolverTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // The registry: every declared type maps to exactly one resolver
-    // ---------------------------------------------------------------------
 
-    /**
-     * @return array<string,LinkTypeResolverInterface>
-     */
+    /** @return array<string,LinkTypeResolverInterface> */
     private function resolvers(): array
     {
         $service = new MenuBuilderLinkResolver();
@@ -55,7 +43,9 @@ class LinkTypeResolverTest extends TestCase
         }
     }
 
-    /** No resolver is registered for a type that isn't declared. */
+    /**
+     * No resolver is registered for a type that isn't declared.
+    */
     public function testNoResolverIsRegisteredForAnUnknownType(): void
     {
         foreach (array_keys($this->resolvers()) as $type) {
@@ -63,9 +53,7 @@ class LinkTypeResolverTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // The resolvers themselves
-    // ---------------------------------------------------------------------
 
     public function testUrlLinkResolver(): void
     {
@@ -115,9 +103,9 @@ class LinkTypeResolverTest extends TestCase
     }
 
     /**
-     * There is no "give it a link anyway" path — a customUrl or a stale
-     * clickable=true on a heading/separator item must never produce a link.
-     */
+     * There is no "give it a link anyway" path — a customUrl or a stale clickable=true on a
+     * heading/separator item must never produce a link.
+    */
     public function testNonClickableLinkResolverIgnoresCustomUrlAndClickableFlag(): void
     {
         $resolver = new NonClickableLinkResolver();
@@ -147,14 +135,11 @@ class LinkTypeResolverTest extends TestCase
     }
 
     /**
-     * A `dynamic` item is a container for its synthesized children, not a
-     * link — but it must resolve as *available*, since MenuBuilderResolver
-     * drops any unavailable item whose fallbackBehavior is `hide` (the
-     * default, and the only value the type-scoped editor fields can leave a
-     * dynamic item with). Before this type had a resolver at all it fell
-     * through to unavailable() and every dynamic item — plus every child it
-     * would have generated — vanished from the rendered tree.
-     */
+     * A `dynamic` item is a container for its synthesized children, not a link — but it must
+     * resolve as *available*, since MenuBuilderResolver drops any unavailable item whose
+     * fallbackBehavior is `hide` (the default, and the only value the type-scoped editor fields can
+     * leave a dynamic item with).
+    */
     public function testDynamicLinkResolverIsAvailableWithoutAUrl(): void
     {
         $item = new MenuBuilderItem();
@@ -167,9 +152,7 @@ class LinkTypeResolverTest extends TestCase
         $this->assertNull($link->url);
     }
 
-    /**
-     * @return array<string,array{string}>
-     */
+    /** @return array<string,array{string}> */
     public static function acceptableCustomUrlProvider(): array
     {
         return [
@@ -185,9 +168,7 @@ class LinkTypeResolverTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider acceptableCustomUrlProvider
-     */
+    /** @dataProvider acceptableCustomUrlProvider */
     public function testUrlLinkResolverPassesThroughAcceptableUrls(string $url): void
     {
         $item = new MenuBuilderItem();
@@ -200,9 +181,7 @@ class LinkTypeResolverTest extends TestCase
         $this->assertSame($url, $link->url);
     }
 
-    /**
-     * @return array<string,array{string}>
-     */
+    /** @return array<string,array{string}> */
     public static function unsafeOrMalformedCustomUrlProvider(): array
     {
         return [
@@ -218,13 +197,12 @@ class LinkTypeResolverTest extends TestCase
     }
 
     /**
-     * Validation rejects these on save; this covers the stored value that
-     * never went through validation (import, direct DB edit, a row written
-     * before the scheme denylist existed) — the resolver must not hand an
-     * executable or malformed value to an `href`.
+     * Validation rejects these on save; this covers the stored value that never went through
+     * validation (import, direct DB edit, a row written before the scheme denylist existed) — the
+     * resolver must not hand an executable or malformed value to an `href`.
      *
      * @dataProvider unsafeOrMalformedCustomUrlProvider
-     */
+    */
     public function testUrlLinkResolverRefusesUnsafeOrMalformedStoredUrls(string $url): void
     {
         $item = new MenuBuilderItem();
@@ -238,12 +216,11 @@ class LinkTypeResolverTest extends TestCase
     }
 
     /**
-     * The editor's "Anchor handle" field posts `customUrl` and is documented
-     * as "leave blank to reuse the Handle field in Advanced", so customUrl
-     * wins — `handle` also doubles as the CSS-targeting handle, and
-     * preferring it meant an item with both silently linked to the wrong
+     * The editor's "Anchor handle" field posts `customUrl` and is documented as "leave blank to
+     * reuse the Handle field in Advanced", so customUrl wins — `handle` also doubles as the
+     * CSS-targeting handle, and preferring it meant an item with both silently linked to the wrong
      * fragment.
-     */
+    */
     public function testAnchorLinkResolverPrefersTheAnchorFieldOverTheCssHandle(): void
     {
         $item = new MenuBuilderItem();
@@ -264,9 +241,7 @@ class LinkTypeResolverTest extends TestCase
         $this->assertSame('#section-2', (new AnchorLinkResolver())->resolve($item)->url);
     }
 
-    /**
-     * @return array<string,array{string}>
-     */
+    /** @return array<string,array{string}> */
     public static function malformedAnchorProvider(): array
     {
         return [
@@ -280,9 +255,7 @@ class LinkTypeResolverTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider malformedAnchorProvider
-     */
+    /** @dataProvider malformedAnchorProvider */
     public function testAnchorLinkResolverRefusesMalformedFragments(string $anchor): void
     {
         $item = new MenuBuilderItem();
@@ -305,13 +278,12 @@ class LinkTypeResolverTest extends TestCase
     }
 
     /**
-     * Availability comes from the element's *status*, which accounts for
-     * per-site enabled state — the previous `enabled`-flag check let a
-     * category or asset disabled for the site being rendered still produce
-     * a link there.
+     * Availability comes from the element's *status*, which accounts for per-site enabled state —
+     * the previous `enabled`-flag check let a category or asset disabled for the site being
+     * rendered still produce a link there.
      *
      * @return array<string,array{class-string,string|null,bool}>
-     */
+    */
     public static function elementAvailabilityProvider(): array
     {
         return [
@@ -330,7 +302,7 @@ class LinkTypeResolverTest extends TestCase
     /**
      * @param class-string $elementClass
      * @dataProvider elementAvailabilityProvider
-     */
+    */
     public function testElementAvailabilityIsDecidedByStatus(string $elementClass, ?string $status, bool $expected): void
     {
         $this->assertSame($expected, ElementLinkResolver::isPubliclyAvailable($elementClass, $status));
@@ -370,9 +342,7 @@ class LinkTypeResolverTest extends TestCase
         $this->assertSame('/archive', ElementLinkResolver::fallbackFor($item)->url);
     }
 
-    /**
-     * @return array<string,array{string|null}>
-     */
+    /** @return array<string,array{string|null}> */
     public static function unusableFallbackUrlProvider(): array
     {
         return [
@@ -382,9 +352,7 @@ class LinkTypeResolverTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider unusableFallbackUrlProvider
-     */
+    /** @dataProvider unusableFallbackUrlProvider */
     public function testAnUnusableFallbackUrlResolvesUnavailableRatherThanBeingEmitted(?string $url): void
     {
         $item = new MenuBuilderItem();
@@ -398,9 +366,8 @@ class LinkTypeResolverTest extends TestCase
         $this->assertNull($link->url);
     }
 
-    // =====================================================================
-    // Dynamic source configuration
-    // =====================================================================
+    // ===================================================================== Dynamic source
+    // configuration =====================================================================
 
     public function testAValidConfigPassesThrough(): void
     {
@@ -419,9 +386,7 @@ class LinkTypeResolverTest extends TestCase
         ], $config);
     }
 
-    /**
-     * @return array<string,array{array<string,mixed>}>
-     */
+    /** @return array<string,array{array<string,mixed>}> */
     public static function unusableConfigProvider(): array
     {
         return [
@@ -438,13 +403,15 @@ class LinkTypeResolverTest extends TestCase
     /**
      * @param array<string,mixed> $config
      * @dataProvider unusableConfigProvider
-     */
+    */
     public function testAnUnusableConfigNormalizesToNull(array $config): void
     {
         $this->assertNull(MenuBuilderDynamicNavigationService::normalizeConfig($config));
     }
 
-    /** The stored limit is never trusted — the server cap wins, in both directions. */
+    /**
+     * The stored limit is never trusted — the server cap wins, in both directions.
+    */
     public function testLimitIsAlwaysClamped(): void
     {
         $base = ['sourceType' => 'categories', 'sourceId' => 2];
@@ -457,7 +424,10 @@ class LinkTypeResolverTest extends TestCase
         $this->assertSame(3, MenuBuilderDynamicNavigationService::normalizeConfig($base + ['limit' => '3'])['limit']);
     }
 
-    /** `orderBy` reaches a query builder, so anything off the whitelist is discarded, not passed along. */
+    /**
+     * `orderBy` reaches a query builder, so anything off the whitelist is discarded, not passed
+     * along.
+    */
     public function testOrderByFallsBackToTheDefaultWhenNotWhitelisted(): void
     {
         $base = ['sourceType' => 'assets', 'sourceId' => 7];
@@ -474,7 +444,9 @@ class LinkTypeResolverTest extends TestCase
         }
     }
 
-    /** Every source type the item model declares must be buildable into a query. */
+    /**
+     * Every source type the item model declares must be buildable into a query.
+    */
     public function testEveryDeclaredSourceTypeNormalizes(): void
     {
         foreach (MenuBuilderItem::DYNAMIC_SOURCE_TYPES as $sourceType) {

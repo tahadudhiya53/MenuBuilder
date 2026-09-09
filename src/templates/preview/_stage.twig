@@ -1,20 +1,4 @@
-{#
- # A polished, illustrative website surface around the production menu.
- #
- # `previewMarkup` is captured from the shipped tree macro in index.twig. This
- # partial never reads nodes or recreates navigation: it only supplies the
- # kind of header, page content and footer a large public website might use.
- # The small "illustrative" label is intentional. MenuBuilder can prove the
- # menu's structure and state, but it cannot know a project's front-end theme.
- #
- # Expected variables:
- #   headerPreviewMarkup captured menu output with header-safe IDs
- #   footerPreviewMarkup captured menu output with footer-safe IDs
- #   isMobile       whether the compact viewport is selected
- #   placement      header, footer or both
- #   siteName       simulated site name
- #   navLabel       accessible name for the navigation landmark
-#}
+{# A polished, illustrative website surface around the production menu. #}
 {% import _self as stage %}
 
 {% macro nav(previewMarkup, navLabel, instance, startsHidden = false) %}
@@ -31,8 +15,10 @@
 {% set showFooter = placement != 'header' %}
 {% set showBoth = placement == 'both' %}
 
-{# Decorative stand-ins make the non-selected region feel complete without
-   inventing links or a second navigation landmark. #}
+{#
+   Decorative stand-ins make the non-selected region feel complete without inventing links or a
+   second navigation landmark.
+#}
 {% macro headerPlaceholder() %}
     <span class="menu-builder-preview-nav-placeholder menu-builder-preview-nav-placeholder--header" aria-hidden="true">
         {% for i in 1..4 %}<span class="menu-builder-preview-pill"></span>{% endfor %}
@@ -105,9 +91,7 @@
                       hidden></span>
             {% endif %}
 
-            {# Representative content gives the navigation real visual
-               context. It is furniture, not menu data, so it stays out of
-               the accessibility tree. #}
+            {# Representative content gives the navigation real visual context. #}
             <main class="menu-builder-preview-canvas" aria-hidden="true">
                 <section class="menu-builder-preview-hero">
                     <div class="menu-builder-preview-hero-copy">

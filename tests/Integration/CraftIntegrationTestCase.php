@@ -18,46 +18,46 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
- * Shared fixture for the integration suite: a real second site, real
- * MenuBuilder menus, a real Navigation field in a real entry type's field
- * layout, and real entries with real stored values.
- *
- * Everything is built through Craft's own services rather than inserted as
- * rows, because the point of this suite is to exercise the paths a Craft
- * install actually uses. Built once per run (the fixture is read-only for
- * every test that isn't explicitly mutating it) and torn down by the next
- * run's bootstrap, which drops the schema.
- */
+ * Shared fixture for the integration suite: a real second site, real MenuBuilder menus, a real
+ * Navigation field in a real entry type's field layout, and real entries with real stored values.
+*/
 abstract class CraftIntegrationTestCase extends TestCase
 {
     protected const SECTION_HANDLE = 'pages';
 
-    /** The shared (untranslatable) instance: one selection covers every site. */
+    /**
+     * The shared (untranslatable) instance: one selection covers every site.
+    */
     protected const FIELD_HANDLE = 'navigation';
 
     /**
-     * A second, **translatable** instance in the same layout. Site-mismatch
-     * validation is only reachable on a translatable field (see
-     * MenuBuilderFieldHelper::validationError()), so without one in a real
-     * layout that rule is unit-tested and never actually exercised by Craft.
-     */
+     * A second, **translatable** instance in the same layout.
+    */
     protected const PER_SITE_FIELD_HANDLE = 'navigationPerSite';
 
     protected static bool $fixtureLoaded = false;
 
-    /** The second site, for the multi-site cases. */
+    /**
+     * The second site, for the multi-site cases.
+    */
     protected static int $secondSiteId;
 
     protected static MenuBuilderGroup $mainMenu;
     protected static MenuBuilderGroup $footerMenu;
 
-    /** Enabled, but restricted to the primary site only. */
+    /**
+     * Enabled, but restricted to the primary site only.
+    */
     protected static MenuBuilderGroup $primaryOnlyMenu;
 
-    /** Disabled, to prove a disabled selection stays stored and queryable. */
+    /**
+     * Disabled, to prove a disabled selection stays stored and queryable.
+    */
     protected static MenuBuilderGroup $disabledMenu;
 
-    /** The UID of a menu that has since been deleted. */
+    /**
+     * The UID of a menu that has since been deleted.
+    */
     protected static string $deletedMenuUid;
 
     protected static MenuBuilderField $field;
@@ -65,15 +65,12 @@ abstract class CraftIntegrationTestCase extends TestCase
 
     /**
      * The UID of the field's **layout element**, not of the field.
-     *
-     * Craft 5 keys `elements_sites.content` by the field layout element's UID
-     * (see `Field::getValueSql()`), which is what makes the same field usable
-     * more than once in one layout. Anything reading the raw column, or
-     * checking the generated SQL, has to address it by this.
-     */
+    */
     protected static string $fieldInstanceUid;
 
-    /** The field as it exists *in the layout* — the only form that can produce value SQL. */
+    /**
+     * The field as it exists *in the layout* — the only form that can produce value SQL.
+    */
     protected static MenuBuilderField $fieldInstance;
 
     protected static MenuBuilderField $perSiteField;
@@ -125,10 +122,9 @@ abstract class CraftIntegrationTestCase extends TestCase
         $perSiteInstance = $layout->getFieldByHandle(self::PER_SITE_FIELD_HANDLE);
         self::$perSiteFieldInstance = $perSiteInstance;
 
-        // Entries are created *before* the doomed menu is deleted, so one of
-        // them ends up holding a UID whose menu no longer exists — the
-        // "deleted selected menu" case, produced the way it happens in
-        // practice rather than by writing a bogus value.
+        // Entries are created *before* the doomed menu is deleted, so one of them ends up holding a
+        // UID whose menu no longer exists — the "deleted selected menu" case, produced the way it
+        // happens in practice rather than by writing a bogus value.
         self::$entryIds['picks-main'] = self::createEntry('picks-main', (string)self::$mainMenu->uid);
         self::$entryIds['picks-main-too'] = self::createEntry('picks-main-too', (string)self::$mainMenu->uid);
         self::$entryIds['picks-footer'] = self::createEntry('picks-footer', (string)self::$footerMenu->uid);
@@ -146,9 +142,7 @@ abstract class CraftIntegrationTestCase extends TestCase
         self::$fixtureLoaded = true;
     }
 
-    // ---------------------------------------------------------------------
     // Fixture builders
-    // ---------------------------------------------------------------------
 
     private static function createSecondSite(): int
     {
@@ -168,14 +162,8 @@ abstract class CraftIntegrationTestCase extends TestCase
             throw new \RuntimeException('Could not create the second site: ' . json_encode($site->getErrors()));
         }
 
-        // Craft memoizes "is this a multi-site install?" and every element
-        // query consults it to decide whether to constrain `elements_sites.siteId`
-        // at all. It was answered "no" when the app booted against a
-        // freshly installed single-site database, so without this refresh
-        // every query below silently returns one row *per site* — which would
-        // turn a "matches nothing" bug into a passing test. Both caches have to
-        // be refreshed — element queries consult the *with-trashed* one, which
-        // is memoized separately.
+        // Craft memoizes "is this a multi-site install?" and every element query consults it to
+        // decide whether to constrain `elements_sites.siteId` at all.
         Craft::$app->getIsMultiSite(refresh: true);
         Craft::$app->getIsMultiSite(refresh: true, withTrashed: true);
 
@@ -244,9 +232,8 @@ abstract class CraftIntegrationTestCase extends TestCase
         ]);
 
         $layout = new FieldLayout(['type' => Entry::class]);
-        // Config arrays rather than constructed tabs: FieldLayout::setTabs()
-        // wires each tab back to its layout, which a tab built in isolation
-        // has no way to know about.
+        // Config arrays rather than constructed tabs: FieldLayout::setTabs() wires each tab back to
+        // its layout, which a tab built in isolation has no way to know about.
         $layout->setTabs([
             [
                 'name' => 'Content',
@@ -303,18 +290,11 @@ abstract class CraftIntegrationTestCase extends TestCase
         return (int)$entry->id;
     }
 
-    // ---------------------------------------------------------------------
     // Assertions helpers
-    // ---------------------------------------------------------------------
 
     /**
      * An entry query scoped to one site.
-     *
-     * Every entry in the fixture is enabled on both sites, and an unscoped
-     * `Entry::find()` returns one row per site — so a query that forgot this
-     * would report each match twice and quietly turn a "matches nothing" bug
-     * into a passing test.
-     */
+    */
     protected static function pages(?int $siteId = null): \craft\elements\db\EntryQuery
     {
         return Entry::find()

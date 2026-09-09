@@ -7,21 +7,14 @@
         {% if edition.canCreate %}
             <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
         {% else %}
-            {# The button stays, and answers. Hiding it would leave "why can't
-               I add a menu?" unanswered; the click explains the limit and
-               offers the upgrade, and `groups/new` redirects here with the
-               same message for anyone who types the URL. #}
+            {# The button stays, and answers. #}
             <button type="button" class="btn add icon" data-mb-action="upgrade-required">{{ "New menu"|t('menu-builder') }}</button>
         {% endif %}
     {% endif %}
 {% endblock %}
 
 {% block content %}
-    {# Edition status. This index is the plugin's only CP destination — the
-       nav item has no subnav and the plugin has no settings screen — so the
-       edition, the menu count against its ceiling, and the upgrade link
-       belong here. Everything in `edition` comes from one call:
-       MenuBuilderMenuLimitService::cpSummary(). #}
+    {# Edition status. #}
     <div class="menu-builder-edition">
         <div class="menu-builder-edition-facts">
             <div class="menu-builder-edition-fact">
@@ -76,9 +69,11 @@
                             </th>
                             <td><code>{{ group.handle }}</code></td>
                             <td>
-                                {# Craft's `.status` needs a modifier to render
-                                   anything; `.status ''` was an empty circle
-                                   that read as "no status" rather than "off". #}
+                                {#
+                                   Craft's `.status` needs a modifier to render anything; `.status
+                                   ''` was an empty circle that read as "no status" rather than
+                                   "off".
+                                #}
                                 <span class="status {{ group.enabled ? 'green' : 'disabled' }}"></span><span class="menu-builder-status-label">{{ group.enabled ? "Enabled"|t('menu-builder') : "Disabled"|t('menu-builder') }}</span>
                             </td>
                             <td>{{ row.itemCount }}</td>
@@ -126,9 +121,7 @@
 
 {% js %}
 (function() {
-    // One in-flight request per row. None of these was guarded before, so a
-    // second click while the first was still running duplicated a menu twice
-    // or raced two toggles against each other.
+    // One in-flight request per row.
     var busy = {};
 
     function run(link, action, data, failureMessage, onDone) {
@@ -160,9 +153,7 @@
             });
     }
 
-    // The [ Upgrade to Pro ] / [ Cancel ] prompt. window.confirm is what
-    // this screen already uses for its one other "are you sure?" (delete),
-    // so the limit doesn't introduce a second dialog mechanism.
+    // The [ Upgrade to Pro ] / [ Cancel ] prompt.
     var upgradeUrl = {{ (edition.upgradeUrl ?? '')|json_encode|raw }};
 
     document.querySelectorAll('[data-mb-action="upgrade-required"]').forEach(function(button) {
@@ -188,9 +179,9 @@
             run(link, 'menu-builder/groups/duplicate', { id: link.getAttribute('data-id') },
                 Craft.t('menu-builder', 'Couldn’t duplicate that menu.'),
                 function(response) {
-                    // Straight to the copy, which is what the editor wants to
-                    // rename — the list reload used to leave them hunting for
-                    // a row named "… 1" somewhere in the table.
+                    // Straight to the copy, which is what the editor wants to rename — the list
+                    // reload used to leave them hunting for a row named "… 1" somewhere in the
+                    // table.
                     window.location.href = response.data.url;
                 });
         });
@@ -205,9 +196,8 @@
             run(link, 'menu-builder/groups/toggle', { id: id },
                 Craft.t('menu-builder', 'Couldn’t update that menu.'),
                 function(response) {
-                    // Patched in place rather than reloaded: a full reload for
-                    // a status flip threw away scroll position and wiped the
-                    // confirmation it had just raised.
+                    // Patched in place rather than reloaded: a full reload for a status flip threw
+                    // away scroll position and wiped the confirmation it had just raised.
                     var enabled = !!(response.data && response.data.enabled);
                     var row = document.querySelector('tr[data-id="' + id + '"]');
 
@@ -229,9 +219,9 @@
                         row.classList.remove('menu-builder-row-busy');
                     }
 
-                    // The row menu may have been relocated near <body> by
-                    // Craft's disclosure JS, so reach it by id, not through
-                    // the row (same reason tree.js looks rows up by id).
+                    // The row menu may have been relocated near <body> by Craft's disclosure JS, so
+                    // reach it by id, not through the row (same reason tree.js looks rows up by
+                    // id).
                     var toggle = document.querySelector('[data-mb-action="toggle-group"][data-id="' + id + '"]');
                     if (toggle) {
                         toggle.textContent = enabled
@@ -255,8 +245,8 @@
             var name = link.getAttribute('data-name');
             var itemCount = parseInt(link.getAttribute('data-item-count'), 10) || 0;
 
-            // Say how much is about to go: "and all of its menu items" gave no
-            // sense of whether that was two items or two hundred.
+            // Say how much is about to go: "and all of its menu items" gave no sense of whether
+            // that was two items or two hundred.
             var message = itemCount
                 ? Craft.t('menu-builder', 'Delete “{name}” and its {count} menu item(s)? This cannot be undone.', { name: name, count: itemCount })
                 : Craft.t('menu-builder', 'Delete “{name}”? This cannot be undone.', { name: name });
@@ -279,8 +269,8 @@
 
                     window.MenuBuilder.success(Craft.t('menu-builder', 'Menu deleted.'));
 
-                    // Nothing left to list — reload so the empty state (and
-                    // its "New menu" call to action) replaces the bare table.
+                    // Nothing left to list — reload so the empty state (and its "New menu" call
+                    // to action) replaces the bare table.
                     if (table && !table.querySelectorAll('tbody tr').length) {
                         window.location.reload();
                     }

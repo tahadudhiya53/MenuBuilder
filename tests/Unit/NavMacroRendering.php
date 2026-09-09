@@ -19,46 +19,28 @@ use Twig\TwigFilter;
 use Twig\TwigFunction;
 
 /**
- * The harness that renders this plugin's real Twig against real
- * `MenuBuilderNode` objects, so a test can assert against the DOM an actual
- * browser receives rather than against template source.
- *
- * Shared by {@see MenuBuilderPreviewRenderTest} (what a resolved node looks
- * like, and the preview stage around it) and
- * {@see MenuBuilderAccessibilityTest} (what the markup promises assistive
- * technology). One harness, because two copies of it would be two
- * definitions of "the markup the front end gets".
- *
- * A booted Craft app isn't needed: the macros consume finished nodes and
- * exactly one Craft touchpoint (`craft.menuBuilder.iconAsset()`, stubbed
- * here the way the variable behaves, including returning null for a deleted
- * asset).
- *
- * Not a `*Test.php` file, so PHPUnit doesn't collect it; test files
- * `require_once` it explicitly, because this plugin's `autoload-dev` isn't
- * part of the consuming Craft install's autoloader (see tests/bootstrap.php).
- */
+ * The harness that renders this plugin's real Twig against real `MenuBuilderNode` objects, so a
+ * test can assert against the DOM an actual browser receives rather than against template source.
+*/
 trait NavMacroRendering
 {
     private const TEMPLATE_DIR = __DIR__ . '/../../src/templates';
 
-    /** An asset icon the stub resolves; anything else stands for a deleted asset. */
+    /**
+     * An asset icon the stub resolves; anything else stands for a deleted asset.
+    */
     private const KNOWN_ASSET_ID = 7;
 
     /**
-     * The plugin's real templates, plus one-line harnesses that call the
-     * macros the way a front-end template would. They are loaded alongside
-     * the real templates rather than added to `src/templates`, so nothing
-     * exists in the shipped plugin purely for a test. (The `.twig` suffix is
-     * explicit because Craft's loader appends it and a bare Twig
-     * FilesystemLoader does not.)
-     */
+     * The plugin's real templates, plus one-line harnesses that call the macros the way a front-end
+     * template would.
+    */
     private const HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.render(nodes, disclosure, idPrefix, viewport) }}';
 
     /**
-     * The mega-menu renderer called on its own, the way a hand-rolled
-     * template that owns its outer markup calls it.
-     */
+     * The mega-menu renderer called on its own, the way a hand-rolled template that owns its outer
+     * markup calls it.
+    */
     private const MEGA_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderMegaMenu(node, disclosure, idPrefix, viewport) }}';
 
     private const LANDMARK_HARNESS = '{% import "_macros/tree.twig" as menuMacros %}{{ menuMacros.renderNav(menu, label, disclosure, idPrefix, viewport) }}';
@@ -74,12 +56,9 @@ trait NavMacroRendering
                 '__navLandmark' => self::LANDMARK_HARNESS,
                 '__megaMenu' => self::MEGA_HARNESS,
                 '__breadcrumbs' => self::BREADCRUMB_HARNESS,
-                // The plugin's templates refer to each other the way Craft
-                // resolves them — by the registered `menu-builder` root
-                // (`preview/index.twig` does the same) — which a bare
-                // FilesystemLoader knows nothing about. Aliasing the two
-                // spellings Craft accepts, to the one real file, keeps the
-                // template under test byte-for-byte the shipped one.
+                // The plugin's templates refer to each other the way Craft resolves them — by the
+                // registered `menu-builder` root (`preview/index.twig` does the same) — which a
+                // bare FilesystemLoader knows nothing about.
                 'menu-builder/_macros/tree' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
                 'menu-builder/_macros/tree.twig' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
             ]),
@@ -98,9 +77,7 @@ trait NavMacroRendering
         }));
         $twig->addFunction(new TwigFunction('url', static fn(string $path = ''): string => '/cp/' . ltrim($path, '/')));
 
-        // `craft.menuBuilder.iconAsset(node)` — the single Craft touchpoint in
-        // the macros. Null for an asset that no longer exists, which is the
-        // contract MenuBuilderVariable documents.
+        // `craft.menuBuilder.iconAsset(node)` — the single Craft touchpoint in the macros.
         $menuBuilder = new class(self::KNOWN_ASSET_ID) {
             public function __construct(private int $knownAssetId)
             {
@@ -130,29 +107,31 @@ trait NavMacroRendering
     }
 
     /**
-     * The list on its own — what `render()` emits, and what a template that
-     * owns its own wrapper gets.
+     * The list on its own — what `render()` emits, and what a template that owns its own wrapper
+     * gets.
      *
      * @param MenuBuilderNode[] $nodes
-     */
+    */
     protected function renderNav(array $nodes, string $disclosure = 'details', string $viewport = 'both'): string
     {
         return $this->twig()->render('__nav', ['nodes' => $nodes, 'disclosure' => $disclosure, 'idPrefix' => '', 'viewport' => $viewport]);
     }
 
-    /** `renderMegaMenu()` on one node, with no `render()` around it. */
+    /**
+     * `renderMegaMenu()` on one node, with no `render()` around it.
+    */
     protected function renderMegaMenuMacro(MenuBuilderNode $node, string $disclosure = 'details', string $viewport = 'both'): string
     {
         return $this->twig()->render('__megaMenu', ['node' => $node, 'disclosure' => $disclosure, 'idPrefix' => '', 'viewport' => $viewport]);
     }
 
     /**
-     * The whole navigation including its landmark — what `renderNav()`
-     * emits for a real `MenuBuilderTree`.
+     * The whole navigation including its landmark — what `renderNav()` emits for a real
+     * `MenuBuilderTree`.
      *
      * @param MenuBuilderNode[] $nodes
      * @param array<string,mixed> $groupConfig
-     */
+    */
     protected function renderNavLandmark(array $nodes, array $groupConfig = [], ?string $label = null, string $disclosure = 'details', string $viewport = 'both', string $idPrefix = ''): string
     {
         $group = new MenuBuilderGroup($groupConfig + ['name' => 'Main', 'handle' => 'main']);
@@ -167,12 +146,12 @@ trait NavMacroRendering
     }
 
     /**
-     * The whole navigation for one viewport, exactly as a front-end template
-     * builds it: an already-resolved tree narrowed with `forViewport()`, then
-     * rendered with the matching macro mode.
+     * The whole navigation for one viewport, exactly as a front-end template builds it: an
+     * already-resolved tree narrowed with `forViewport()`, then rendered with the matching macro
+     * mode.
      *
      * @param MenuBuilderNode[] $nodes
-     */
+    */
     protected function renderNavForViewport(array $nodes, string $viewport, ?string $label = null, string $disclosure = 'details'): string
     {
         $group = new MenuBuilderGroup(['name' => 'Main', 'handle' => 'main']);
@@ -187,11 +166,11 @@ trait NavMacroRendering
     }
 
     /**
-     * The breadcrumb trail — what `_macros/breadcrumbs.twig` emits for a
-     * real `MenuBuilderBreadcrumbTrail`.
+     * The breadcrumb trail — what `_macros/breadcrumbs.twig` emits for a real
+     * `MenuBuilderBreadcrumbTrail`.
      *
      * @param MenuBuilderNode[] $crumbs
-     */
+    */
     protected function renderBreadcrumbs(array $crumbs, ?string $label = null, bool $linkCurrent = true): string
     {
         return $this->twig()->render('__breadcrumbs', [
@@ -201,34 +180,29 @@ trait NavMacroRendering
         ]);
     }
 
-    /** What the macro emits when there is no menu at all — `craft.menuBuilder.breadcrumbs()` returned null. */
+    /**
+     * What the macro emits when there is no menu at all — `craft.menuBuilder.breadcrumbs()`
+     * returned null.
+    */
     protected function renderBreadcrumbsForMissingMenu(): string
     {
         return $this->twig()->render('__breadcrumbs', ['trail' => null, 'label' => null, 'linkCurrent' => true]);
     }
 
-    /**
-     * @param MenuBuilderNode[] $nodes
-     */
+    /** @param MenuBuilderNode[] $nodes */
     protected function renderStage(array $nodes, bool $isMobile = false, string $placement = 'both'): string
     {
         $twig = $this->twig();
 
         return $twig->render('preview/_stage.twig', [
-            // Markup, not a bare string: preview/index.twig hands the stage a
-            // `{% set %}` capture, which Twig treats as already-escaped
-            // output. Passing a plain string here would escape the navigation
-            // into visible source and quietly test the wrong thing.
+            // Markup, not a bare string: preview/index.twig hands the stage a `{% set %}` capture,
+            // which Twig treats as already-escaped output.
             'headerPreviewMarkup' => new Markup($twig->render('__nav', [
                 'nodes' => $nodes,
                 'disclosure' => 'details',
                 'idPrefix' => 'preview-header',
-                // 'both', deliberately: the control-panel preview renders one
-                // markup for its device toggle, which is a *width* and not a
-                // user agent (see ARCHITECTURE.md "Preview"). Mobile item
-                // metadata is not applied there — see the front-end viewport
-                // tests in MenuBuilderMobileRenderTest for what a real
-                // template gets.
+                // 'both', deliberately: the control-panel preview renders one markup for its device
+                // toggle, which is a *width* and not a user agent (see ARCHITECTURE.md "Preview").
                 'viewport' => 'both',
             ]), 'UTF-8'),
             'footerPreviewMarkup' => new Markup($twig->render('__nav', [
@@ -255,9 +229,7 @@ trait NavMacroRendering
         return new DOMXPath($document);
     }
 
-    /**
-     * @return DOMElement[]
-     */
+    /** @return DOMElement[] */
     protected function query(string $html, string $expression): array
     {
         $nodes = [];
@@ -271,7 +243,9 @@ trait NavMacroRendering
         return $nodes;
     }
 
-    /** A mega-menu parent with two columns: two children in column 1, one in column 2. */
+    /**
+     * A mega-menu parent with two columns: two children in column 1, one in column 2.
+    */
     protected function megaParent(): MenuBuilderNode
     {
         return $this->node(1, title: 'Explore', url: '/explore', megaMenu: new MenuBuilderMegaMenuConfig(columns: 2), children: [
@@ -284,7 +258,7 @@ trait NavMacroRendering
     /**
      * @param MenuBuilderNode[] $children
      * @param array<string,mixed> $htmlAttributes
-     */
+    */
     protected function node(
         int $id,
         string $title = 'Item',

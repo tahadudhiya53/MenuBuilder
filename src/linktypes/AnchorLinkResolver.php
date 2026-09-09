@@ -11,11 +11,9 @@ class AnchorLinkResolver implements LinkTypeResolverInterface
     {
         $target = self::anchorTarget($item);
 
-        // Fragments reach the rendered href just like a customUrl does, and
-        // a stored value isn't guaranteed to have gone through the CP's
-        // validation (import, direct DB edit, a pre-existing row). Anything
-        // that isn't a well-formed fragment resolves to "unavailable"
-        // rather than being emitted as-is.
+        // Fragments reach the rendered href just like a customUrl does, and a stored value isn't
+        // guaranteed to have gone through the CP's validation (import, direct DB edit, a
+        // pre-existing row).
         if ($target === null || !MenuBuilderItem::isValidAnchorTarget($target)) {
             return ResolvedLink::unavailable();
         }
@@ -24,13 +22,10 @@ class AnchorLinkResolver implements LinkTypeResolverInterface
     }
 
     /**
-     * The editor's "Anchor handle" field posts `customUrl` and is documented
-     * as "leave blank to reuse the Handle field in Advanced" (see
-     * items/_fields.twig), so customUrl wins and `handle` — which doubles as
-     * the CSS-targeting handle — is only the fallback. Kept here (and used
-     * by MenuBuilderItem::validateAnchorTarget()) so validation and
-     * resolution can never disagree about which field is the anchor.
-     */
+     * The editor's "Anchor handle" field posts `customUrl` and is documented as "leave blank to
+     * reuse the Handle field in Advanced" (see items/_fields.twig), so customUrl wins and `handle`
+     * — which doubles as the CSS-targeting handle — is only the fallback.
+    */
     public static function anchorTarget(MenuBuilderItem $item): ?string
     {
         foreach ([$item->customUrl, $item->handle] as $candidate) {

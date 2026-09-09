@@ -11,23 +11,19 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
- * The navigation query through Craft's **real GraphQL layer**: a real schema
- * with a real scope, a query executed by Craft's own `Gql` service against
- * real menus in a real database.
- *
- * The unit suite (MenuBuilderGqlTest) proves what each resolver returns for a
- * given node. It proves nothing about whether Craft can build a schema out of
- * these types at all, whether the scope actually gates anything, or whether
- * the site argument reaches the resolve pipeline — a recursive type webonyx
- * rejects, or a scope check that silently passes everything, would sail
- * through every unit test and only fail against a real install.
- */
+ * The navigation query through Craft's **real GraphQL layer**: a real schema with a real scope, a
+ * query executed by Craft's own `Gql` service against real menus in a real database.
+*/
 class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
 {
-    /** The menu this class builds for itself: nesting, visibility rules, mobile config. */
+    /**
+     * The menu this class builds for itself: nesting, visibility rules, mobile config.
+    */
     private static MenuBuilderGroup $navMenu;
 
-    /** Enabled and real, but deliberately left out of the schema's scope. */
+    /**
+     * Enabled and real, but deliberately left out of the schema's scope.
+    */
     private static MenuBuilderGroup $unscopedMenu;
 
     private static ?GqlSchema $schema = null;
@@ -38,11 +34,8 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     {
         parent::setUpBeforeClass();
 
-        // Craft's GraphQL result cache is keyed by (site, schema, query,
-        // variables) and by nothing else — which is the very property this
-        // surface is designed around. Left on, it would mean half these
-        // assertions were reading a cache entry rather than exercising the
-        // resolver, so each test here resolves for real.
+        // Craft's GraphQL result cache is keyed by (site, schema, query, variables) and by nothing
+        // else — which is the very property this surface is designed around.
         Craft::$app->getConfig()->getGeneral()->enableGraphqlCaching = false;
 
         if (self::$navFixtureLoaded) {
@@ -58,9 +51,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         self::addChild(self::$navMenu, $about, 'Team', '/about/team');
         self::addChild(self::$navMenu, $about, 'History', '/about/history');
 
-        // The audience gates. A GraphQL response is resolved for nobody, so
-        // the members-only item must never appear and the logged-out one
-        // always must.
+        // The audience gates.
         self::addNavItem(self::$navMenu, 'Members', '/members', visibility: [['type' => 'loggedIn']]);
         self::addNavItem(self::$navMenu, 'Sign in', '/login', visibility: [['type' => 'loggedOut']]);
 
@@ -76,9 +67,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         self::$navFixtureLoaded = true;
     }
 
-    // ---------------------------------------------------------------------
     // Fixture helpers
-    // ---------------------------------------------------------------------
 
     private static function addNavItem(
         MenuBuilderGroup $group,
@@ -112,10 +101,8 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A schema scoped the way a real token's would be: both sites, and the
-     * one menu under test. `gqlsecret` and the fixture's other menus are
-     * deliberately absent — that omission is what the scope tests assert on.
-     */
+     * A schema scoped the way a real token's would be: both sites, and the one menu under test.
+    */
     private static function schema(): GqlSchema
     {
         if (self::$schema !== null) {
@@ -138,17 +125,15 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     /**
      * @param array<string,mixed>|null $variables
      * @return array<string,mixed>
-     */
+    */
     private static function runQuery(string $query, ?array $variables = null, ?GqlSchema $schema = null): array
     {
         $gql = Craft::$app->getGql();
         $schema ??= self::schema();
 
-        // Craft memoizes the *built* schema definition on the service, keyed
-        // by nothing — so a definition another test class built from its own
-        // schema would be reused here and every scope assertion below would
-        // be answered by the wrong schema. Flushing is the only way to make a
-        // per-schema assertion independent of what ran before it.
+        // Craft memoizes the *built* schema definition on the service, keyed by nothing — so a
+        // definition another test class built from its own schema would be reused here and every
+        // scope assertion below would be answered by the wrong schema.
         $gql->flushCaches();
         $gql->setActiveSchema($schema);
 
@@ -162,7 +147,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     /**
      * @param array<string,mixed>|null $variables
      * @return array<string,mixed>|null The `menuBuilder` payload.
-     */
+    */
     private function menu(?array $variables = null, ?GqlSchema $schema = null): ?array
     {
         $result = self::runQuery(self::MENU_QUERY, $variables ?? ['handle' => 'gqlnav'], $schema);
@@ -203,9 +188,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         return array_column($menu['items'], 'title');
     }
 
-    // ---------------------------------------------------------------------
     // A valid query
-    // ---------------------------------------------------------------------
 
     public function testAValidQueryReturnsTheResolvedMenu(): void
     {
@@ -240,15 +223,12 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertNotContains('Draft page', $this->titles($this->menu()));
     }
 
-    // ---------------------------------------------------------------------
     // Visibility — the shared-cache property
-    // ---------------------------------------------------------------------
 
     /**
-     * A GraphQL response is resolved for nobody: Craft caches it by schema
-     * and query, not by caller, so an item only logged-in users may see must
-     * never enter one.
-     */
+     * A GraphQL response is resolved for nobody: Craft caches it by schema and query, not by
+     * caller, so an item only logged-in users may see must never enter one.
+    */
     public function testItemsRestrictedToLoggedInVisitorsAreNeverReturned(): void
     {
         $titles = $this->titles($this->menu());
@@ -258,12 +238,8 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The same query, sent by an authenticated admin, returns exactly the
-     * same tree. Were the audience taken from the request instead, this
-     * caller's response would carry the members-only item — and, with Craft's
-     * result cache on, would hand it to the next anonymous caller sharing the
-     * key.
-     */
+     * The same query, sent by an authenticated admin, returns exactly the same tree.
+    */
     public function testAnAuthenticatedCallerGetsTheSameTreeAsAnAnonymousOne(): void
     {
         $anonymous = $this->menu();
@@ -283,9 +259,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertNotContains('Members', $this->titles($authenticated));
     }
 
-    // ---------------------------------------------------------------------
     // Active state
-    // ---------------------------------------------------------------------
 
     public function testActiveStateIsMarkedAgainstTheCurrentUriArgument(): void
     {
@@ -300,10 +274,9 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A GraphQL request is served from the API endpoint, not from the page
-     * whose navigation this is. With no `currentUri`, nothing is the current
-     * page — and nothing about the request leaks into a shared response.
-     */
+     * A GraphQL request is served from the API endpoint, not from the page whose navigation this
+     * is.
+    */
     public function testWithoutACurrentUriNothingIsActive(): void
     {
         $menu = $this->menu();
@@ -314,9 +287,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Handles: unknown, disabled, malformed
-    // ---------------------------------------------------------------------
 
     public function testAnUnknownHandleReturnsNullRatherThanAnError(): void
     {
@@ -325,8 +296,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
 
     public function testADisabledMenuReturnsNull(): void
     {
-        // `retired` is a real, disabled menu from the shared fixture. It is
-        // granted here, so this is the disabled gate and not the scope one.
+        // `retired` is a real, disabled menu from the shared fixture.
         $schema = new GqlSchema([
             'id' => 101,
             'name' => 'Disabled menu granted',
@@ -336,9 +306,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertNull($this->menu(['handle' => 'retired'], $schema));
     }
 
-    /**
-     * @dataProvider malformedHandles
-     */
+    /** @dataProvider malformedHandles */
     public function testAMalformedHandleReturnsNullAndNeverReachesTheDatabase(string $handle): void
     {
         $this->assertNull($this->menu(['handle' => $handle]));
@@ -357,7 +325,9 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         ];
     }
 
-    /** A required argument is still a schema-level error, as GraphQL defines it. */
+    /**
+     * A required argument is still a schema-level error, as GraphQL defines it.
+    */
     public function testOmittingTheHandleIsARejectedQuery(): void
     {
         $result = self::runQuery('{ menuBuilder { handle } }');
@@ -372,15 +342,12 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertArrayHasKey('errors', $result);
     }
 
-    // ---------------------------------------------------------------------
     // Scope — the authorization gate
-    // ---------------------------------------------------------------------
 
     /**
-     * A real, enabled menu the schema doesn't name is indistinguishable from
-     * one that doesn't exist. Anything else would be an enumeration oracle
-     * for the install's navigation structure.
-     */
+     * A real, enabled menu the schema doesn't name is indistinguishable from one that doesn't
+     * exist.
+    */
     public function testAMenuOutsideTheSchemasScopeIsIndistinguishableFromAMissingOne(): void
     {
         $this->assertNull($this->menu(['handle' => 'gqlsecret']));
@@ -396,10 +363,9 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A schema that names no menu doesn't get the fields at all — they are
-     * absent from it, introspection included, so an install that hasn't opted
-     * in exposes nothing.
-     */
+     * A schema that names no menu doesn't get the fields at all — they are absent from it,
+     * introspection included, so an install that hasn't opted in exposes nothing.
+    */
     public function testASchemaThatNamesNoMenuHasNoMenuBuilderFields(): void
     {
         $empty = new GqlSchema(['id' => 102, 'name' => 'No menus', 'scope' => []]);
@@ -423,14 +389,11 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Sites
-    // ---------------------------------------------------------------------
 
     public function testAMenuRestrictedToOtherSitesIsNotReturnedForThisOne(): void
     {
-        // `primaryOnly` is restricted to the primary site. Granted in scope,
-        // so what is being tested is the site gate and nothing else.
+        // `primaryOnly` is restricted to the primary site.
         $schema = new GqlSchema([
             'id' => 103,
             'name' => 'Primary-only granted',
@@ -472,7 +435,9 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertNull($this->menu(['handle' => 'gqlnav', 'siteId' => 99999]));
     }
 
-    /** Two site arguments that disagree are answering a question nobody asked. */
+    /**
+     * Two site arguments that disagree are answering a question nobody asked.
+    */
     public function testDisagreeingSiteArgumentsAreRejected(): void
     {
         $this->assertNull($this->menu([
@@ -488,9 +453,7 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         ]));
     }
 
-    // ---------------------------------------------------------------------
     // Viewport
-    // ---------------------------------------------------------------------
 
     public function testTheViewportArgumentReshapesTheMenu(): void
     {
@@ -501,7 +464,9 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         $this->assertContains('App', $mobile);
     }
 
-    /** An unknown viewport reshapes nothing rather than emptying the menu. */
+    /**
+     * An unknown viewport reshapes nothing rather than emptying the menu.
+    */
     public function testAnUnknownViewportIsIgnored(): void
     {
         $this->assertSame(
@@ -510,15 +475,12 @@ class MenuBuilderNavigationGqlTest extends CraftIntegrationTestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // What the schema does not expose
-    // ---------------------------------------------------------------------
 
     /**
-     * Asked for against the **built** schema, not against a field list: a row
-     * ID that had crept back into the type would be a real, answerable query
-     * here.
-     */
+     * Asked for against the **built** schema, not against a field list: a row ID that had crept
+     * back into the type would be a real, answerable query here.
+    */
     public function testRowIdsAreNotQueryable(): void
     {
         foreach (['id', 'parentId', 'groupId', 'enabled', 'visibility', 'metadata'] as $field) {

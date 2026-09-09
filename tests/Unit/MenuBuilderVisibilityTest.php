@@ -23,24 +23,10 @@ use Tahadudhiya\MenuBuilder\visibility\VisibilityContext;
 use Tahadudhiya\MenuBuilder\visibility\VisibilityRuleInterface;
 
 /**
- * Visibility end to end: each built-in rule, the service that ANDs an item's
- * rules together, the edit form's translation of its fields into persisted
- * rule configs, and the cache boundary that keeps the whole decision
- * per-request.
- *
- * Every rule fails closed — a missing, empty or malformed config hides the
- * item instead of exposing it, and no rule may throw, since a malformed
- * import would otherwise become a 500 or a leaked item. The rules themselves
- * carry no user identity, which is what makes it safe for one cached tree to
- * be shared between an anonymous visitor and a logged-in one: link resolution
- * is cached per group/site, visibility is applied to that cached tree on
- * every render.
- *
- * MenuBuilderResolver::filterVisible() and ItemsController::buildVisibilityRules()
- * need no booted Craft app but are non-public, so they are invoked directly
- * through reflection; the public getTree() around them needs a database and is
- * covered by the manual testing checklist.
- */
+ * Visibility end to end: each built-in rule, the service that ANDs an item's rules together, the
+ * edit form's translation of its fields into persisted rule configs, and the cache boundary that
+ * keeps the whole decision per-request.
+*/
 class MenuBuilderVisibilityTest extends TestCase
 {
     private function context(
@@ -62,9 +48,7 @@ class MenuBuilderVisibilityTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // The individual rules — each one fails closed
-    // ---------------------------------------------------------------------
 
     public function testAlwaysRule(): void
     {
@@ -101,10 +85,10 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A group rule with nothing to match on is missing configuration, not
-     * "any logged-in user" (that is what the loggedIn rule is for), so it
-     * hides the item rather than exposing it to every authenticated visitor.
-     */
+     * A group rule with nothing to match on is missing configuration, not "any logged-in user"
+     * (that is what the loggedIn rule is for), so it hides the item rather than exposing it to
+     * every authenticated visitor.
+    */
     public function testUserGroupRuleFailsClosedOnMissingOrMalformedGroupIds(): void
     {
         $rule = new UserGroupRule();
@@ -140,10 +124,10 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * Same reasoning as the group rule: a site rule exists only to restrict,
-     * so an empty/malformed list — or a request with no resolvable current
-     * site (console, pre-install) — hides rather than shows.
-     */
+     * Same reasoning as the group rule: a site rule exists only to restrict, so an empty/malformed
+     * list — or a request with no resolvable current site (console, pre-install) — hides rather
+     * than shows.
+    */
     public function testSiteRuleFailsClosedOnMissingConfigurationOrUnknownSite(): void
     {
         $rule = new SiteRule();
@@ -193,10 +177,9 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A directly-posted/imported `visibility` array isn't guaranteed to
-     * contain strings — `passes()` must fail closed rather than let a
-     * TypeError from a string-typed helper escape.
-     */
+     * A directly-posted/imported `visibility` array isn't guaranteed to contain strings —
+     * `passes()` must fail closed rather than let a TypeError from a string-typed helper escape.
+    */
     public function testDateRangeRuleFailsClosedOnNonStringValuesWithoutThrowing(): void
     {
         $rule = new DateRangeRule();
@@ -222,10 +205,9 @@ class MenuBuilderVisibilityTest extends TestCase
         $context = $this->context();
         $rule = new DateRangeRule();
 
-        // The context is UTC; a start bound 2 hours in the future in UTC
-        // terms, expressed with an explicit +05:00 offset, must still be
-        // evaluated against its own offset rather than being reinterpreted
-        // in the context's timezone.
+        // The context is UTC; a start bound 2 hours in the future in UTC terms, expressed with an
+        // explicit +05:00 offset, must still be evaluated against its own offset rather than being
+        // reinterpreted in the context's timezone.
         $offsetFuture = (clone $context->now)->modify('+2 hours')->setTimezone(new \DateTimeZone('+05:00'))->format('Y-m-d\TH:i:sP');
 
         $this->assertFalse($rule->passes(['start' => $offsetFuture], $context), 'An explicit offset must be honored, not overridden by the context timezone.');
@@ -249,18 +231,18 @@ class MenuBuilderVisibilityTest extends TestCase
         );
         $rule = new DateRangeRule();
 
-        // A naive start one hour in the future, interpreted in the
-        // application's (non-UTC) timezone, must still be treated as
-        // future — not reinterpreted against PHP's ambient default tz.
+        // A naive start one hour in the future, interpreted in the application's (non-UTC)
+        // timezone, must still be treated as future — not reinterpreted against PHP's ambient
+        // default tz.
         $naiveFutureStart = (clone $now)->modify('+1 hour')->format('Y-m-d H:i:s');
 
         $this->assertFalse($rule->passes(['start' => $naiveFutureStart], $context));
     }
 
     /**
-     * The three "before / during / after" states of a bounded range, checked
-     * against one fixed `now` rather than a moving clock.
-     */
+     * The three "before / during / after" states of a bounded range, checked against one fixed
+     * `now` rather than a moving clock.
+    */
     public function testDateRangeRuleAcrossBeforeDuringAndAfterTheWindow(): void
     {
         $rule = new DateRangeRule();
@@ -309,10 +291,7 @@ class MenuBuilderVisibilityTest extends TestCase
 
     /**
      * Every built-in rule is handed config shapes it was never designed for.
-     * None may throw — MenuBuilderVisibilityService catches as a backstop,
-     * but a rule that fails closed on its own is what keeps a malformed
-     * import from turning into a 500 or an exposed item.
-     */
+    */
     public function testNoBuiltInRuleThrowsOnMalformedConfig(): void
     {
         $rules = [
@@ -335,9 +314,7 @@ class MenuBuilderVisibilityTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // CP form fields to persisted rule configs
-    // ---------------------------------------------------------------------
 
     private function build(array $posted): array
     {
@@ -366,10 +343,10 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * The shapes an unchecked checkbox-select actually posts (a zero-value
-     * padding field, or a bare string when nothing is checked) must not
-     * become an empty — and now fail-closed — restriction rule.
-     */
+     * The shapes an unchecked checkbox-select actually posts (a zero-value padding field, or a bare
+     * string when nothing is checked) must not become an empty — and now fail-closed —
+     * restriction rule.
+    */
     public function testEmptyOrPaddedSelectionsProduceNoRuleRatherThanAnEmptyOne(): void
     {
         foreach ([
@@ -418,9 +395,7 @@ class MenuBuilderVisibilityTest extends TestCase
 
     /**
      * A tampered post can send an array where the form sends a string.
-     * That must not reach `explode()` as a TypeError, and must not put a
-     * non-scalar into a persisted rule config.
-     */
+    */
     public function testNonScalarPostedValuesAreIgnoredRatherThanCrashing(): void
     {
         $rules = $this->build([
@@ -434,9 +409,7 @@ class MenuBuilderVisibilityTest extends TestCase
         $this->assertSame([], $rules);
     }
 
-    // ---------------------------------------------------------------------
     // The service: an item's rules combined with AND
-    // ---------------------------------------------------------------------
 
     public function testNoRulesIsAlwaysVisible(): void
     {
@@ -483,10 +456,9 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * The common rule pairings, each checked in both directions: both rules
-     * satisfied is the only visible case, and either one failing hides the
-     * item (AND, never OR).
-     */
+     * The common rule pairings, each checked in both directions: both rules satisfied is the only
+     * visible case, and either one failing hides the item (AND, never OR).
+    */
     public function testLoggedInAndUserGroupCombination(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -548,9 +520,7 @@ class MenuBuilderVisibilityTest extends TestCase
 
     /**
      * `loggedIn` AND `loggedOut` on one item is unsatisfiable by definition.
-     * The CP lets both boxes be ticked, so this pins the consequence: the
-     * item disappears for everyone rather than showing for anyone.
-     */
+    */
     public function testContradictoryLoggedInAndLoggedOutHidesForEveryone(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -561,10 +531,9 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A passing rule sitting *after* a malformed one must not rescue the
-     * item — the loop has to reject on the malformed entry regardless of
-     * where it sits in the array.
-     */
+     * A passing rule sitting *after* a malformed one must not rescue the item — the loop has to
+     * reject on the malformed entry regardless of where it sits in the array.
+    */
     public function testMalformedRuleAmongPassingRulesStillHides(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -589,10 +558,9 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A third-party rule registered through EVENT_REGISTER_VISIBILITY_RULES
-     * is outside this plugin's control; if it throws, the item hides and the
-     * page still renders.
-     */
+     * A third-party rule registered through EVENT_REGISTER_VISIBILITY_RULES is outside this
+     * plugin's control; if it throws, the item hides and the page still renders.
+    */
     public function testThrowingRuleFailsClosedInsteadOfEscaping(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -608,7 +576,9 @@ class MenuBuilderVisibilityTest extends TestCase
         $this->assertFalse($service->isVisible($this->item(1, [['type' => 'explodes']]), $this->context(isLoggedIn: true)));
     }
 
-    /** A registered third-party rule that passes is still honored. */
+    /**
+     * A registered third-party rule that passes is still honored.
+    */
     public function testRegisteredThirdPartyRuleParticipatesInTheAnd(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -626,11 +596,10 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * The `visibility` bag holds no user identity of its own — the same item
-     * evaluated against two contexts must give two answers, which is why the
-     * decision can never be baked into the shared per-group cache
-     * (MenuBuilderCacheService / MenuBuilderResolver::filterVisible()).
-     */
+     * The `visibility` bag holds no user identity of its own — the same item evaluated against
+     * two contexts must give two answers, which is why the decision can never be baked into the
+     * shared per-group cache (MenuBuilderCacheService / MenuBuilderResolver::filterVisible()).
+    */
     public function testSameItemYieldsDifferentAnswersPerContext(): void
     {
         $service = new MenuBuilderVisibilityService();
@@ -642,9 +611,7 @@ class MenuBuilderVisibilityTest extends TestCase
         $this->assertSame([['type' => 'userGroup', 'groupIds' => [3]]], $item->visibility, 'Evaluation must not mutate the item.');
     }
 
-    // ---------------------------------------------------------------------
     // The cache boundary: visibility is applied per request, never cached
-    // ---------------------------------------------------------------------
 
     private function node(int $id, bool $isDynamic = false, array $children = []): MenuBuilderNode
     {
@@ -690,20 +657,15 @@ class MenuBuilderVisibilityTest extends TestCase
      * @param MenuBuilderNode[] $nodes
      * @param array<int,MenuBuilderItem> $itemsById
      * @return MenuBuilderNode[]
-     */
+    */
     private function filter(array $nodes, array $itemsById, VisibilityContext $context): array
     {
-        // The per-request pass reads visibility bags keyed by item ID, not
-        // hydrated items — see
-        // MenuBuilderItemService::getVisibilityRulesForGroup(). These cases
-        // still describe their fixture in items, so it is projected here:
-        // same keys, so "no key" still means the row is gone, and an item
-        // with no rules is still a present key holding an empty bag.
+        // The per-request pass reads visibility bags keyed by item ID, not hydrated items — see
+        // MenuBuilderItemService::getVisibilityRulesForGroup().
         $visibilityById = array_map(fn(MenuBuilderItem $item) => $item->visibility, $itemsById);
 
-        // No setAccessible(): private methods have been invokable through
-        // ReflectionMethod without it since PHP 8.1, and the call is
-        // deprecated as of 8.5.
+        // No setAccessible(): private methods have been invokable through ReflectionMethod without
+        // it since PHP 8.1, and the call is deprecated as of 8.5.
         $method = new ReflectionMethod(MenuBuilderResolver::class, 'filterVisible');
 
         return $method->invoke(new MenuBuilderResolver(), $nodes, $visibilityById, new MenuBuilderVisibilityService(), $context);
@@ -730,9 +692,9 @@ class MenuBuilderVisibilityTest extends TestCase
         $authenticated = $this->filter($cached, $itemsById, $this->context(isLoggedIn: true));
         $this->assertSame([1, 2], $this->ids($authenticated));
 
-        // Same cached input, two different results, and the input itself is
-        // untouched — this is the guarantee that makes it safe to share one
-        // cache entry between an anonymous visitor and a logged-in one.
+        // Same cached input, two different results, and the input itself is untouched — this is
+        // the guarantee that makes it safe to share one cache entry between an anonymous visitor
+        // and a logged-in one.
         $this->assertSame([1, 2, 3], $this->ids($cached), 'Filtering must not mutate the cached tree.');
     }
 
@@ -769,11 +731,10 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A cached node whose persisted item is no longer in the fresh read —
-     * deleted, or disabled since the tree was cached — has no visibility
-     * rules left to evaluate, so it is hidden rather than passed through
-     * unchecked. Invalidation should prevent this; this is the backstop.
-     */
+     * A cached node whose persisted item is no longer in the fresh read — deleted, or disabled
+     * since the tree was cached — has no visibility rules left to evaluate, so it is hidden
+     * rather than passed through unchecked.
+    */
     public function testAnOrphanedCachedNodeFailsClosed(): void
     {
         $cached = [$this->node(1), $this->node(99)];
@@ -783,18 +744,16 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * A dynamic-navigation child's `id` is a Craft element ID, not an item
-     * ID, so it must not be looked up in the item map — a numeric collision
-     * would otherwise apply an unrelated item's visibility rules to it (or,
-     * with the orphan check above, hide it outright).
-     */
+     * A dynamic-navigation child's `id` is a Craft element ID, not an item ID, so it must not be
+     * looked up in the item map — a numeric collision would otherwise apply an unrelated item's
+     * visibility rules to it (or, with the orphan check above, hide it outright).
+    */
     public function testDynamicChildrenAreNotMatchedAgainstItemIds(): void
     {
         $cached = [$this->node(1, children: [$this->node(2, isDynamic: true)])];
         $itemsById = [
             1 => $this->item(1),
-            // Same numeric ID as the synthesized child, gated to a group the
-            // visitor isn't in.
+            // Same numeric ID as the synthesized child, gated to a group the visitor isn't in.
             2 => $this->item(2, [['type' => 'userGroup', 'groupIds' => [4]]]),
         ];
 
@@ -824,10 +783,8 @@ class MenuBuilderVisibilityTest extends TestCase
     }
 
     /**
-     * The cached payload is MenuBuilderNode; visibility config lives only on
-     * MenuBuilderItem. If a `visibility` property ever appeared on the node,
-     * a user-independent cache entry would start carrying access rules.
-     */
+     * The cached payload is MenuBuilderNode; visibility config lives only on MenuBuilderItem.
+    */
     public function testCachedNodesCarryNoVisibilityData(): void
     {
         $properties = array_map(
@@ -840,19 +797,14 @@ class MenuBuilderVisibilityTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // passes() is isVisible() over a raw bag — the same decision, no model
-    // ---------------------------------------------------------------------
 
     /**
-     * The cache-hit path re-checks visibility from the stored bags alone,
-     * without hydrating a MenuBuilderItem per row — a measured 10.4ms of a
-     * 13.1ms request for a 1000-item menu. That only stays safe while the
-     * bag-only path reaches the *same* decision as the model path, which is
-     * what this pins.
+     * The cache-hit path re-checks visibility from the stored bags alone, without hydrating a
+     * MenuBuilderItem per row — a measured 10.4ms of a 13.1ms request for a 1000-item menu.
      *
      * @dataProvider visibilityBags
-     */
+    */
     public function testPassesAgreesWithIsVisibleForTheSameRules(array $visibility, bool $expected): void
     {
         $service = new MenuBuilderVisibilityService();

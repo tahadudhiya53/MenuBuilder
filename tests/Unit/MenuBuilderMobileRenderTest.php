@@ -9,33 +9,16 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 require_once __DIR__ . '/NavMacroRendering.php';
 
 /**
- * What a browser actually receives for each viewport — the bundled macros
- * rendered through real Twig against real nodes, asserted against the DOM.
- *
- * The two rendering strategies MenuBuilder supports are both tested here,
- * because they are the whole of the front-end contract:
- *
- * 1. **One navigation, `data-mb-viewport`.** The default. Every item renders
- *    once; the ones an editor restricted carry one attribute, and the
- *    theme's own media query decides at what width each is `display:none`.
- *    No breakpoint, media query or framework class is emitted by this
- *    plugin — asserted, not assumed.
- * 2. **Two navigations, `forViewport()`.** The tree is narrowed and re-sorted
- *    server-side and rendered twice, with `idPrefix` keeping the two copies'
- *    HTML ids apart. This is the only strategy in which mobile *ordering*
- *    means anything, because order has to be DOM order (WCAG 1.3.2, 2.4.3).
- *
- * Accessibility is not a separate section below: it is the point of most of
- * these assertions. A collapsed branch is a native `<details>`, so "what the
- * markup says" and "what is on screen" are one attribute the browser owns;
- * there is no `aria-expanded` anywhere to fall out of step, and nothing in
- * the mobile navigation is reachable by pointer but not by keyboard.
- */
+ * What a browser actually receives for each viewport — the bundled macros rendered through real
+ * Twig against real nodes, asserted against the DOM.
+*/
 class MenuBuilderMobileRenderTest extends TestCase
 {
     use NavMacroRendering;
 
-    /** Home, a desktop-only download, a mobile-only phone link, and a branch. */
+    /**
+     * Home, a desktop-only download, a mobile-only phone link, and a branch.
+    */
     private function mixedMenu(): array
     {
         return [
@@ -55,9 +38,7 @@ class MenuBuilderMobileRenderTest extends TestCase
         return array_map(static fn($node) => trim($node->textContent), $this->query($html, '//a'));
     }
 
-    // ---------------------------------------------------------------
     // Strategy 1: one navigation, data-mb-viewport
-    // ---------------------------------------------------------------
 
     public function testASharedNavigationRendersEveryItemOnceAndMarksTheRestrictedOnes(): void
     {
@@ -68,7 +49,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//li[@data-mb-viewport="mobile"]'));
     }
 
-    /** The attribute says something only when the editor restricted the item. */
+    /**
+     * The attribute says something only when the editor restricted the item.
+    */
     public function testAnUnrestrictedItemCarriesNoViewportAttribute(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/')]);
@@ -83,7 +66,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//li[@data-mb-viewport="desktop"]/hr'));
     }
 
-    /** A restricted child is marked wherever it sits, not only at the top level. */
+    /**
+     * A restricted child is marked wherever it sits, not only at the top level.
+    */
     public function testARestrictedNestedItemIsMarked(): void
     {
         $html = $this->renderNav([
@@ -96,10 +81,9 @@ class MenuBuilderMobileRenderTest extends TestCase
     }
 
     /**
-     * MenuBuilder decides *which* items belong to a viewport; where a
-     * viewport begins is the front-end developer's decision alone. If this
-     * ever fails, the plugin has started owning a breakpoint.
-     */
+     * MenuBuilder decides *which* items belong to a viewport; where a viewport begins is the
+     * front-end developer's decision alone.
+    */
     public function testTheMacrosEmitNoBreakpointMediaQueryOrFrameworkClass(): void
     {
         $html = $this->renderNav($this->mixedMenu(), 'details', 'mobile')
@@ -112,9 +96,7 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertStringNotContainsString('<style', $html);
     }
 
-    // ---------------------------------------------------------------
     // Strategy 2: two navigations via forViewport()
-    // ---------------------------------------------------------------
 
     public function testTheDesktopNavigationDropsMobileOnlyItems(): void
     {
@@ -134,7 +116,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertNotContains('Print catalogue', $links);
     }
 
-    /** A narrowed tree needs no attribute: everything left in it belongs. */
+    /**
+     * A narrowed tree needs no attribute: everything left in it belongs.
+    */
     public function testANarrowedNavigationEmitsNoPerItemViewportAttributes(): void
     {
         foreach (['desktop', 'mobile'] as $viewport) {
@@ -145,7 +129,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         }
     }
 
-    /** Two navigations on one page must not produce two elements with the same id. */
+    /**
+     * Two navigations on one page must not produce two elements with the same id.
+    */
     public function testTheTwoNavigationsDoNotCollideOnHtmlIds(): void
     {
         $nodes = [$this->node(1, title: 'Home', url: '/', htmlId: 'home')];
@@ -157,7 +143,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertSame($ids, array_unique($ids));
     }
 
-    /** Order has to be DOM order, or the visual and focus sequences disagree. */
+    /**
+     * Order has to be DOM order, or the visual and focus sequences disagree.
+    */
     public function testMobileOrderIsAppliedByReorderingTheDomAndNeverByCss(): void
     {
         $nodes = [
@@ -183,9 +171,7 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertSame(['Home', 'Contact'], $this->linkTexts($this->renderNavForViewport($nodes, 'desktop')));
     }
 
-    // ---------------------------------------------------------------
     // Collapsible children
-    // ---------------------------------------------------------------
 
     private function branch(array $mobile = []): MenuBuilderNode
     {
@@ -206,7 +192,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//details[@data-mb-submenu]/ul'));
     }
 
-    /** The state is one attribute the browser owns — there is no second copy of it to drift. */
+    /**
+     * The state is one attribute the browser owns — there is no second copy of it to drift.
+    */
     public function testACollapsedBranchClaimsNoAriaStateOfItsOwn(): void
     {
         $html = $this->renderNav([$this->branch()], 'details', 'mobile');
@@ -219,10 +207,10 @@ class MenuBuilderMobileRenderTest extends TestCase
     }
 
     /**
-     * The parent's own label is already a link above the summary, so the
-     * summary must not repeat it — two controls with the same accessible
-     * name, one of which navigates and one of which opens.
-     */
+     * The parent's own label is already a link above the summary, so the summary must not repeat it
+     * — two controls with the same accessible name, one of which navigates and one of which
+     * opens.
+    */
     public function testTheSummaryIsNamedForWhatItDoesRatherThanRepeatingTheLabel(): void
     {
         $summary = $this->query($this->renderNav([$this->branch()], 'details', 'mobile'), '//summary');
@@ -243,7 +231,10 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertSame('Explore our work submenu', $summary[0]->getAttribute('aria-label'));
     }
 
-    /** A collapsed branch's links stay in the DOM, so find-in-page and a screen reader's own expansion still reach them. */
+    /**
+     * A collapsed branch's links stay in the DOM, so find-in-page and a screen reader's own
+     * expansion still reach them.
+    */
     public function testACollapsedBranchStillContainsItsLinks(): void
     {
         $html = $this->renderNav([$this->branch()], 'details', 'mobile');
@@ -260,7 +251,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertSame(['Explore', 'Latest', 'Archive'], $this->linkTexts($html));
     }
 
-    /** A leaf has nothing to disclose, so it never becomes a control that opens an empty panel. */
+    /**
+     * A leaf has nothing to disclose, so it never becomes a control that opens an empty panel.
+    */
     public function testALeafIsNeverWrappedInADisclosure(): void
     {
         $html = $this->renderNav([$this->node(1, title: 'Home', url: '/')], 'details', 'mobile');
@@ -269,7 +262,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(0, $this->query($html, '//summary'));
     }
 
-    /** Nothing changes on desktop: a submenu is still a nested list with no state claimed. */
+    /**
+     * Nothing changes on desktop: a submenu is still a nested list with no state claimed.
+    */
     public function testTheDesktopNavigationStillRendersPlainNestedLists(): void
     {
         foreach (['desktop', 'both'] as $viewport) {
@@ -280,7 +275,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         }
     }
 
-    /** `disclosure: 'none'` means "claim no state" — that promise holds on mobile too. */
+    /**
+     * `disclosure: 'none'` means "claim no state" — that promise holds on mobile too.
+    */
     public function testDisclosureNoneClaimsNoStateOnMobileEither(): void
     {
         $html = $this->renderNav([$this->branch()], 'none', 'mobile');
@@ -303,9 +300,7 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//details//details[@data-mb-submenu]'), 'A branch inside a branch nests rather than flattening.');
     }
 
-    // ---------------------------------------------------------------
     // Mega menus on mobile
-    // ---------------------------------------------------------------
 
     public function testAMegaMenuStacksIntoOneListOnMobileByDefault(): void
     {
@@ -325,7 +320,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//details[@data-mb-submenu]'), 'It is still one drawer disclosure, not a hover flyout.');
     }
 
-    /** A sharp, deliberate choice: those links then exist in no navigation a phone has. */
+    /**
+     * A sharp, deliberate choice: those links then exist in no navigation a phone has.
+    */
     public function testAMegaMenuCanBeHiddenEntirelyOnMobile(): void
     {
         $html = $this->renderNav([$this->megaParentWithMobile(['megaMenu' => 'hide'])], 'details', 'mobile');
@@ -345,7 +342,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         }
     }
 
-    /** The mega parent's panel is still named and grouped when its columns are kept. */
+    /**
+     * The mega parent's panel is still named and grouped when its columns are kept.
+    */
     public function testAKeptColumnPanelStillCarriesItsGroupLabel(): void
     {
         $html = $this->renderNav([$this->megaParentWithMobile(['megaMenu' => 'columns'])], 'details', 'mobile');
@@ -355,11 +354,12 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertSame('Explore', $panel[0]->getAttribute('aria-label'));
     }
 
-    // ---------------------------------------------------------------
     // Active state
-    // ---------------------------------------------------------------
 
-    /** `aria-current="page"` must survive `forViewport()`, or the mobile navigation stops saying where you are. */
+    /**
+     * `aria-current="page"` must survive `forViewport()`, or the mobile navigation stops saying
+     * where you are.
+    */
     public function testTheActiveItemStaysMarkedInBothNavigations(): void
     {
         $nodes = [
@@ -376,7 +376,10 @@ class MenuBuilderMobileRenderTest extends TestCase
         }
     }
 
-    /** The ancestor of the current page keeps its styling hook and still claims no aria-current of its own. */
+    /**
+     * The ancestor of the current page keeps its styling hook and still claims no aria-current of
+     * its own.
+    */
     public function testAnActiveAncestorKeepsItsClassInTheMobileNavigation(): void
     {
         $child = $this->node(2, title: 'Latest', url: '/latest', level: 2, isActive: true);
@@ -388,16 +391,12 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(1, $this->query($html, '//a[@aria-current="page"]'), 'Only the page being served is the current page.');
     }
 
-    // ---------------------------------------------------------------
     // Keyboard navigation
-    // ---------------------------------------------------------------
 
     /**
-     * Everything the mobile navigation can do by pointer, it can do by
-     * keyboard — because `<details>`/`<summary>` is the whole mechanism.
-     * A summary is focusable and toggled by Enter and Space natively, with
-     * no script, no `tabindex`, and no key handler to get wrong.
-     */
+     * Everything the mobile navigation can do by pointer, it can do by keyboard — because
+     * `<details>`/`<summary>` is the whole mechanism.
+    */
     public function testEveryMobileControlIsANativelyFocusableElement(): void
     {
         $html = $this->renderNav([$this->branch(), $this->megaParent()], 'details', 'mobile');
@@ -412,7 +411,9 @@ class MenuBuilderMobileRenderTest extends TestCase
     }
 
     
-    /** Nothing in the mobile navigation is hidden from the keyboard while remaining on screen. */
+    /**
+     * Nothing in the mobile navigation is hidden from the keyboard while remaining on screen.
+    */
     public function testNoMobileItemIsHiddenFromTheKeyboardOnly(): void
     {
         $html = $this->renderNav($this->mixedMenu(), 'details', 'mobile');
@@ -421,7 +422,9 @@ class MenuBuilderMobileRenderTest extends TestCase
         $this->assertCount(0, $this->query($html, '//a[@aria-hidden="true"]'));
     }
 
-    /** A mega parent with two columns, plus a mobile config on the parent. */
+    /**
+     * A mega parent with two columns, plus a mobile config on the parent.
+    */
     private function megaParentWithMobile(array $mobile): MenuBuilderNode
     {
         return $this->node(1, title: 'Explore', url: '/explore', megaMenu: new MenuBuilderMegaMenuConfig(columns: 2), mobile: $mobile, children: [

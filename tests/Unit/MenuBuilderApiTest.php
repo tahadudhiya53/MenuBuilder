@@ -12,19 +12,12 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderNode;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
- * The REST API's decidable half: whether the endpoint exists at all, what it
- * refuses, what it returns for a given tree, and the arithmetic behind its
- * caching and rate-limiting headers.
- *
- * No booted Craft application. Whether a real HTTP request reaches the
- * controller, and what a real schema lets it read, is
- * {@see \Tahadudhiya\MenuBuilder\Tests\Integration\MenuBuilderApiTest}'s job.
- */
+ * The REST API's decidable half: whether the endpoint exists at all, what it refuses, what it
+ * returns for a given tree, and the arithmetic behind its caching and rate-limiting headers.
+*/
 class MenuBuilderApiTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // The master switch — the difference between "no API" and "an API"
-    // ---------------------------------------------------------------------
 
     public function testApiIsOffWithNoConfigAtAll(): void
     {
@@ -36,12 +29,10 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * Publishing an endpoint must take a literal `true`. A truthy string in a
-     * config file is as likely to be a mistake as an intention, and the
-     * mistake is the one with consequences.
+     * Publishing an endpoint must take a literal `true`.
      *
      * @dataProvider truthyButNotTrue
-     */
+    */
     public function testApiIsOffForAnythingButLiteralTrue(mixed $value): void
     {
         $this->assertFalse(MenuBuilderApiConfig::fromArray(['api' => ['enabled' => $value]])->enabled);
@@ -65,13 +56,9 @@ class MenuBuilderApiTest extends TestCase
         $this->assertSame([], $config->allowedOrigins);
     }
 
-    // ---------------------------------------------------------------------
     // Config normalization — a config file is hand-edited and deployed
-    // ---------------------------------------------------------------------
 
-    /**
-     * @dataProvider basePaths
-     */
+    /** @dataProvider basePaths */
     public function testBasePathNormalization(mixed $given, string $expected): void
     {
         $this->assertSame($expected, self::enabled(['basePath' => $given])->basePath);
@@ -106,9 +93,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertFalse(self::enabled(['allowPublicSchema' => false])->allowPublicSchema);
     }
 
-    /**
-     * @dataProvider numbers
-     */
+    /** @dataProvider numbers */
     public function testNonNegativeIntegerSettings(mixed $given, int $expectedRateLimit, int $expectedDuration): void
     {
         $config = self::enabled(['rateLimit' => $given, 'cacheDuration' => $given]);
@@ -167,9 +152,9 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * The classic allowlist bug: `evil-example.com` and `example.com.evil.net`
-     * must not be admitted for `example.com`.
-     */
+     * The classic allowlist bug: `evil-example.com` and `example.com.evil.net` must not be admitted
+     * for `example.com`.
+    */
     public function testOriginMatchingIsExact(): void
     {
         $config = self::enabled(['allowedOrigins' => ['https://example.com']]);
@@ -181,7 +166,9 @@ class MenuBuilderApiTest extends TestCase
         $this->assertNull($config->allowOriginHeader('https://example.com:8080'));
     }
 
-    /** A configured wildcard is echoed as `*`, never as the caller's own origin. */
+    /**
+     * A configured wildcard is echoed as `*`, never as the caller's own origin.
+    */
     public function testWildcardIsEchoedAsAWildcard(): void
     {
         $config = self::enabled(['allowedOrigins' => ['*']]);
@@ -190,9 +177,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertNull($config->allowOriginHeader(null));
     }
 
-    // ---------------------------------------------------------------------
     // Malformed input
-    // ---------------------------------------------------------------------
 
     public function testNoParametersIsValid(): void
     {
@@ -218,9 +203,7 @@ class MenuBuilderApiTest extends TestCase
         ], MenuBuilderApiHelper::arguments($params));
     }
 
-    /**
-     * @dataProvider malformedParams
-     */
+    /** @dataProvider malformedParams */
     public function testMalformedParametersAreNamed(array $params, string $expected): void
     {
         $this->assertSame($expected, MenuBuilderApiHelper::invalidParam($params));
@@ -251,10 +234,10 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * Unrecognized parameters are ignored rather than rejected — but they must
-     * not reach the resolve pipeline, which distinguishes "named nothing
-     * usable" from "named nothing" by `isset()`.
-     */
+     * Unrecognized parameters are ignored rather than rejected — but they must not reach the
+     * resolve pipeline, which distinguishes "named nothing usable" from "named nothing" by
+     * `isset()`.
+    */
     public function testUnknownParametersAreIgnoredAndNeverForwarded(): void
     {
         $params = ['site' => 'de', 'depth' => '2', 'callback' => 'alert', 'admin' => '1'];
@@ -263,9 +246,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertSame(['site' => 'de'], MenuBuilderApiHelper::arguments($params));
     }
 
-    // ---------------------------------------------------------------------
     // The response shape
-    // ---------------------------------------------------------------------
 
     public function testEnvelopeCarriesTheVersionAndTheAnsweringSite(): void
     {
@@ -331,9 +312,9 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * A menu's row ID and its site-restriction list are facts about the
-     * install, not about the navigation a visitor is being handed.
-     */
+     * A menu's row ID and its site-restriction list are facts about the install, not about the
+     * navigation a visitor is being handed.
+    */
     public function testTreeSerializationExposesNoInstallStructure(): void
     {
         $group = new MenuBuilderGroup([
@@ -379,16 +360,15 @@ class MenuBuilderApiTest extends TestCase
         $this->assertFalse($serialized['hasChildren']);
         $this->assertSame([], $serialized['children']);
 
-        // `href` is reserved and never comes from the bag — the node's own
-        // accessor decides, exactly as it does for a rendered menu.
+        // `href` is reserved and never comes from the bag — the node's own accessor decides,
+        // exactly as it does for a rendered menu.
         $this->assertSame(['data-track' => 'nav'], (array)$serialized['htmlAttributes']);
     }
 
     /**
-     * A node's `id` is a `menubuilder_items` primary key on an authored item
-     * and a Craft *element* ID on a dynamic item's synthesized child. It is
-     * never exposed.
-     */
+     * A node's `id` is a `menubuilder_items` primary key on an authored item and a Craft *element*
+     * ID on a dynamic item's synthesized child.
+    */
     public function testNodeSerializationNeverExposesTheRowId(): void
     {
         $this->assertArrayNotHasKey('id', MenuBuilderApiHelper::serializeNode($this->node()));
@@ -463,11 +443,10 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * A node with no content element serializes an empty field bag without
-     * reaching for the plugin — which is what keeps this suite runnable
-     * without a booted Craft, and what a separator or a fresh item really
-     * is.
-     */
+     * A node with no content element serializes an empty field bag without reaching for the plugin
+     * — which is what keeps this suite runnable without a booted Craft, and what a separator or a
+     * fresh item really is.
+    */
     public function testANodeWithoutContentSerializesNoCustomFields(): void
     {
         $serialized = MenuBuilderApiHelper::serializeNode($this->node());
@@ -476,10 +455,9 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * The bag's JSON *type* must not change with its contents — an empty bag
-     * that encodes as `[]` while a populated one encodes as `{}` is what
-     * breaks a typed consumer.
-     */
+     * The bag's JSON *type* must not change with its contents — an empty bag that encodes as `[]`
+     * while a populated one encodes as `{}` is what breaks a typed consumer.
+    */
     public function testAnEmptyBagEncodesAsAnObject(): void
     {
         $serialized = MenuBuilderApiHelper::serializeNode($this->node());
@@ -488,9 +466,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertSame('{}', json_encode($serialized['htmlAttributes']));
     }
 
-    // ---------------------------------------------------------------------
     // Caching
-    // ---------------------------------------------------------------------
 
     public function testEtagIsStableAndBodySpecific(): void
     {
@@ -501,9 +477,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertMatchesRegularExpression('/^"[0-9a-f]+"$/', $etag);
     }
 
-    /**
-     * @dataProvider etagHeaders
-     */
+    /** @dataProvider etagHeaders */
     public function testIfNoneMatch(?string $header, bool $expected): void
     {
         $this->assertSame($expected, MenuBuilderApiHelper::etagMatches($header, '"abc"'));
@@ -531,18 +505,16 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * A token's schema can name menus the public schema cannot, so a
-     * token-authenticated response must never be storable by a shared cache.
-     */
+     * A token's schema can name menus the public schema cannot, so a token-authenticated response
+     * must never be storable by a shared cache.
+    */
     public function testAnAuthenticatedResponseIsPrivate(): void
     {
         $this->assertSame('public, max-age=300', MenuBuilderApiHelper::cacheControl(300, false));
         $this->assertSame('private, max-age=300', MenuBuilderApiHelper::cacheControl(300, true));
     }
 
-    // ---------------------------------------------------------------------
     // Rate limiting
-    // ---------------------------------------------------------------------
 
     public function testRateLimitWindowsAreFixedMinutes(): void
     {
@@ -564,9 +536,9 @@ class MenuBuilderApiTest extends TestCase
     }
 
     /**
-     * An access token must never appear in a cache key, and an IP address has
-     * no business being stored in the clear to count requests.
-     */
+     * An access token must never appear in a cache key, and an IP address has no business being
+     * stored in the clear to count requests.
+    */
     public function testRateLimitKeyLeaksNeitherTokenNorAddress(): void
     {
         $key = MenuBuilderApiHelper::rateLimitKey('token-uid-1234', '203.0.113.9', 42);
@@ -587,7 +559,7 @@ class MenuBuilderApiTest extends TestCase
         $this->assertSame($anonymous, MenuBuilderApiHelper::rateLimitKey(null, '203.0.113.9', 42));
     }
 
-    // ---------------------------------------------------------------------
+
 
     /** @param array<string,mixed> $api */
     private static function enabled(array $api): MenuBuilderApiConfig

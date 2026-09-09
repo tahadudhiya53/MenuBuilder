@@ -19,7 +19,7 @@ use craft\db\ActiveRecord;
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid
- */
+*/
 class MenuBuilderGroupRecord extends ActiveRecord
 {
     public static function tableName(): string

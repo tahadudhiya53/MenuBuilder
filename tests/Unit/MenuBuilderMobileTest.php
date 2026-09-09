@@ -11,30 +11,10 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
  * The mobile-navigation model: one menu, presented differently.
- *
- * There is no second menu and no duplicated tree — see the {@see MobileHelper}
- * class docblock for why. What exists instead is four presentation facts per
- * item, in the `metadata` bag that already carries the mega-menu config and
- * the badge style, and one pure re-shaping of an already-resolved tree
- * ({@see MenuBuilderTree::forViewport()}).
- *
- * Two properties are load-bearing throughout and are tested here rather than
- * assumed:
- *
- * - **Everything fails closed toward keeping the link.** An unrecognised
- *   visibility, an unknown viewport, a garbage mega behaviour: the item stays
- *   in the navigation. The opposite failure — links silently vanishing from
- *   the only navigation a phone has — is the one nobody notices until a
- *   customer can't find the shop.
- * - **A default is never stored.** An item nobody has configured for mobile
- *   carries no `mobile` key at all, so "empty means unconfigured" stays true
- *   in the column, in the cache and in the form.
- */
+*/
 class MenuBuilderMobileTest extends TestCase
 {
-    // ---------------------------------------------------------------
     // MobileHelper: the grammar
-    // ---------------------------------------------------------------
 
     public function testTheThreeVisibilitiesReadBackAsThemselves(): void
     {
@@ -79,7 +59,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertTrue(MobileHelper::isVisibleOn(MobileHelper::VIEWPORT_MOBILE, $mobileOnly));
     }
 
-    /** A template that passes a typo must render the menu, not an empty landmark. */
+    /**
+     * A template that passes a typo must render the menu, not an empty landmark.
+    */
     public function testAnUnknownViewportKeepsEverything(): void
     {
         foreach ([['visibility' => 'desktopOnly'], ['visibility' => 'mobileOnly'], []] as $config) {
@@ -105,7 +87,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame(MobileHelper::ORDER_MIN, MobileHelper::order(MobileHelper::ORDER_MIN));
     }
 
-    /** Absence and an explicit `false` are different answers — see MobileHelper::collapsible(). */
+    /**
+     * Absence and an explicit `false` are different answers — see MobileHelper::collapsible().
+    */
     public function testCollapsibleDistinguishesAbsenceFromAnExplicitFalse(): void
     {
         $this->assertTrue(MobileHelper::collapsible(true));
@@ -126,7 +110,9 @@ class MenuBuilderMobileTest extends TestCase
         }
     }
 
-    /** Failing closed to "hide" would drop links from the only navigation a phone has. */
+    /**
+     * Failing closed to "hide" would drop links from the only navigation a phone has.
+    */
     public function testAnUnrecognizedMegaBehaviorFailsClosedToStackAndNeverToHide(): void
     {
         foreach ([null, '', 'HIDE ', 'collapse', 0, true, ['hide']] as $value) {
@@ -134,9 +120,7 @@ class MenuBuilderMobileTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------
     // MobileHelper::config() / fromForm(): defaults are never stored
-    // ---------------------------------------------------------------
 
     public function testAnItemWithNoMobileKeyReadsAsNothingConfigured(): void
     {
@@ -163,7 +147,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame(['collapsible' => false], MobileHelper::fromForm('both', null, false, 'stack'));
     }
 
-    /** A stored `true` is the default too, so it is not written back — the bag stays minimal. */
+    /**
+     * A stored `true` is the default too, so it is not written back — the bag stays minimal.
+    */
     public function testAnExplicitCollapsibleTrueIsStoredBecauseAbsenceAlreadyMeansIt(): void
     {
         $this->assertSame(['collapsible' => true], MobileHelper::config([MobileHelper::METADATA_KEY => ['collapsible' => true]]));
@@ -188,9 +174,7 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame('mobile', MobileHelper::viewportAttribute(['visibility' => 'mobileOnly']));
     }
 
-    // ---------------------------------------------------------------
     // MenuBuilderItem: validation and the CP-form accessors
-    // ---------------------------------------------------------------
 
     private function item(mixed $mobile): MenuBuilderItem
     {
@@ -245,7 +229,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertFalse($this->item(['order' => true])->validate());
     }
 
-    /** A sequence hint is not worth refusing a save over — it clamps instead. */
+    /**
+     * A sequence hint is not worth refusing a save over — it clamps instead.
+    */
     public function testAnOutOfRangeOrderStillValidates(): void
     {
         $item = $this->item(['order' => 999999]);
@@ -270,9 +256,7 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame('both', $this->item(['visibility' => 'nonsense'])->mobileVisibility());
     }
 
-    // ---------------------------------------------------------------
     // MenuBuilderNode: the derived accessors
-    // ---------------------------------------------------------------
 
     /** @param MenuBuilderNode[] $children */
     private function node(int $id, string $title = 'Item', array $mobile = [], array $children = []): MenuBuilderNode
@@ -335,7 +319,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame('mobile', $mobileOnly->viewportAttribute());
     }
 
-    /** A <details> around no children is a control that opens an empty panel. */
+    /**
+     * A <details> around no children is a control that opens an empty panel.
+    */
     public function testALeafIsNeverCollapsible(): void
     {
         $this->assertFalse($this->node(1)->isMobileCollapsible());
@@ -351,7 +337,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertFalse($this->node(1, mobile: ['collapsible' => false], children: $children)->isMobileCollapsible());
     }
 
-    /** The node fails closed over its own stored bag, the way iconClass() and badgeClass() do. */
+    /**
+     * The node fails closed over its own stored bag, the way iconClass() and badgeClass() do.
+    */
     public function testANodeCarryingAGarbageBagReadsBackAsDefaults(): void
     {
         $node = $this->node(1, mobile: ['visibility' => 'sideways', 'megaMenu' => 'explode', 'order' => 'first']);
@@ -362,9 +350,7 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertNull($node->viewportAttribute());
     }
 
-    // ---------------------------------------------------------------
     // MenuBuilderTree::forViewport(): filtering and ordering
-    // ---------------------------------------------------------------
 
     /** @param MenuBuilderNode[] $nodes */
     private function tree(array $nodes): MenuBuilderTree
@@ -375,7 +361,7 @@ class MenuBuilderMobileTest extends TestCase
     /**
      * @param MenuBuilderNode[] $nodes
      * @return string[]
-     */
+    */
     private function titles(iterable $nodes): array
     {
         $titles = [];
@@ -448,7 +434,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame(['Contact', 'Home', 'Products', 'About'], $this->titles($tree->forViewport('mobile')));
     }
 
-    /** Unnumbered siblings keep the order the editor dragged them into, relative to each other. */
+    /**
+     * Unnumbered siblings keep the order the editor dragged them into, relative to each other.
+    */
     public function testUnorderedSiblingsKeepTheirEditorOrder(): void
     {
         $tree = $this->tree([
@@ -472,7 +460,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame(['Archive', 'Latest'], $this->titles($tree->forViewport('mobile')->items[0]->children));
     }
 
-    /** Order is a mobile-only presentation fact; the desktop tree is the editor's tree. */
+    /**
+     * Order is a mobile-only presentation fact; the desktop tree is the editor's tree.
+    */
     public function testDesktopIgnoresMobileOrder(): void
     {
         $tree = $this->tree([
@@ -494,7 +484,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertSame(['Home', 'Call us', 'Downloads'], $this->titles($tree->forViewport('tablet')));
     }
 
-    /** The tree it re-shapes has already been active-marked; losing that would break aria-current. */
+    /**
+     * The tree it re-shapes has already been active-marked; losing that would break aria-current.
+    */
     public function testActiveStateSurvivesTheViewportCopy(): void
     {
         $child = $this->node(2, 'Latest');
@@ -509,7 +501,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertTrue($mobile->items[0]->isActiveOrAncestor());
     }
 
-    /** These objects can be the cached ones — see MenuBuilderNode::withChildren(). */
+    /**
+     * These objects can be the cached ones — see MenuBuilderNode::withChildren().
+    */
     public function testTheOriginalTreeIsNotMutatedByAViewportCopy(): void
     {
         $original = $this->tree([
@@ -532,7 +526,9 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertNotSame($tree->items[0], $mobile->items[0]->children[0]->parent);
     }
 
-    /** The plain resolve pipeline still resets active state — only forViewport() preserves it. */
+    /**
+     * The plain resolve pipeline still resets active state — only forViewport() preserves it.
+    */
     public function testWithChildrenStillResetsActiveStateByDefault(): void
     {
         $node = $this->node(1, 'Home');
@@ -542,20 +538,14 @@ class MenuBuilderMobileTest extends TestCase
         $this->assertTrue($node->withChildren([], preserveActiveState: true)->isActive);
     }
 
-    // ---------------------------------------------------------------
     // The CP wiring: form, controller and storage agree
-    // ---------------------------------------------------------------
 
     
     
     /**
-     * An item nobody has configured for mobile has an empty `mobile` bag, and
-     * Twig runs with `strict_variables` in the CP: reading a key off an empty
-     * mapping is a hard error, not null. The editor slideout blew up with
-     * `Key "collapsible" does not exist as the sequence/mapping is empty` for
-     * exactly that reason, so every read of the two optional config bags in
-     * the form has to be guarded — `??` suppresses it, a bare `.key` does not.
-     */
+     * An item nobody has configured for mobile has an empty `mobile` bag, and Twig runs with
+     * `strict_variables` in the CP: reading a key off an empty mapping is a hard error, not null.
+    */
     public function testTheFormNeverReadsAnOptionalConfigBagUnguarded(): void
     {
         $form = file_get_contents(__DIR__ . '/../../src/templates/items/_fields.twig');

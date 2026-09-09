@@ -10,27 +10,16 @@ use GraphQL\Type\Definition\Type;
 use Tahadudhiya\MenuBuilder\gql\MenuBuilderMenuType;
 
 /**
- * The Navigation field through Craft's **real GraphQL layer**: a schema built
- * from the real section, a query executed by Craft's own `Gql` service against
- * the real database.
- *
- * The unit suite asserts what `MenuBuilderMenuType::fieldDefinitions()`
- * returns. That proves the resolvers are right and proves nothing about
- * whether Craft can build a schema from them at all — a type that fails
- * webonyx's own validation, or a field Craft can't attach to an entry type,
- * would pass every unit test and 500 on the first real query.
- */
+ * The Navigation field through Craft's **real GraphQL layer**: a schema built from the real
+ * section, a query executed by Craft's own `Gql` service against the real database.
+*/
 class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
 {
     private static ?GqlSchema $schema = null;
 
     /**
-     * A schema scoped to the fixture's section, as a real token's schema would
-     * be. Craft caches GraphQL types globally in `GqlEntityRegistry`, so the
-     * registry is flushed first: a type left behind by another test's schema
-     * is the classic cause of an integration GraphQL suite that passes alone
-     * and fails in sequence.
-     */
+     * A schema scoped to the fixture's section, as a real token's schema would be.
+    */
     private static function schema(): GqlSchema
     {
         if (self::$schema !== null) {
@@ -53,13 +42,7 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
 
     /**
      * The selection query every "what comes back" test runs.
-     *
-     * Deliberately unscoped by site: Craft's GraphQL layer already returns one
-     * row per entry rather than one per site (unlike a bare `Entry::find()`),
-     * so adding a site argument would only put another of Craft's moving parts
-     * between the test and the field. The per-site behaviour is covered
-     * separately, against element queries, in MenuBuilderFieldMultiSiteTest.
-     */
+    */
     private const SELECTION_QUERY = <<<'GQL'
     {
       entries(section: "pages") {
@@ -87,14 +70,11 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Craft's element resolvers read the **active** schema, not the one handed
-     * to `executeQuery()` — that is what a real `/graphql` request sets from
-     * the token. Without setting it, every entry query resolves against an
-     * empty scope and returns nothing, which would make each assertion below
-     * pass or fail for the wrong reason.
+     * Craft's element resolvers read the **active** schema, not the one handed to `executeQuery()`
+     * — that is what a real `/graphql` request sets from the token.
      *
      * @return array<string,mixed>
-     */
+    */
     private static function runQuery(string $query, ?array $variables = null): array
     {
         $gql = Craft::$app->getGql();
@@ -119,9 +99,7 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         $this->fail("No entry with slug \"$slug\" in the GraphQL result.");
     }
 
-    // ---------------------------------------------------------------------
     // Querying the field
-    // ---------------------------------------------------------------------
 
     public function testTheFieldIsQueryableAndReturnsTheSelection(): void
     {
@@ -147,10 +125,10 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A deleted menu is the case a GraphQL consumer most needs to be able to
-     * tell apart from "nothing selected", so the UID survives and `exists`
-     * reports the truth rather than the whole object collapsing to null.
-     */
+     * A deleted menu is the case a GraphQL consumer most needs to be able to tell apart from
+     * "nothing selected", so the UID survives and `exists` reports the truth rather than the whole
+     * object collapsing to null.
+    */
     public function testADeletedMenuReportsItselfRatherThanVanishing(): void
     {
         $result = $this->selection();
@@ -177,7 +155,9 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         ], $this->navigationFor('picks-disabled', $result));
     }
 
-    /** The field is queryable as a filter argument too, by UID. */
+    /**
+     * The field is queryable as a filter argument too, by UID.
+    */
     public function testEntriesCanBeFilteredByTheSelectedMenusUid(): void
     {
         $result = $this->execute(<<<'GQL'
@@ -194,17 +174,11 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         $this->assertSame(['picks-main', 'picks-main-too'], $slugs);
     }
 
-    // ---------------------------------------------------------------------
     // No tree is exposed
-    // ---------------------------------------------------------------------
 
     /**
-     * The load-bearing guarantee. A resolved tree is per-site, per-visitor and
-     * per-page; a GraphQL response is shared and cached. Asserting it against
-     * the **real, built schema** (not the PHP array the unit test checks) is
-     * what proves nothing else in the pipeline — an interface, an event, a
-     * Craft default — put one back.
-     */
+     * The load-bearing guarantee.
+    */
     public function testTheBuiltSchemaExposesNoResolvedTree(): void
     {
         $this->selection();
@@ -226,7 +200,9 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         }
     }
 
-    /** Asking for a tree has to be an error, not an empty success. */
+    /**
+     * Asking for a tree has to be an error, not an empty success.
+    */
     public function testAskingForATreeIsARejectedQuery(): void
     {
         $result = self::runQuery(<<<'GQL'
@@ -243,15 +219,12 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         $this->assertStringContainsString('tree', json_encode($result['errors']));
     }
 
-    // ---------------------------------------------------------------------
     // Mutation
-    // ---------------------------------------------------------------------
 
     /**
-     * The mutation argument is a plain `String` carrying a menu UID — the same
-     * identity the field stores. Asserted off the field instance in the real
-     * layout, so it is the type Craft would actually put in a mutation schema.
-     */
+     * The mutation argument is a plain `String` carrying a menu UID — the same identity the field
+     * stores.
+    */
     public function testTheMutationArgumentTakesAMenuUid(): void
     {
         $argument = self::$fieldInstance->getContentGqlMutationArgumentType();
@@ -262,13 +235,9 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
     }
 
     /**
-     * And it round-trips: a UID sent through Craft's own mutation resolution
-     * for this field lands in the content column and reads back as the menu.
-     *
-     * The field's `normalizeValue()`/`serializeValue()` pair is what a mutation
-     * goes through, so this drives that pair the way a mutation does rather
-     * than re-testing the GraphQL transport Craft owns.
-     */
+     * And it round-trips: a UID sent through Craft's own mutation resolution for this field lands
+     * in the content column and reads back as the menu.
+    */
     public function testAUidSentAsAMutationValueIsStoredAndReadBack(): void
     {
         $entry = self::pages()->id(self::$entryIds['picks-nothing'])->one();
@@ -293,7 +262,9 @@ class MenuBuilderFieldGqlTest extends CraftIntegrationTestCase
         $this->assertNull(self::pages()->id(self::$entryIds['picks-nothing'])->one()->getFieldValue(self::FIELD_HANDLE));
     }
 
-    /** A non-UID mutation value is rejected at normalization, not stored. */
+    /**
+     * A non-UID mutation value is rejected at normalization, not stored.
+    */
     public function testANonUidMutationValueIsNotStored(): void
     {
         $entry = self::pages()->id(self::$entryIds['picks-nothing'])->one();

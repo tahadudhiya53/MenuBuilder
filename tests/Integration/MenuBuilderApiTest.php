@@ -16,40 +16,37 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
- * The REST API through the **real controller**: a real `craft\web\Request`
- * built from real superglobals, a real `craft\web\Response`, real GraphQL
- * tokens in the database, and real menus resolved through the real pipeline.
- *
- * The unit suite (`Tests\Unit\MenuBuilderApiTest`) proves what the API
- * returns for a given tree and what it refuses for a given parameter. It
- * proves nothing about whether an HTTP request ever reaches any of that:
- * an `allowAnonymous` that locks the endpoint to logged-in users, a token
- * lookup that accepts an expired token, a scope check that passes
- * everything, or a 404 rendered as Craft's HTML error page would all sail
- * through every unit test and only fail against a real install.
- *
- * The suite's application is a console one (see `tests/integration-bootstrap.php`),
- * so the request and response are constructed and handed to the controller
- * explicitly rather than being routed to. That is the only simulated part;
- * everything from `beforeAction()` inward is the code a web request runs.
- */
+ * The REST API through the **real controller**: a real `craft\web\Request` built from real
+ * superglobals, a real `craft\web\Response`, real GraphQL tokens in the database, and real menus
+ * resolved through the real pipeline.
+*/
 class MenuBuilderApiTest extends CraftIntegrationTestCase
 {
-    /** In scope, enabled, with items. */
+    /**
+     * In scope, enabled, with items.
+    */
     private static MenuBuilderGroup $apiMenu;
 
-    /** Real and enabled, deliberately left out of the schema's scope. */
+    /**
+     * Real and enabled, deliberately left out of the schema's scope.
+    */
     private static MenuBuilderGroup $unscopedMenu;
 
-    /** In scope, but disabled. */
+    /**
+     * In scope, but disabled.
+    */
     private static MenuBuilderGroup $disabledApiMenu;
 
-    /** In scope, but restricted to the second site. */
+    /**
+     * In scope, but restricted to the second site.
+    */
     private static MenuBuilderGroup $secondSiteMenu;
 
     private static ?GqlToken $token = null;
 
-    /** A token whose schema names the menus but only the primary site. */
+    /**
+     * A token whose schema names the menus but only the primary site.
+    */
     private static ?GqlToken $primarySiteToken = null;
 
     private static ?GqlToken $expiredToken = null;
@@ -74,9 +71,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $about = self::addApiItem(self::$apiMenu, 'About', '/about');
         self::addApiItem(self::$apiMenu, 'Team', '/about/team', parentId: (int)$about->id);
 
-        // The audience gates. An API response is resolved for nobody, so the
-        // members-only item must never appear and the logged-out one always
-        // must — whoever is asking.
+        // The audience gates.
         self::addApiItem(self::$apiMenu, 'Members', '/members', visibility: [['type' => 'loggedIn']]);
         self::addApiItem(self::$apiMenu, 'Sign in', '/login', visibility: [['type' => 'loggedOut']]);
 
@@ -107,9 +102,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         parent::tearDown();
     }
 
-    // ---------------------------------------------------------------------
     // A valid request
-    // ---------------------------------------------------------------------
 
     public function testAValidRequestReturnsTheMenu(): void
     {
@@ -142,7 +135,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame(2, $about['children'][0]['level']);
     }
 
-    /** The row IDs the resolver carries for Twig's benefit must not be in the JSON. */
+    /**
+     * The row IDs the resolver carries for Twig's benefit must not be in the JSON.
+    */
     public function testTheResponseCarriesNoRowIds(): void
     {
         $body = $this->body($this->get('apinav'));
@@ -163,20 +158,16 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
 
         $this->assertContains('apinav', $handles);
 
-        // Out of scope, disabled, and restricted to another site: three
-        // different reasons, one indistinguishable absence.
+        // Out of scope, disabled, and restricted to another site: three different reasons, one
+        // indistinguishable absence.
         $this->assertNotContains('apisecret', $handles);
         $this->assertNotContains('apiretired', $handles);
         $this->assertNotContains('apisecondary', $handles);
     }
 
-    // ---------------------------------------------------------------------
     // Every refusal is the same refusal
-    // ---------------------------------------------------------------------
 
-    /**
-     * @dataProvider unservableMenus
-     */
+    /** @dataProvider unservableMenus */
     public function testUnservableMenusAreAllTheSame404(string $handle): void
     {
         $response = $this->get($handle);
@@ -200,7 +191,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         ];
     }
 
-    /** A refusal is JSON, not Craft's HTML error template. */
+    /**
+     * A refusal is JSON, not Craft's HTML error template.
+    */
     public function testEvenA404IsJson(): void
     {
         $response = $this->get('nosuchmenu');
@@ -209,9 +202,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame('no-store', $response->getHeaders()->get('Cache-Control'));
     }
 
-    // ---------------------------------------------------------------------
     // Authentication
-    // ---------------------------------------------------------------------
 
     public function testAnInvalidTokenIsRefused(): void
     {
@@ -230,9 +221,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A missing token and a wrong one are the same 401: the difference
-     * between a typo and a guess only benefits the guesser.
-     */
+     * A missing token and a wrong one are the same 401: the difference between a typo and a guess
+     * only benefits the guesser.
+    */
     public function testNoTokenIsRefusedWhenThePublicSchemaIsTurnedOff(): void
     {
         $response = $this->request('view', ['handle' => 'apinav'], config: self::config(['allowPublicSchema' => false]), token: '');
@@ -241,7 +232,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame('unauthorized', $this->body($response)['error']['code']);
     }
 
-    /** A valid token's `lastUsed` is recorded, so the CP's token list stays an audit trail. */
+    /**
+     * A valid token's `lastUsed` is recorded, so the CP's token list stays an audit trail.
+    */
     public function testAValidTokenIsMarkedAsUsed(): void
     {
         $token = self::createToken('api-lastused-token', self::menuScope(self::allSiteUids()));
@@ -254,9 +247,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A token scoped to one site cannot read another site's navigation simply
-     * by naming it — the same boundary Craft's own `site` argument enforces.
-     */
+     * A token scoped to one site cannot read another site's navigation simply by naming it — the
+     * same boundary Craft's own `site` argument enforces.
+    */
     public function testATokenCannotReachASiteItsSchemaExcludes(): void
     {
         $response = $this->get('apinav', params: ['siteId' => (string)self::$secondSiteId], token: (string)self::$primarySiteToken->accessToken);
@@ -264,9 +257,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame(404, $response->getStatusCode());
     }
 
-    // ---------------------------------------------------------------------
     // Sites
-    // ---------------------------------------------------------------------
 
     public function testTheSiteParameterSelectsTheSiteThatAnswers(): void
     {
@@ -301,16 +292,14 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame(404, $response->getStatusCode());
     }
 
-    // ---------------------------------------------------------------------
     // Visibility — the audience is nobody
-    // ---------------------------------------------------------------------
 
     public function testTheAudienceIsAlwaysAnonymous(): void
     {
         $titles = array_column($this->body($this->get('apinav'))['data']['items'], 'title');
 
-        // Restricted to logged-in users: absent, because a shared response
-        // cannot carry one caller's visibility decision.
+        // Restricted to logged-in users: absent, because a shared response cannot carry one
+        // caller's visibility decision.
         $this->assertNotContains('Members', $titles);
 
         // Restricted to logged-out visitors: always present.
@@ -320,13 +309,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertNotContains('Draft', $titles);
     }
 
-    // ---------------------------------------------------------------------
     // Malformed input
-    // ---------------------------------------------------------------------
 
-    /**
-     * @dataProvider malformedParams
-     */
+    /** @dataProvider malformedParams */
     public function testAMalformedParameterIsA400ThatNamesIt(array $params, string $expected): void
     {
         $response = $this->get('apinav', params: $params);
@@ -355,9 +340,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame(200, $response->getStatusCode());
     }
 
-    // ---------------------------------------------------------------------
     // Reshaping and active state
-    // ---------------------------------------------------------------------
 
     public function testCurrentUriMarksActiveState(): void
     {
@@ -388,9 +371,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame('mobile', $body['meta']['viewport']);
     }
 
-    // ---------------------------------------------------------------------
     // Caching
-    // ---------------------------------------------------------------------
 
     public function testAResponseIsRevalidatableAndNotStoredByDefault(): void
     {
@@ -420,9 +401,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A token's schema can name menus the public schema cannot, so a
-     * token-authenticated response must never be storable by a shared cache.
-     */
+     * A token's schema can name menus the public schema cannot, so a token-authenticated response
+     * must never be storable by a shared cache.
+    */
     public function testAConfiguredDurationIsPrivateForATokenAndPublicWithout(): void
     {
         $config = self::config(['cacheDuration' => 300]);
@@ -430,13 +411,15 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $authenticated = $this->request('view', ['handle' => 'apinav'], config: $config, token: (string)self::$token->accessToken);
         $this->assertSame('private, max-age=300', $authenticated->getHeaders()->get('Cache-Control'));
 
-        // No token: the public schema answers (or refuses) — either way the
-        // response is not tied to a credential.
+        // No token: the public schema answers (or refuses) — either way the response is not tied
+        // to a credential.
         $anonymous = $this->request('view', ['handle' => 'apinav'], config: $config, token: '');
         $this->assertStringNotContainsString('private', (string)$anonymous->getHeaders()->get('Cache-Control'));
     }
 
-    /** The same menu, resolved twice, is byte-identical — which is what makes an ETag meaningful. */
+    /**
+     * The same menu, resolved twice, is byte-identical — which is what makes an ETag meaningful.
+    */
     public function testTheSameRequestProducesTheSameEntityTag(): void
     {
         $this->assertSame(
@@ -453,13 +436,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Methods, CORS and the master switch
-    // ---------------------------------------------------------------------
 
-    /**
-     * @dataProvider writeMethods
-     */
+    /** @dataProvider writeMethods */
     public function testWriteMethodsAreRefusedBeforeAnythingElseRuns(string $method): void
     {
         $response = $this->request('view', ['handle' => 'apinav'], method: $method);
@@ -516,7 +495,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertNull($response->getHeaders()->get('Access-Control-Allow-Origin'));
     }
 
-    /** A preflight carries no credentials, so it must not need any. */
+    /**
+     * A preflight carries no credentials, so it must not need any.
+    */
     public function testAPreflightIsAnsweredWithoutAuthentication(): void
     {
         $response = $this->request(
@@ -534,11 +515,10 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Defence in depth: with the API off there is no route to this
-     * controller, but if one is reached anyway it answers as though the
-     * endpoint doesn't exist — because as far as the install has said, it
-     * doesn't.
-     */
+     * Defence in depth: with the API off there is no route to this controller, but if one is
+     * reached anyway it answers as though the endpoint doesn't exist — because as far as the
+     * install has said, it doesn't.
+    */
     public function testADisabledApiAnswersNothingAtAll(): void
     {
         $response = $this->request(
@@ -552,9 +532,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame('Not found.', $this->body($response)['error']['message']);
     }
 
-    // ---------------------------------------------------------------------
     // Rate limiting
-    // ---------------------------------------------------------------------
 
     public function testTheRateLimitIsEnforcedAndAnnounced(): void
     {
@@ -589,16 +567,13 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Driving the controller
-    // ---------------------------------------------------------------------
 
     /**
-     * `GET {prefix}/navigations/{handle}`, or the list endpoint when no
-     * handle is given.
+     * `GET {prefix}/navigations/{handle}`, or the list endpoint when no handle is given.
      *
      * @param array<string,string> $params
-     */
+    */
     private function get(?string $handle = null, array $params = [], ?string $token = null): Response
     {
         return $handle === null
@@ -607,15 +582,14 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Builds a real `craft\web\Request` from real superglobals, hands it to a
-     * real `ApiController`, and returns the response it produced.
+     * Builds a real `craft\web\Request` from real superglobals, hands it to a real `ApiController`,
+     * and returns the response it produced.
      *
      * @param array<string,mixed> $actionParams
      * @param array<string,string> $params
      * @param array<string,string> $headers Raw `$_SERVER` header entries (`HTTP_*`).
-     * @param string|null $token The bearer token to send; the shared fixture token by
-     *                           default, and `''` for a request that carries none.
-     */
+     * @param string|null $token The bearer token to send; the shared fixture token by default, and `''` for a request that carries none.
+    */
     private function request(
         string $action,
         array $actionParams = [],
@@ -657,10 +631,9 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
             $controller = new ApiController('api', MenuBuilder::getInstance(), [
                 'request' => new Request(['isConsoleRequest' => false]),
                 'response' => $response,
-                // Rate limiting is off unless a test is exercising it: the
-                // limiter's counter is keyed by caller and window, so a
-                // shared default budget would make every other test's result
-                // depend on how many ran before it in the same minute.
+                // Rate limiting is off unless a test is exercising it: the limiter's counter is
+                // keyed by caller and window, so a shared default budget would make every other
+                // test's result depend on how many ran before it in the same minute.
                 'apiConfig' => $config ?? self::config(['rateLimit' => 0]),
             ]);
 
@@ -673,17 +646,13 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         }
     }
 
-    /**
-     * @return array<string,mixed>
-     */
+    /** @return array<string,mixed> */
     private function body(Response $response): array
     {
         return Json::decode((string)$response->content);
     }
 
-    // ---------------------------------------------------------------------
     // Fixture
-    // ---------------------------------------------------------------------
 
     /** @param array<string,mixed> $api */
     private static function config(array $api): MenuBuilderApiConfig
@@ -692,13 +661,11 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A schema scoped the way a real token's would be: the API menus, and the
-     * named sites. `apisecret` is deliberately absent — that omission is what
-     * the scope tests assert on.
+     * A schema scoped the way a real token's would be: the API menus, and the named sites.
      *
      * @param string[] $siteUids
      * @return string[]
-     */
+    */
     private static function menuScope(array $siteUids): array
     {
         $scope = [];
@@ -714,20 +681,18 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         return $scope;
     }
 
-    /**
-     * @return string[]
-     */
+    /** @return string[] */
     private static function allSiteUids(): array
     {
         return array_map(static fn($site) => (string)$site->uid, Craft::$app->getSites()->getAllSites());
     }
 
     /**
-     * A real schema and a real token, saved through Craft's own service — the
-     * only way `getTokenByAccessToken()` can find one.
+     * A real schema and a real token, saved through Craft's own service — the only way
+     * `getTokenByAccessToken()` can find one.
      *
      * @param string[] $scope
-     */
+    */
     private static function createToken(string $name, array $scope, bool $expired = false): GqlToken
     {
         $gql = Craft::$app->getGql();
@@ -753,9 +718,7 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         return $token;
     }
 
-    /**
-     * @param array<int,array<string,mixed>> $visibility
-     */
+    /** @param array<int,array<string,mixed>> $visibility */
     private static function addApiItem(
         MenuBuilderGroup $group,
         string $title,

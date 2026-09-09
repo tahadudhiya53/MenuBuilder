@@ -39,31 +39,19 @@ class MenuBuilderVisibilityService extends Component
     }
 
     /**
-     * An item's rules are combined with AND: visible only if every one of
-     * them passes. Everything that isn't an unambiguous pass fails closed —
-     * an entry that isn't even an array of config, a missing or non-string
-     * `type`, a type no rule is registered for, or a rule that throws.
-     * A malformed `visibility` bag must hide the item, never expose it.
-     */
+     * An item's rules are combined with AND: visible only if every one of them passes.
+    */
     public function isVisible(MenuBuilderItem $item, VisibilityContext $context): bool
     {
         return $this->passes($item->visibility ?? [], $context, $item->id);
     }
 
     /**
-     * The same decision as {@see isVisible()}, over a raw rule bag rather
-     * than a hydrated MenuBuilderItem.
-     *
-     * The resolve pipeline re-checks visibility on every request against a
-     * cached node tree, and the *only* thing it needs from the persisted row
-     * is this bag — so it reads the bag alone
-     * ({@see MenuBuilderItemService::getVisibilityRulesForGroup()}) rather
-     * than hydrating a model per node. `$itemId` is carried purely so a
-     * third-party rule that throws still names the item it threw on in the
-     * warning log.
+     * The same decision as {@see isVisible()}, over a raw rule bag rather than a hydrated
+     * MenuBuilderItem.
      *
      * @param array $visibility The item's `visibility` bag, as persisted.
-     */
+    */
     public function passes(array $visibility, VisibilityContext $context, ?int $itemId = null): bool
     {
         if (empty($visibility)) {
@@ -73,18 +61,18 @@ class MenuBuilderVisibilityService extends Component
         $rules = $this->getRules();
 
         foreach ($visibility as $ruleConfig) {
-            // Guarded rather than assumed: `visibility` is persisted as free-form
-            // JSON, so a directly-posted or imported bag can hold a scalar here,
-            // and `$ruleConfig['type']` on a string is a TypeError in PHP 8 — an
-            // uncaught one would surface as a 500 instead of a hidden item.
+            // Guarded rather than assumed: `visibility` is persisted as free-form JSON, so a
+            // directly-posted or imported bag can hold a scalar here, and `$ruleConfig['type']` on
+            // a string is a TypeError in PHP 8 — an uncaught one would surface as a 500 instead
+            // of a hidden item.
             if (!is_array($ruleConfig)) {
                 return false;
             }
 
             $type = $ruleConfig['type'] ?? null;
 
-            // Non-string type (an array or int) would be an illegal offset on
-            // the rules map, so it's rejected before the lookup.
+            // Non-string type (an array or int) would be an illegal offset on the rules map, so
+            // it's rejected before the lookup.
             if (!is_string($type) || $type === '') {
                 return false;
             }
@@ -96,9 +84,6 @@ class MenuBuilderVisibilityService extends Component
             }
 
             // A rule is allowed to be third-party (EVENT_REGISTER_VISIBILITY_RULES).
-            // If one throws on config it didn't expect, that's still a rule that
-            // did not pass — hide the item rather than letting the exception
-            // escape and take out the whole page render.
             try {
                 if (!$rule->passes($ruleConfig, $context)) {
                     return false;
@@ -116,9 +101,7 @@ class MenuBuilderVisibilityService extends Component
         return true;
     }
 
-    /**
-     * @return array<string,VisibilityRuleInterface>
-     */
+    /** @return array<string,VisibilityRuleInterface> */
     private function getRules(): array
     {
         if ($this->rules === null) {

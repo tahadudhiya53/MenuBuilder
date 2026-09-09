@@ -10,29 +10,8 @@ use Tahadudhiya\MenuBuilder\helpers\MenuBuilderGqlHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderTree;
 
 /**
- * A resolved menu: the menu's own public facts plus its already-filtered
- * items.
- *
- * Distinct from {@see MenuBuilderMenuType}, which is the Navigation *field's*
- * value — a selection, not a tree. That type stays exactly what it is; a
- * consumer that has a selection takes its `handle` and asks for the tree
- * here, where the site, the audience and the current page are stated as
- * arguments instead of being inherited from whichever entry happened to be
- * queried.
- *
- * The source value is a {@see MenuBuilderTree}, so what reaches this type has
- * already been through the whole resolve pipeline: enabled menus only,
- * site-gated, link-resolved, visibility-filtered and (when the query asked
- * for it) active-state marked. This type does no filtering of its own — it is
- * a projection, and everything security-relevant happened upstream in
- * {@see MenuBuilderNavigationResolver}.
- *
- * What is deliberately absent: the menu's row ID, its site restriction list,
- * and its `settings` bag. A restriction list is an install's structure rather
- * than a fact about the menu a visitor is being handed, and a menu that isn't
- * available on the requested site is simply not returned at all — a consumer
- * cannot learn from this type which *other* sites a menu exists on.
- */
+ * A resolved menu: the menu's own public facts plus its already-filtered items.
+*/
 class MenuBuilderNavigationType
 {
     public const NAME = 'MenuBuilderNavigation';
@@ -46,9 +25,7 @@ class MenuBuilderNavigationType
         ]));
     }
 
-    /**
-     * @return array<string,array<string,mixed>>
-     */
+    /** @return array<string,array<string,mixed>> */
     public static function fieldDefinitions(): array
     {
         return [

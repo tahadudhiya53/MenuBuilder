@@ -32,18 +32,12 @@ class MenuBuilderLinkResolver extends Component
     }
 
     /**
-     * Tells every preload-capable link type which elements the tree about to
-     * be built will ask for, so an entry/category/asset link costs a shared
-     * query rather than one apiece
-     * ({@see PreloadingLinkTypeResolverInterface}).
-     *
-     * Grouped by item *type* rather than pooled, because each type resolves
-     * against its own element class — an entry ID handed to the category
-     * resolver simply isn't there. Types whose resolver doesn't preload are
-     * skipped, which is what keeps a third-party resolver working unchanged.
+     * Tells every preload-capable link type which elements the tree about to be built will ask for,
+     * so an entry/category/asset link costs a shared query rather than one apiece ({@see
+     * PreloadingLinkTypeResolverInterface}).
      *
      * @param MenuBuilderItem[] $items Top-level items; children are walked.
-     */
+    */
     public function preload(array $items): void
     {
         $idsByType = [];
@@ -59,10 +53,8 @@ class MenuBuilderLinkResolver extends Component
     }
 
     /**
-     * Drops every preloaded element. Called once the tree is built: the
-     * resolvers live for the whole request, the elements are wanted only for
-     * the build.
-     */
+     * Drops every preloaded element.
+    */
     public function releasePreloaded(): void
     {
         foreach ($this->getResolvers() as $resolver) {
@@ -75,7 +67,7 @@ class MenuBuilderLinkResolver extends Component
     /**
      * @param MenuBuilderItem[] $items
      * @param array<string,int[]> $idsByType
-     */
+    */
     private function collectElementIds(array $items, array &$idsByType): void
     {
         foreach ($items as $item) {
@@ -87,9 +79,7 @@ class MenuBuilderLinkResolver extends Component
         }
     }
 
-    /**
-     * @return array<string,LinkTypeResolverInterface>
-     */
+    /** @return array<string,LinkTypeResolverInterface> */
     private function getResolvers(): array
     {
         if ($this->resolvers === null) {

@@ -4,9 +4,11 @@
 {% set title = group.name %}
 {% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
 
-{# Every affordance flag comes from BaseMenuBuilderController::cpAffordances(),
-   so a button is rendered only when the action behind it would actually be
-   allowed — a Delete that answers 403 is worse than no Delete at all. #}
+{#
+   Every affordance flag comes from BaseMenuBuilderController::cpAffordances(), so a button is
+   rendered only when the action behind it would actually be allowed — a Delete that answers 403
+   is worse than no Delete at all.
+#}
 {% set isFiltered = search|trim != '' %}
 {% set canSelect = canEdit or canDelete %}
 
@@ -51,9 +53,7 @@
         {% endif %}
     </header>
 
-    {# A disabled menu resolves to nothing on the front end, whatever is in it.
-       Without saying so, editing a menu that renders nowhere looks like a bug
-       in the templates rather than a switch someone turned off. #}
+    {# A disabled menu resolves to nothing on the front end, whatever is in it. #}
     {% if not group.enabled %}
         <div class="menu-builder-notice warning" role="status">
             <p>
@@ -65,15 +65,7 @@
         </div>
     {% endif %}
 
-    {# Link health, summarised. The per-row badges say what is wrong with a
-       given item; this says how much of the menu is affected at all, which is
-       the thing an editor can't see when the broken rows are three levels
-       down and collapsed out of sight. Counted over the whole menu, never the
-       search-filtered subset.
-
-       It names no content: the counts come from
-       MenuBuilderLinkHealth::summarize(), which sees statuses and nothing
-       else. See MenuBuilderLinkHealthService. #}
+    {# Link health, summarised. #}
     {% if healthSummary.total %}
         <div class="menu-builder-notice warning" role="status">
             <p>
@@ -100,9 +92,10 @@
                 {% endif %}
             </form>
         </div>
-        {# Preview is read-only and needs nothing beyond the `view` permission
-           this screen already required, so it is deliberately not gated on a
-           further affordance flag. #}
+        {#
+           Preview is read-only and needs nothing beyond the `view` permission this screen already
+           required, so it is deliberately not gated on a further affordance flag.
+        #}
         <div>
             <a href="{{ url('menu-builder/' ~ group.handle ~ '/preview') }}" class="btn">{{ "Preview"|t('menu-builder') }}</a>
         </div>
@@ -113,11 +106,10 @@
         {% endif %}
     </div>
 
-    {# Search filters the tree, so what is on screen is a subset in an order
-       that isn't the menu's real one. Reordering against it would post a
-       sibling list the editor never actually saw, so drag is switched off
-       while a search is active and the reason is said out loud rather than
-       leaving the handles looking broken. #}
+    {#
+       Search filters the tree, so what is on screen is a subset in an order that isn't the menu's
+       real one.
+    #}
     {% if isFiltered %}
         <div class="menu-builder-notice" role="status">
             <p>
@@ -295,22 +287,12 @@
                         }) }}
                     </div>
 
-                    {# Dynamic navigation is a supported item type, so it has to
-                       be creatable here: quick-add is the only creation path
-                       (see ARCHITECTURE.md, "Single path per behaviour"), and
-                       without this entry a dynamic item could be edited but
-                       never made.
-
-                       Only the two fields the model actually *requires* of a
-                       dynamic item are asked for — a source type and a source.
-                       Limit and order are optional in
-                       MenuBuilderItem::validateDynamicSource() and defaulted by
-                       MenuBuilderDynamicNavigationService::normalizeConfig(),
-                       so they stay in the full editor, where the rest of the
-                       item is configured after it exists. The field names are
-                       the ones ItemsController::buildMetadata() already reads;
-                       nothing about a dynamic source is represented a second
-                       way here. #}
+                    {#
+                       Dynamic navigation is a supported item type, so it has to be creatable here:
+                       quick-add is the only creation path (see ARCHITECTURE.md, "Single path per
+                       behaviour"), and without this entry a dynamic item could be edited but never
+                       made.
+                    #}
                     <div data-quick-add-section="dynamic" class="menu-builder-link-section hidden">
                         {{ forms.selectField({
                             label: "Source"|t('menu-builder'),
@@ -324,18 +306,12 @@
                             ],
                         }) }}
 
-                        {# One picker per source type, all posting the same
-                           `dynamicSourceId`, exactly as the full editor renders
-                           them — MenuBuilder.syncDynamicSourcePickers() (shared
-                           with items/_fields.twig) keeps one enabled.
-
-                           The two that don't match the default source type
-                           above are rendered `disabled` so that state is right
-                           before any script runs: without JS all three would
-                           otherwise post `dynamicSourceId` and the last one
-                           would win, sending a blank over the editor's real
-                           choice. JS recomputes all three on init, so this
-                           changes nothing once it runs. #}
+                        {#
+                           One picker per source type, all posting the same `dynamicSourceId`,
+                           exactly as the full editor renders them —
+                           MenuBuilder.syncDynamicSourcePickers() (shared with items/_fields.twig)
+                           keeps one enabled.
+                        #}
                         <div data-dynamic-source="entries">
                             {{ forms.selectField({
                                 label: "Section"|t('menu-builder'),
@@ -422,8 +398,8 @@
 
             if (selectAll) {
                 selectAll.checked = all.length > 0 && ids.length === all.length;
-                // Some-but-not-all reads as "nothing selected" without this,
-                // which is exactly wrong when a bulk delete is one click away.
+                // Some-but-not-all reads as "nothing selected" without this, which is exactly wrong
+                // when a bulk delete is one click away.
                 selectAll.indeterminate = ids.length > 0 && ids.length < all.length;
             }
         }
@@ -453,9 +429,8 @@
             });
         }
 
-        // Browsers restore checkbox state on reload and on back/forward, which
-        // would otherwise leave checked rows with no toolbar. Sync once now,
-        // and again when the page is restored from the back/forward cache.
+        // Browsers restore checkbox state on reload and on back/forward, which would otherwise
+        // leave checked rows with no toolbar.
         updateToolbar();
         window.addEventListener('pageshow', updateToolbar);
 
@@ -476,12 +451,9 @@
 
                 Craft.sendActionRequest('POST', 'menu-builder/items/bulk', { data: { op: op, ids: ids } })
                     .then(function() {
-                        // Enable/disable is a per-row visual change, so apply it
-                        // in place through the tree controller's own
-                        // setRowEnabled() — the single implementation the row
-                        // menu's Disable/Enable uses too. Delete changes the
-                        // tree's shape (child counts, connector lines, sort
-                        // order), so that one still reloads.
+                        // Enable/disable is a per-row visual change, so apply it in place through
+                        // the tree controller's own setRowEnabled() — the single implementation
+                        // the row menu's Disable/Enable uses too.
                         if (op !== 'delete' && window.MenuBuilder && window.MenuBuilder.tree) {
                             ids.forEach(function(id) {
                                 window.MenuBuilder.tree.setRowEnabled(id, op === 'enable');
@@ -531,29 +503,27 @@
             sections.forEach(function(section) {
                 var visible = section.getAttribute('data-quick-add-section') === type;
                 section.classList.toggle('hidden', !visible);
-                // The url/anchor sections share the `customUrl` field name
-                // (only one applies per type) — disabling the inactive one
-                // keeps its blank value out of the submitted form entirely,
-                // rather than letting it silently overwrite the real value.
+                // The url/anchor sections share the `customUrl` field name (only one applies per
+                // type) — disabling the inactive one keeps its blank value out of the submitted
+                // form entirely, rather than letting it silently overwrite the real value.
                 window.MenuBuilder.setFieldsDisabled(section, !visible);
             });
             clickableField.value = (type === 'nonclickable' || type === 'separator') ? '' : '1';
-            // Entry/category/asset titles fall back to the linked element's
-            // own title when left blank (see MenuBuilderResolver) — this hint
-            // is UX-only, the PHP model remains the authoritative validator.
-            // A dynamic item has no linked element and its title IS required,
-            // so the hint stays off for it.
+            // Entry/category/asset titles fall back to the linked element's own title when left
+            // blank (see MenuBuilderResolver) — this hint is UX-only, the PHP model remains the
+            // authoritative validator.
             if (titleHint) {
                 titleHint.hidden = elementTypes.indexOf(type) === -1;
             }
 
-            // Must run after the loop: re-enabling the dynamic section above
-            // switches all three source pickers back on, and they all post
-            // `dynamicSourceId`.
+            // Must run after the loop: re-enabling the dynamic section above switches all three
+            // source pickers back on, and they all post `dynamicSourceId`.
             updateDynamicSource();
         }
 
-        /** Shared with the full item editor — see item-fields.js. */
+        /**
+         * Shared with the full item editor — see item-fields.js.
+        */
         function updateDynamicSource() {
             if (!dynamicSourceTypeField) {
                 return;
@@ -581,12 +551,9 @@
             });
         });
 
-        // A plain form post that fails validation re-renders the dashboard,
-        // which knows nothing about the rejected item: every field the editor
-        // filled in came back blank, with a flash that named no field.
-        // Submitting the same form over AJAX instead keeps the panel's state
-        // and puts each message under the field it belongs to. The <form> is
-        // left intact so a no-JS post still works exactly as before.
+        // A plain form post that fails validation re-renders the dashboard, which knows nothing
+        // about the rejected item: every field the editor filled in came back blank, with a flash
+        // that named no field.
         function setBusy(busy) {
             submitBtn.disabled = busy;
             submitBtn.classList.toggle('disabled', busy);
@@ -601,19 +568,15 @@
 
             Craft.sendActionRequest('POST', 'menu-builder/items/save', { data: new FormData(form) })
                 .then(function(response) {
-                    // A toast raised here would be wiped by the reload. The
-                    // new row is appended at the end of its level instead —
-                    // well below the fold in a long menu — so the reload
-                    // carries its id and the tree scrolls to it, flags it, and
-                    // announces the save once it is actually on screen.
+                    // A toast raised here would be wiped by the reload.
                     window.MenuBuilder.tree.reloadWith('added', response.data && response.data.id);
                 })
                 .catch(function(error) {
                     setBusy(false);
                     var shown = window.MenuBuilder.applyFieldErrors(form, window.MenuBuilder.errorsFor(error));
 
-                    // Only raise the banner when nothing landed on a field —
-                    // otherwise it just repeats what is now visible in place.
+                    // Only raise the banner when nothing landed on a field — otherwise it just
+                    // repeats what is now visible in place.
                     if (!shown) {
                         window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t add that menu item.'));
                     }

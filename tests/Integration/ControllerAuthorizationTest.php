@@ -21,29 +21,12 @@ use yii\web\MethodNotAllowedHttpException;
 
 /**
  * The permission gate, executed for real.
- *
- * ControllerPermissionTest and CpAffordanceTest pin the *decisions* — pure
- * static mappings, checked without a booted app. Neither of them runs
- * {@see BaseMenuBuilderController::beforeAction()}, which is the thing that
- * actually stands between a hand-written POST and the database. So neither
- * would have noticed a permission that Craft never registered (making
- * `can()` answer false for everyone), a gate that consulted the request
- * instead of the session, or a CSRF check switched off somewhere in the
- * inheritance chain.
- *
- * This test runs the gate itself: real users, in real user groups, holding
- * real permission rows, against a real CP `craft\web\Request`, for every
- * action of every controller. Nothing here mirrors the plugin's own logic —
- * the expectation column is written out by hand, one row per action, so a
- * change to a mapping has to be restated here to pass.
- *
- * The UI is not consulted at any point, which is the point: hiding a button
- * is not a security boundary, and every case below is the request that
- * arrives when someone ignores the hidden button and posts anyway.
- */
+*/
 class ControllerAuthorizationTest extends CraftIntegrationTestCase
 {
-    /** Users, by the permission they hold. Keys are the labels used in failure messages. */
+    /**
+     * Users, by the permission they hold.
+    */
     private const VIEW = 'view only';
     private const CREATE = 'create only';
     private const EDIT = 'edit only';
@@ -53,10 +36,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     private const ADMIN = 'admin';
 
     /**
-     * Holds `menuBuilder:edit` but not Craft's own `accessCp`. Craft refuses
-     * the request before this plugin is consulted; the case is here so that
-     * fact is pinned rather than assumed.
-     */
+     * Holds `menuBuilder:edit` but not Craft's own `accessCp`.
+    */
     private const NO_CP_ACCESS = 'no CP access';
 
     /** @var array<string,int> User IDs by label. */
@@ -64,17 +45,18 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
 
     private static bool $usersLoaded = false;
 
-    /** A real saved item, so an action that reaches the database has something to act on. */
+    /**
+     * A real saved item, so an action that reaches the database has something to act on.
+    */
     private static int $itemId;
 
     private static int $groupId;
 
     /**
-     * The console components this test swaps out. Put back afterwards so the
-     * rest of the suite isn't left running against a half-web application.
+     * The console components this test swaps out.
      *
      * @var array<string,mixed>
-     */
+    */
     private static array $originalComponents = [];
 
     public static function setUpBeforeClass(): void
@@ -85,8 +67,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
             return;
         }
 
-        // User groups are a Pro feature, and the harness installs the
-        // default edition. Nothing else in the suite reads the edition.
+        // User groups are a Pro feature, and the harness installs the default edition.
         Craft::$app->setEdition(Craft::Pro);
 
         foreach ([
@@ -133,18 +114,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     /**
      * A real user in a real group holding real permission rows.
      *
-     * The admin holds *no* permissions at all, on purpose: "admin bypasses
-     * the gate" is only proven by an admin who would fail every check if the
-     * bypass were removed.
-     *
-     * Every non-admin also gets Craft's own `accessCp`, because a control
-     * panel user who lacks it never reaches a plugin controller at all
-     * (craft\web\Controller enforces it first) — without it the matrix below
-     * would pass for the wrong reason, refusing everyone regardless of what
-     * this plugin's gate decided.
-     *
      * @param string[] $permissions
-     */
+    */
     private static function createUser(
         string $label,
         array $permissions,
@@ -190,23 +161,13 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         return $user;
     }
 
-    // ---------------------------------------------------------------------
     // The matrix
-    // ---------------------------------------------------------------------
 
     /**
-     * Every action of every controller, and the *one* permission that opens
-     * it. Written out by hand rather than read from
-     * `requiredPermissionForAction()`: a test that asked the code what it
-     * requires would agree with any answer it gave.
-     *
-     * The `body` column is what the gate reads to decide — `itemId` (is this
-     * save creating something?) and `op` (which bulk operation?) — and is
-     * posted for real, so a gate that read them from somewhere else than the
-     * action does would show up here.
+     * Every action of every controller, and the *one* permission that opens it.
      *
      * @return array<string,array{class-string<BaseMenuBuilderController>,string,string,string,array<string,mixed>}>
-     */
+    */
     public static function actionProvider(): array
     {
         return [
@@ -237,14 +198,14 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The whole point of the phase: for each action, exactly one of the five
-     * single-permission users gets through, and the other four are refused —
-     * by the server, on a request that never went near the UI.
+     * The whole point of the phase: for each action, exactly one of the five single-permission
+     * users gets through, and the other four are refused — by the server, on a request that never
+     * went near the UI.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testOnlyTheOnePermissionThatOpensAnActionOpensIt(
         string $controllerClass,
         string $controllerId,
@@ -283,7 +244,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testAUserWithNoPermissionsIsRefusedEveryAction(
         string $controllerClass,
         string $controllerId,
@@ -298,14 +259,13 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Admin bypass, proven by an admin who holds none of the five
-     * permissions: if `$currentUser->admin` stopped short-circuiting the
-     * check, every row here would fail.
+     * Admin bypass, proven by an admin who holds none of the five permissions: if
+     * `$currentUser->admin` stopped short-circuiting the check, every row here would fail.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testAnAdminHoldingNoPermissionsReachesEveryAction(
         string $controllerClass,
         string $controllerId,
@@ -316,8 +276,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $admin = self::user(self::ADMIN);
 
         $this->assertTrue((bool)$admin->admin);
-        // `can()` answers true for an admin by definition, so the fixture's
-        // emptiness has to be checked against what is actually stored.
+        // `can()` answers true for an admin by definition, so the fixture's emptiness has to be
+        // checked against what is actually stored.
         $this->assertSame(
             [],
             Craft::$app->getUserPermissions()->getPermissionsByUserId((int)$admin->id),
@@ -331,13 +291,12 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Direct URL access with no session at all. A logged-out request must
-     * never reach an action, whatever it posts.
+     * Direct URL access with no session at all.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testAnAnonymousRequestIsRefusedEveryAction(
         string $controllerClass,
         string $controllerId,
@@ -353,14 +312,11 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
 
     /**
      * MenuBuilder's own permissions are not a way into the control panel.
-     * Craft requires `accessCp` for every CP request, and a user granted
-     * `menuBuilder:edit` alone must still be refused — the plugin's gate is
-     * an additional check, never a replacement for Craft's.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testMenuBuilderPermissionsDoNotGrantControlPanelAccess(
         string $controllerClass,
         string $controllerId,
@@ -380,15 +336,12 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * An AJAX request is the same request. The CP's tree, bulk toolbar and
-     * slide-out editor all post JSON, and a gate that answered a JSON
-     * request differently — or answered `{success: true}` with a 200 — would
-     * be a hole every one of those endpoints shares.
+     * An AJAX request is the same request.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testAjaxRequestsAreGatedIdenticallyToPageRequests(
         string $controllerClass,
         string $controllerId,
@@ -408,15 +361,12 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Every one of these actions is control-panel-only. A front-end request
-     * that happened to guess the route must not reach one even when the
-     * user behind it is an admin — `requireCpRequest()` is what makes the CP
-     * the only surface, and it runs before any of the mutations.
+     * Every one of these actions is control-panel-only.
      *
      * @dataProvider actionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
      * @param array<string,mixed> $body
-     */
+    */
     public function testASiteRequestCannotReachAnyAction(
         string $controllerClass,
         string $controllerId,
@@ -430,10 +380,9 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The gate refuses with a 403, not with a redirect or a silent `false` —
-     * so a hand-written POST gets an error rather than, say, a 302 that a
-     * script would follow into a second attempt.
-     */
+     * The gate refuses with a 403, not with a redirect or a silent `false` — so a hand-written
+     * POST gets an error rather than, say, a 302 that a script would follow into a second attempt.
+    */
     public function testAnUnauthorizedUserIsRefusedWithForbidden(): void
     {
         $this->expectException(ForbiddenHttpException::class);
@@ -441,19 +390,16 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $this->runGate(ItemsController::class, 'items', 'delete', self::EDIT);
     }
 
-    // ---------------------------------------------------------------------
     // CSRF
-    // ---------------------------------------------------------------------
 
     /**
-     * CSRF validation is Craft's, but it is only Craft's for as long as no
-     * controller in this plugin switches it off — and holding the right
-     * permission must not substitute for holding a token. Run as the admin,
-     * so the only thing left that can refuse the request is the token check.
+     * CSRF validation is Craft's, but it is only Craft's for as long as no controller in this
+     * plugin switches it off — and holding the right permission must not substitute for holding a
+     * token.
      *
      * @dataProvider mutatingActionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
-     */
+    */
     public function testCsrfIsStillRequiredForEveryMutation(
         string $controllerClass,
         string $controllerId,
@@ -465,12 +411,10 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Every action that writes. Kept separate from actionProvider() because
-     * these are the ones that must also refuse a GET and a missing CSRF
-     * token — the read-only screens legitimately answer both.
+     * Every action that writes.
      *
      * @return array<string,array{class-string<BaseMenuBuilderController>,string,string}>
-     */
+    */
     public static function mutatingActionProvider(): array
     {
         return [
@@ -488,14 +432,11 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A GET must not mutate anything, whoever sends it. Run as the admin and
-     * against the real action method, past the gate, so what is being tested
-     * is the action's own `requirePostRequest()` rather than the permission
-     * check that happens to come first.
+     * A GET must not mutate anything, whoever sends it.
      *
      * @dataProvider mutatingActionProvider
      * @param class-string<BaseMenuBuilderController> $controllerClass
-     */
+    */
     public function testEveryMutationRefusesAGetRequest(
         string $controllerClass,
         string $controllerId,
@@ -508,17 +449,12 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $controller->{'action' . ucfirst($actionId)}();
     }
 
-    // ---------------------------------------------------------------------
     // Smuggling the operation past the gate
-    // ---------------------------------------------------------------------
 
     /**
-     * `bulk` is the one action whose permission depends on a posted value,
-     * so it is the one place a request could be shaped to be checked as one
-     * operation and executed as another. The gate reads `op` from the body;
-     * this proves the action does too — an `op` supplied only in the query
-     * string is checked as (and stays) a non-delete.
-     */
+     * `bulk` is the one action whose permission depends on a posted value, so it is the one place a
+     * request could be shaped to be checked as one operation and executed as another.
+    */
     public function testABulkOpInTheQueryStringCannotBeSmuggledPastTheEditGate(): void
     {
         $item = self::addItem(
@@ -533,9 +469,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
             self::EDIT,
             ['ids' => [$item->id]],
             queryParams: ['op' => 'delete'],
-            // The JSON branch, because the CP's bulk toolbar posts JSON and
-            // the alternative branch flashes to a session a console-booted
-            // app doesn't have.
+            // The JSON branch, because the CP's bulk toolbar posts JSON and the alternative branch
+            // flashes to a session a console-booted app doesn't have.
             ajax: true,
         );
 
@@ -554,11 +489,9 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The other request-shaped decision: `save` needs `create` when it is
-     * making a new item and `edit` when it is changing one. An editor
-     * without `create` must not be able to create by posting no `itemId`,
-     * and a creator without `edit` must not be able to edit by posting one.
-     */
+     * The other request-shaped decision: `save` needs `create` when it is making a new item and
+     * `edit` when it is changing one.
+    */
     public function testSaveCannotBeReshapedToDodgeCreateOrEdit(): void
     {
         $this->assertFalse(
@@ -573,9 +506,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     }
 
     /**
-     * A refusal must happen before anything is written. Proven end-to-end
-     * rather than by inspection: the item is still enabled afterwards.
-     */
+     * A refusal must happen before anything is written.
+    */
     public function testARefusedMutationChangesNothing(): void
     {
         $before = MenuBuilder::getInstance()->items->getById(self::$itemId);
@@ -591,9 +523,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $this->assertSame($before->enabled, $after->enabled);
     }
 
-    // ---------------------------------------------------------------------
     // Harness
-    // ---------------------------------------------------------------------
 
     /** @param array<string,mixed> $body */
     private function gateAllows(
@@ -607,10 +537,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         try {
             return $this->runGate($controllerClass, $controllerId, $actionId, $userLabel, $body, ajax: $ajax);
         } catch (\Throwable) {
-            // Any refusal is a refusal. Which exception it is, is pinned
-            // separately (see testAnUnauthorizedUserIsRefusedWithForbidden()
-            // and testASiteRequestCannotReachAnyAction()) so a boolean
-            // matrix doesn't have to carry an exception column.
+            // Any refusal is a refusal.
             return false;
         }
     }
@@ -642,15 +569,9 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     /**
      * A controller wired to a real CP request, with a real user logged in.
      *
-     * CSRF validation is off by default: with it on, every row of the
-     * permission matrix would fail for the same uninteresting reason (a test
-     * harness cannot set a browser cookie), and the matrix would prove
-     * nothing about permissions. It is switched back on by the one test
-     * whose subject it is.
-     *
      * @param array<string,mixed> $body
      * @param array<string,mixed> $queryParams
-     */
+    */
     private function controller(
         string $controllerClass,
         string $controllerId,
@@ -678,7 +599,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
     /**
      * @param array<string,mixed> $body
      * @param array<string,mixed> $queryParams
-     */
+    */
     private static function buildRequest(
         string $method,
         bool $cpRequest,
@@ -689,9 +610,8 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $_SERVER['REQUEST_METHOD'] = $method;
         $_SERVER['SCRIPT_FILENAME'] = CRAFT_BASE_PATH . '/web/index.php';
         $_SERVER['SCRIPT_NAME'] = '/index.php';
-        // `admin` is the default cpTrigger, and it is what makes
-        // getIsCpRequest() true — the site path below is the same request
-        // arriving at the front end instead.
+        // `admin` is the default cpTrigger, and it is what makes getIsCpRequest() true — the site
+        // path below is the same request arriving at the front end instead.
         $_SERVER['REQUEST_URI'] = $cpRequest ? '/admin/actions/menu-builder' : '/menu-builder';
         $_SERVER['SERVER_NAME'] = 'primary.test';
         $_SERVER['HTTP_HOST'] = 'primary.test';

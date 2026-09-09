@@ -27,13 +27,10 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * Pure mapping from action (+ whether a `save` is creating a brand new
-     * item) to the permission it requires — factored out from
-     * beforeAction() so it's unit-testable without a booted Craft app or
-     * request. `duplicate` always creates a new item, so it always needs
-     * `create` regardless of which item is being cloned; `toggle`/`reorder`
-     * only ever act on an item that already exists, so they need `edit`.
-     */
+     * Pure mapping from action (+ whether a `save` is creating a brand new item) to the permission
+     * it requires — factored out from beforeAction() so it's unit-testable without a booted Craft
+     * app or request.
+    */
     public static function requiredPermissionForAction(string $actionId, bool $isNewSave, ?string $bulkOp = null): string
     {
         return match ($actionId) {
@@ -41,8 +38,8 @@ class ItemsController extends BaseMenuBuilderController
             'edit' => 'menuBuilder:view',
             'duplicate' => 'menuBuilder:create',
             'save' => $isNewSave ? 'menuBuilder:create' : 'menuBuilder:edit',
-            // A bulk op needs whatever permission its single-item equivalent
-            // needs — 'delete' is the only op that needs more than 'edit'.
+            // A bulk op needs whatever permission its single-item equivalent needs — 'delete' is
+            // the only op that needs more than 'edit'.
             'bulk' => $bulkOp === 'delete' ? 'menuBuilder:delete' : 'menuBuilder:edit',
             default => 'menuBuilder:edit',
         };
@@ -56,10 +53,8 @@ class ItemsController extends BaseMenuBuilderController
             throw new NotFoundHttpException('Menu not found.');
         }
 
-        // Edit-only: creating an item happens in exactly one place, the
-        // dashboard's quick-add panel (which posts straight to actionSave()).
-        // There is deliberately no second "new item" form here — see
-        // ARCHITECTURE.md, "Single path per behaviour".
+        // Edit-only: creating an item happens in exactly one place, the dashboard's quick-add panel
+        // (which posts straight to actionSave()).
         if ($item === null) {
             if ($itemId === null) {
                 throw new NotFoundHttpException('Menu item not found.');
@@ -72,9 +67,9 @@ class ItemsController extends BaseMenuBuilderController
             }
         }
 
-        // `edit` only needs `view` (this action renders a form, it doesn't
-        // save one), so both wrappers around items/_fields have to be able to
-        // render read-only rather than offer a Save the save action refuses.
+        // `edit` only needs `view` (this action renders a form, it doesn't save one), so both
+        // wrappers around items/_fields have to be able to render read-only rather than offer a
+        // Save the save action refuses.
         $affordances = $this->currentUserAffordances();
 
         $variables = [
@@ -82,18 +77,12 @@ class ItemsController extends BaseMenuBuilderController
             'item' => $item,
             'isNew' => $item->id === null,
             'siblingCandidates' => MenuBuilder::getInstance()->items->getFlatForGroup($group->id),
-            // Why this item's link would or wouldn't work, shown at the top of
-            // the editor. Computed here rather than in Twig so the template
-            // reads no elements of its own, and so the slide-out and the
-            // full-page form show the same warning. Null for an unsaved item:
-            // a link that hasn't been filled in yet isn't broken, and an
-            // element type with no element picked yet would classify as
-            // "missing" and open the editor with a warning about nothing.
+            // Why this item's link would or wouldn't work, shown at the top of the editor.
             'health' => $item->id !== null
                 ? MenuBuilder::getInstance()->linkHealth->getForItem($item)
                 : null,
-            // The dynamic-source cap belongs to the model; the editor's field
-            // shows and bounds it rather than writing the number out again.
+            // The dynamic-source cap belongs to the model; the editor's field shows and bounds it
+            // rather than writing the number out again.
             'dynamicSourceMaxLimit' => MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT,
         ] + $affordances;
 
@@ -106,8 +95,8 @@ class ItemsController extends BaseMenuBuilderController
                 'html' => $html,
                 'headHtml' => $view->getHeadHtml(),
                 'footHtml' => $view->getBodyHtml(),
-                // The slide-out's Save button is the one control it renders
-                // itself, so it can't be hidden by the template above.
+                // The slide-out's Save button is the one control it renders itself, so it can't be
+                // hidden by the template above.
                 'canSave' => $affordances['canEdit'],
             ]);
         }
@@ -116,11 +105,8 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * What to call an item on screen. A title is optional (element-linked
-     * items inherit one, separators never have one), and an empty slide-out
-     * heading or browser tab reads as a broken screen rather than an
-     * untitled item.
-     */
+     * What to call an item on screen.
+    */
     private function itemLabel(MenuBuilderItem $item): string
     {
         $title = trim((string)$item->title);
@@ -141,10 +127,8 @@ class ItemsController extends BaseMenuBuilderController
         }
 
         // An existing item's groupId is fixed at creation (see
-        // MenuBuilderItemService::isGroupChangeAllowed()) — the posted
-        // `groupId` is a hidden field and must not be trusted to move an
-        // existing item into a different group. Only a brand new item may
-        // pick its group from the posted value.
+        // MenuBuilderItemService::isGroupChangeAllowed()) — the posted `groupId` is a hidden
+        // field and must not be trusted to move an existing item into a different group.
         $postedGroupId = (int)$request->getRequiredBodyParam('groupId');
         $item->groupId = $item->id !== null ? $item->groupId : $postedGroupId;
         $parentId = $request->getBodyParam('parentId');
@@ -152,10 +136,9 @@ class ItemsController extends BaseMenuBuilderController
         $item->type = $this->bodyString('type', MenuBuilderItem::TYPE_URL);
         $item->title = $this->bodyString('title');
         $item->handle = $this->bodyString('handle') ?: null;
-        // The "Enabled" toggle only exists once an item can be saved a second
-        // time (basic-only new-item forms don't show it — see the isNew
-        // handling in items/_fields.twig), so a missing param means "leave
-        // the default" rather than "explicitly disabled".
+        // The "Enabled" toggle only exists once an item can be saved a second time (basic-only
+        // new-item forms don't show it — see the isNew handling in items/_fields.twig), so a
+        // missing param means "leave the default" rather than "explicitly disabled".
         $item->enabled = (bool)$request->getBodyParam('enabled', $item->id === null);
         $item->clickable = (bool)$request->getBodyParam('clickable', false);
 
@@ -171,16 +154,15 @@ class ItemsController extends BaseMenuBuilderController
         $item->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $item->ariaLabel = $this->bodyString('ariaLabel') ?: null;
         $item->titleAttribute = $this->bodyString('titleAttribute') ?: null;
-        // Three inputs, one column: the icon source select decides which of
-        // the two fields is read (see IconHelper::composeFromForm()), so a
-        // stale value left in the hidden one can't win.
+        // Three inputs, one column: the icon source select decides which of the two fields is read
+        // (see IconHelper::composeFromForm()), so a stale value left in the hidden one can't win.
         $item->icon = IconHelper::composeFromForm(
             $this->bodyString('iconSource'),
             $this->bodyString('icon'),
             $request->getBodyParam('iconAsset'),
         );
-        // Text only — the badge's style is a closed enum and rides in
-        // metadata with the other presentation config (see buildMetadata()).
+        // Text only — the badge's style is a closed enum and rides in metadata with the other
+        // presentation config (see buildMetadata()).
         $item->badge = BadgeHelper::normalizeText($this->bodyString('badge'));
         $item->description = $this->bodyString('description') ?: null;
 
@@ -194,14 +176,10 @@ class ItemsController extends BaseMenuBuilderController
         $item->visibility = $this->buildVisibilityRules($this->bodyArray('visibility'));
         $item->metadata = $this->buildMetadata($request, $item->type);
 
-        // Custom field content is Craft's to read off the request: the
-        // fields in the menu's layout own their own input names, their own
-        // normalization and their own validation, so there is no allowlist
-        // for this plugin to keep — which is precisely why an arbitrary
-        // `fields[...]` key can't inject anything. A field the layout does
-        // not contain is ignored by setFieldValuesFromRequest(), and the
-        // element then validates every value it did accept
-        // (MenuBuilderItemContentService::validate()).
+        // Custom field content is Craft's to read off the request: the fields in the menu's layout
+        // own their own input names, their own normalization and their own validation, so there is
+        // no allowlist for this plugin to keep — which is precisely why an arbitrary
+        // `fields[...]` key can't inject anything.
         $content = $item->getContent();
 
         if ($content !== null) {
@@ -210,19 +188,17 @@ class ItemsController extends BaseMenuBuilderController
         }
 
         if (!MenuBuilder::getInstance()->items->save($item)) {
-            // asModelFailure() sets the error flash itself (and returns the
-            // field errors to the slide-out) — setting one here as well
-            // surfaced the same message twice, once as a flash and once as
-            // the notification the JS raises from the response.
+            // asModelFailure() sets the error flash itself (and returns the field errors to the
+            // slide-out) — setting one here as well surfaced the same message twice, once as a
+            // flash and once as the notification the JS raises from the response.
             return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save that menu item.'), 'item');
         }
 
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
 
-        // A flash set before this branch would sit in the session unread and
-        // then surface on the *next* full page load — the reload the
-        // slide-out triggers after saving — as a second, differently-worded
-        // notice about a save the editor had already been told about.
+        // A flash set before this branch would sit in the session unread and then surface on the
+        // *next* full page load — the reload the slide-out triggers after saving — as a second,
+        // differently-worded notice about a save the editor had already been told about.
         if ($request->getIsAjax() && $request->getAcceptsJson()) {
             return $this->asSuccess(data: ['id' => $item->id, 'title' => $item->title]);
         }
@@ -286,18 +262,8 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * Drag-and-drop / keyboard reorder endpoint. Body:
-     * `groupId`, `itemId`, `newParentId` (nullable), `siblingIds` (ordered array
-     * including itemId, for the new parent).
-     *
-     * One service call, therefore one transaction: reparenting and
-     * renumbering the affected sibling sets can't half-commit and leave the
-     * tree in a state neither editor asked for. Depth, circularity and
-     * cross-group are all re-validated server-side regardless of the
-     * client's own checks, and the posted `groupId` is only ever used to
-     * confirm the client is looking at the menu it thinks it is — never to
-     * decide which group the item ends up in.
-     */
+     * Drag-and-drop / keyboard reorder endpoint.
+    */
     public function actionReorder(): Response
     {
         $this->requirePostRequest();
@@ -317,11 +283,7 @@ class ItemsController extends BaseMenuBuilderController
             throw new NotFoundHttpException('Menu item not found.');
         }
 
-        // An item's group is fixed at creation. A posted groupId that
-        // disagrees means the client is acting on a stale page (the item was
-        // moved or the menu reloaded) or the payload was tampered with —
-        // either way, refuse rather than silently reordering against the
-        // wrong menu's sibling set.
+        // An item's group is fixed at creation.
         if ($item->groupId !== $groupId) {
             return $this->asFailure(Craft::t('menu-builder', 'A navigation menu item cannot be moved to a different navigation group.'));
         }
@@ -339,11 +301,8 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * Bulk action endpoint. Body: `op` (enable|disable|delete),
-     * `ids[]`. Every posted ID is still individually validated/permission-
-     * scoped by MenuBuilderItemService (see beforeAction()'s per-op
-     * permission mapping) — the CP's multi-select checkboxes are UX only.
-     */
+     * Bulk action endpoint.
+    */
     public function actionBulk(): Response
     {
         $this->requirePostRequest();
@@ -384,15 +343,8 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * The two checkboxes plus the free-text `rel` field, merged into one
-     * attribute value. `array_unique()` over the raw parts wasn't enough:
-     * the custom field holds a whole (possibly multi-token, possibly
-     * differently-cased) rel value, so a `nofollow` checkbox alongside a
-     * typed "nofollow noreferrer" needs token-level, case-insensitive
-     * deduping — the same merge
-     * {@see LinkAttributeHelper::mergeRelForTarget()} performs at render
-     * time, so the stored value and the rendered one agree.
-     */
+     * The two checkboxes plus the free-text `rel` field, merged into one attribute value.
+    */
     private function buildRel(\craft\web\Request $request): ?string
     {
         return LinkAttributeHelper::combineRel([
@@ -403,11 +355,10 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * Builds the visibility rule-config array from the edit form's discrete
-     * fields (checkboxes/selects) rather than expecting the editor to author
-     * JSON directly — see MenuBuilderVisibilityService for how each rule type
-     * is evaluated.
-     */
+     * Builds the visibility rule-config array from the edit form's discrete fields
+     * (checkboxes/selects) rather than expecting the editor to author JSON directly — see
+     * MenuBuilderVisibilityService for how each rule type is evaluated.
+    */
     private function buildVisibilityRules(array $posted): array
     {
         $rules = [];
@@ -420,10 +371,9 @@ class ItemsController extends BaseMenuBuilderController
             $rules[] = ['type' => 'loggedOut'];
         }
 
-        // Checkbox-select groups post a zero-value padding field alongside
-        // the checked `[]` entries so the key always exists — when nothing
-        // is checked, that padding value arrives as a bare string instead
-        // of an array (seen from the AJAX slide-out's own request builder).
+        // Checkbox-select groups post a zero-value padding field alongside the checked `[]` entries
+        // so the key always exists — when nothing is checked, that padding value arrives as a
+        // bare string instead of an array (seen from the AJAX slide-out's own request builder).
         $userGroups = array_filter(array_map('intval', is_array($posted['userGroups'] ?? null) ? $posted['userGroups'] : []));
         if (!empty($userGroups)) {
             $rules[] = ['type' => 'userGroup', 'groupIds' => array_values($userGroups)];
@@ -434,9 +384,9 @@ class ItemsController extends BaseMenuBuilderController
             $rules[] = ['type' => 'site', 'siteIds' => array_values($sites)];
         }
 
-        // Scalars only: a tampered `visibility[dateStart][]=x` post would
-        // otherwise put an array into a rule config (and `explode()` on the
-        // environments field would be an outright TypeError).
+        // Scalars only: a tampered `visibility[dateStart][]=x` post would otherwise put an array
+        // into a rule config (and `explode()` on the environments field would be an outright
+        // TypeError).
         $dateStart = $this->scalarOrNull($posted['dateStart'] ?? null);
         $dateEnd = $this->scalarOrNull($posted['dateEnd'] ?? null);
 
@@ -456,20 +406,20 @@ class ItemsController extends BaseMenuBuilderController
         return $rules;
     }
 
-    /** Non-empty scalar POST values only — anything else (array, null, '') becomes null. */
+    /**
+     * Non-empty scalar POST values only — anything else (array, null, '') becomes null.
+    */
     private function scalarOrNull(mixed $value): ?string
     {
         return is_scalar($value) && (string)$value !== '' ? (string)$value : null;
     }
 
     /**
-     * Builds the `metadata` bag from discrete, explicitly-named POST fields
-     * rather than trusting a raw posted `metadata` array
-     * directly — an uncontrolled `metadata[...]` POST key would otherwise
-     * let a tampered request inject arbitrary data into a bag that's
-     * rendered/read by Twig. `MenuBuilderItem::validate*()` re-validates all
-     * of this server-side regardless.
-     */
+     * Builds the `metadata` bag from discrete, explicitly-named POST fields rather than trusting a
+     * raw posted `metadata` array directly — an uncontrolled `metadata[...]` POST key would
+     * otherwise let a tampered request inject arbitrary data into a bag that's rendered/read by
+     * Twig.
+    */
     private function buildMetadata(\craft\web\Request $request, string $itemType): array
     {
         $metadata = [];
@@ -479,9 +429,8 @@ class ItemsController extends BaseMenuBuilderController
             $metadata['megaMenu'] = ['enabled' => true, 'columns' => max(1, min(6, $columns))];
         }
 
-        // Only stored alongside actual badge text: a style left behind by a
-        // cleared badge would otherwise sit in metadata forever, and come
-        // back the next time the editor typed a badge.
+        // Only stored alongside actual badge text: a style left behind by a cleared badge would
+        // otherwise sit in metadata forever, and come back the next time the editor typed a badge.
         $badgeStyle = BadgeHelper::style($this->bodyString('badgeStyle'));
 
         if ($badgeStyle !== null && BadgeHelper::hasBadge($this->bodyString('badge'))) {
@@ -493,10 +442,8 @@ class ItemsController extends BaseMenuBuilderController
             $metadata['megaMenuColumn'] = max(1, min(6, (int)$column));
         }
 
-        // Four discrete fields, one bag key, and nothing stored when they
-        // are all at their defaults — see MobileHelper::fromForm(). An item
-        // nobody has configured for mobile therefore carries no `mobile`
-        // key at all, which is what keeps "empty means unconfigured" true.
+        // Four discrete fields, one bag key, and nothing stored when they are all at their defaults
+        // — see MobileHelper::fromForm().
         $mobile = MobileHelper::fromForm(
             $this->bodyString('mobileVisibility'),
             $request->getBodyParam('mobileOrder'),

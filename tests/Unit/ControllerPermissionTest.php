@@ -13,27 +13,18 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderItemService;
 
 /**
  * Server-side authorization for every control-panel action.
- *
- * The permission decision is pure static logic (requiredPermissionForAction())
- * deliberately factored out of beforeAction() so it can be checked without a
- * booted Craft app or request. The CP hides buttons a user cannot use; these
- * mappings are what a direct POST is actually checked against.
- */
+*/
 class ControllerPermissionTest extends TestCase
 {
     /**
-     * The only two actions in the plugin that render rather than write, and
-     * so the only two that may legitimately answer a GET.
-     */
+     * The only two actions in the plugin that render rather than write, and so the only two that
+     * may legitimately answer a GET.
+    */
     private const READ_ONLY_ACTIONS = ['index', 'edit'];
 
-    // ---------------------------------------------------------------------
     // One shared permission gate, inherited by every controller
-    // ---------------------------------------------------------------------
 
-    /**
-     * @return array<string,array{class-string}>
-     */
+    /** @return array<string,array{class-string}> */
     public static function controllerProvider(): array
     {
         return [
@@ -47,7 +38,7 @@ class ControllerPermissionTest extends TestCase
     /**
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testEveryControllerInheritsTheSharedGate(string $controllerClass): void
     {
         $this->assertTrue(
@@ -59,7 +50,7 @@ class ControllerPermissionTest extends TestCase
     /**
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testNoControllerDeclaresItsOwnBeforeAction(string $controllerClass): void
     {
         $declaringClass = (new \ReflectionMethod($controllerClass, 'beforeAction'))->getDeclaringClass()->getName();
@@ -74,7 +65,7 @@ class ControllerPermissionTest extends TestCase
     /**
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testEveryControllerDeclaresWhichPermissionAnActionNeeds(string $controllerClass): void
     {
         $declaringClass = (new \ReflectionMethod($controllerClass, 'requiredPermission'))->getDeclaringClass()->getName();
@@ -82,25 +73,24 @@ class ControllerPermissionTest extends TestCase
         $this->assertSame($declaringClass, $controllerClass, "$controllerClass must declare its own permission mapping.");
     }
 
-    /** The dashboard renders trees and nothing else, so `view` covers all of it. */
+    /**
+     * The dashboard renders trees and nothing else, so `view` covers all of it.
+    */
     public function testDashboardActionsRequireView(): void
     {
         $this->assertSame('menuBuilder:view', DashboardController::requiredPermissionForAction('index'));
     }
 
     /**
-     * Preview renders a simulated tree and writes nothing at all (see
-     * MenuBuilderPreviewTest), so it asks for no more than the dashboard
-     * the editor reached it from.
-     */
+     * Preview renders a simulated tree and writes nothing at all (see MenuBuilderPreviewTest), so
+     * it asks for no more than the dashboard the editor reached it from.
+    */
     public function testPreviewActionsRequireView(): void
     {
         $this->assertSame('menuBuilder:view', PreviewController::requiredPermissionForAction('index'));
     }
 
-    // ---------------------------------------------------------------------
     // Which permission each group / item action requires
-    // ---------------------------------------------------------------------
 
     public function testGroupsIndexAndEditRequireView(): void
     {
@@ -115,10 +105,9 @@ class ControllerPermissionTest extends TestCase
 
     public function testGroupsSaveAndDuplicateRequireManageSettings(): void
     {
-        // Groups are structural/settings-level entities, not content — see
-        // MenuBuilderGroup's docblock — so mutating one (whether creating,
-        // editing, or duplicating) is gated by manageSettings rather than
-        // the item-level create/edit permissions.
+        // Groups are structural/settings-level entities, not content — see MenuBuilderGroup's
+        // docblock — so mutating one (whether creating, editing, or duplicating) is gated by
+        // manageSettings rather than the item-level create/edit permissions.
         $this->assertSame('menuBuilder:manageSettings', GroupsController::requiredPermissionForAction('save'));
         $this->assertSame('menuBuilder:manageSettings', GroupsController::requiredPermissionForAction('duplicate'));
     }
@@ -158,9 +147,7 @@ class ControllerPermissionTest extends TestCase
         $this->assertFalse(MenuBuilderItemService::isGroupChangeAllowed(5, 6));
     }
 
-    // ---------------------------------------------------------------------
     // Bulk item actions take the permission of the operation they run
-    // ---------------------------------------------------------------------
 
     public function testBulkDeleteRequiresDeletePermission(): void
     {
@@ -173,22 +160,15 @@ class ControllerPermissionTest extends TestCase
         $this->assertSame('menuBuilder:edit', ItemsController::requiredPermissionForAction('bulk', false, 'disable'));
     }
 
-    // ---------------------------------------------------------------------
     // Nothing escapes the mapping
-    // ---------------------------------------------------------------------
 
     /**
-     * Every `action*()` method a controller exposes must be answered by that
-     * controller's mapping with one of the plugin's five permissions.
-     *
-     * The gate can only be as complete as the mapping is: a new action added
-     * without a thought about permissions falls through to a `default` arm,
-     * and this is what makes that a decision someone has to have made rather
-     * than one that happened.
+     * Every `action*()` method a controller exposes must be answered by that controller's mapping
+     * with one of the plugin's five permissions.
      *
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testEveryActionMethodIsAnsweredByTheMapping(string $controllerClass): void
     {
         $actions = self::actionIdsOf($controllerClass);
@@ -205,15 +185,11 @@ class ControllerPermissionTest extends TestCase
     }
 
     /**
-     * The `default` arm of a mutating controller's mapping must not be
-     * `view`. Both mutating controllers route unrecognised action ids
-     * through a default, so that default is the permission any future action
-     * silently inherits — it has to be a writing-level one, or adding an
-     * action would quietly open it to every reader.
+     * The `default` arm of a mutating controller's mapping must not be `view`.
      *
      * @dataProvider mutatingControllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testAnUnrecognisedActionDoesNotFallThroughToView(string $controllerClass): void
     {
         $this->assertNotSame(
@@ -223,9 +199,7 @@ class ControllerPermissionTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string,array{class-string}>
-     */
+    /** @return array<string,array{class-string}> */
     public static function mutatingControllerProvider(): array
     {
         return [
@@ -234,19 +208,15 @@ class ControllerPermissionTest extends TestCase
         ];
     }
 
-    // ---------------------------------------------------------------------
     // Guards the gate depends on, and that no controller may weaken
-    // ---------------------------------------------------------------------
 
     /**
-     * CSRF protection is Craft's, and stays Craft's: it is on by default and
-     * no controller here turns it off. ControllerAuthorizationTest proves a
-     * tokenless POST is actually refused; this is the cheap check that keeps
-     * a `false` from appearing anywhere in the first place.
+     * CSRF protection is Craft's, and stays Craft's: it is on by default and no controller here
+     * turns it off.
      *
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testNoControllerDisablesCsrfValidation(string $controllerClass): void
     {
         $default = (new \ReflectionClass($controllerClass))->getDefaultProperties()['enableCsrfValidation'] ?? null;
@@ -260,19 +230,17 @@ class ControllerPermissionTest extends TestCase
     }
 
     /**
-     * No action of any controller may be reached anonymously. Craft reads
-     * `$allowAnonymous` before this plugin's gate runs, so a non-false value
-     * here would skip Craft's own login and `accessCp` checks entirely.
+     * No action of any controller may be reached anonymously.
      *
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testNoActionIsAnonymouslyAccessible(string $controllerClass): void
     {
         $default = (new \ReflectionClass($controllerClass))->getDefaultProperties()['allowAnonymous'] ?? null;
 
-        // An array would be a per-action allowlist, which is the shape that
-        // could open one action while leaving the rest closed.
+        // An array would be a per-action allowlist, which is the shape that could open one action
+        // while leaving the rest closed.
         $this->assertIsNotArray($default, "$controllerClass must not allow anonymous access per action.");
         $this->assertSame(
             Controller::ALLOW_ANONYMOUS_NEVER,
@@ -282,18 +250,11 @@ class ControllerPermissionTest extends TestCase
     }
 
     /**
-     * Every action that writes must refuse a GET. `requirePostRequest()` is
-     * what makes a mutation unreachable by a link, an image tag or a
-     * prefetch — none of which carry a CSRF token, but all of which arrive
-     * with the victim's session.
-     *
-     * Read-only actions are exempt by name: `index` and `edit` render
-     * screens, and are the only two actions in the plugin that legitimately
-     * answer a GET.
+     * Every action that writes must refuse a GET.
      *
      * @dataProvider controllerProvider
      * @param class-string $controllerClass
-     */
+    */
     public function testEveryWritingActionRequiresPost(string $controllerClass): void
     {
         $writing = array_values(array_filter(
@@ -302,9 +263,7 @@ class ControllerPermissionTest extends TestCase
         ));
 
         if ($writing === []) {
-            // A read-only controller. Asserted rather than skipped, so a
-            // mutation added to the dashboard or the preview screen shows up
-            // as a failure here instead of as an empty test.
+            // A read-only controller.
             $this->assertSame(
                 [],
                 array_diff(self::actionIdsOf($controllerClass), self::READ_ONLY_ACTIONS),
@@ -323,25 +282,21 @@ class ControllerPermissionTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Helpers
-    // ---------------------------------------------------------------------
 
     /**
-     * The action ids a controller exposes, derived from its methods rather
-     * than listed, so an action added later is included without anyone
-     * having to remember to add it here.
+     * The action ids a controller exposes, derived from its methods rather than listed, so an
+     * action added later is included without anyone having to remember to add it here.
      *
      * @param class-string $controllerClass
      * @return string[]
-     */
+    */
     private static function actionIdsOf(string $controllerClass): array
     {
         $ids = [];
 
         foreach ((new \ReflectionClass($controllerClass))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-            // `action` followed by a capital: Yii's own inherited actions()
-            // is not an action.
+            // `action` followed by a capital: Yii's own inherited actions() is not an action.
             if (preg_match('/^action[A-Z]/', $method->getName())) {
                 $ids[] = lcfirst(substr($method->getName(), 6));
             }
@@ -351,11 +306,11 @@ class ControllerPermissionTest extends TestCase
     }
 
     /**
-     * Each controller's mapping takes the arguments its own decision needs;
-     * this calls whichever signature the class declares.
+     * Each controller's mapping takes the arguments its own decision needs; this calls whichever
+     * signature the class declares.
      *
      * @param class-string $controllerClass
-     */
+    */
     private static function requiredPermission(string $controllerClass, string $actionId): string
     {
         $method = new \ReflectionMethod($controllerClass, 'requiredPermissionForAction');

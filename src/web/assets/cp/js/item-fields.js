@@ -5,22 +5,14 @@
 
     /**
      * Drives the item editor's type-contingent field visibility.
-     * Runs identically whether the fields markup came from a full page load
-     * or was injected into a slide-out, since both paths call this on the
-     * same `[data-menu-builder-item-fields]` root.
-     */
+    */
     window.MenuBuilder = window.MenuBuilder || {};
 
     /**
-     * Several sibling sections deliberately share one field name (`customUrl`
-     * for url/anchor, `elementId` for entry/category/asset, `dynamicSourceId`
-     * for the three dynamic source pickers) since only one is ever meant to
-     * apply at a time. Hiding a section isn't enough on its own — an
-     * unrelated section's stale/blank value would still serialize and
-     * silently clobber the visible one's on submit. Disabling excludes a
-     * field from both serializeArray() and a native form submission, so this
-     * must run for every visibility toggle, not just the type sections.
-     */
+     * Several sibling sections deliberately share one field name (`customUrl` for url/anchor,
+     * `elementId` for entry/category/asset, `dynamicSourceId` for the three dynamic source pickers)
+     * since only one is ever meant to apply at a time.
+    */
     window.MenuBuilder.setFieldsDisabled = function(section, disabled) {
         section.querySelectorAll('input, select, textarea').forEach(function(field) {
             field.disabled = disabled;
@@ -28,18 +20,9 @@
     };
 
     /**
-     * Shows the one `[data-dynamic-source]` picker matching `activeSourceType`
-     * and disables the rest. Pass `null` when the dynamic section itself isn't
-     * showing, which disables all of them.
-     *
-     * The full item editor and the dashboard's quick-add panel render the same
-     * `data-dynamic-source` hook over the same section / category-group /
-     * volume pickers, so they share this rather than each deciding for
-     * themselves which one may post `dynamicSourceId`. Nothing about a dynamic
-     * source is *decided* here — sourceType, sourceId, limit and orderBy are
-     * validated by MenuBuilderItem and normalized by
-     * MenuBuilderDynamicNavigationService, which remain the only authorities.
-     */
+     * Shows the one `[data-dynamic-source]` picker matching `activeSourceType` and disables the
+     * rest.
+    */
     window.MenuBuilder.syncDynamicSourcePickers = function(root, activeSourceType) {
         root.querySelectorAll('[data-dynamic-source]').forEach(function(wrap) {
             var visible = activeSourceType !== null &&
@@ -51,10 +34,8 @@
     };
 
     /**
-     * Turns the editor's long stack of settings into scannable, independently
-     * collapsible cards. The original headings and content remain in the DOM,
-     * so the form is still completely usable if this enhancement never runs.
-     */
+     * Turns the editor's long stack of settings into scannable, independently collapsible cards.
+    */
     function initSectionCards(root) {
         root.querySelectorAll('.menu-builder-fieldset > [data-mb-section]').forEach(function(section, index) {
             if (section.dataset.mbSectionInitialized) {
@@ -96,8 +77,7 @@
             heading.textContent = '';
             heading.appendChild(button);
 
-            // Start with the essential link settings open. Any section with a
-            // server-side validation error also opens so the error isn't hidden.
+            // Start with the essential link settings open.
             var fieldset = section.closest('.menu-builder-fieldset');
             var expanded = section.dataset.mbSection === 'basic' ||
                 !!section.querySelector('.errors, .error') ||
@@ -154,9 +134,8 @@
                 setSectionDisabled(section, !visible);
             });
 
-            // Must run after the loop above: the dynamic section's own
-            // re-enable would otherwise switch all three source pickers back
-            // on, and they all post `dynamicSourceId`.
+            // Must run after the loop above: the dynamic section's own re-enable would otherwise
+            // switch all three source pickers back on, and they all post `dynamicSourceId`.
             updateDynamicSource();
         }
 
@@ -188,12 +167,8 @@
         }
 
         /**
-         * The icon source select owns which of the two icon inputs is
-         * shown. The hidden one is disabled as well as hidden for the same
-         * reason the link sections are: a stale value left in it would
-         * still serialize, and the server would have two candidate icons
-         * for one column.
-         */
+         * The icon source select owns which of the two icon inputs is shown.
+        */
         function updateIconSource() {
             if (!iconSourceField || !iconClassWrap || !iconAssetWrap) {
                 return;

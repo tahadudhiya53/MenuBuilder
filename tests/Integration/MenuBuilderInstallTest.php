@@ -11,31 +11,15 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
  * The install migration, run for real.
- *
- * Until this existed, `src/migrations/Install.php` was only ever asserted
- * against as *text* — `file_get_contents()` plus `assertStringContainsString()`
- * — which cannot tell you whether the schema it describes actually builds,
- * whether the foreign keys cascade, or whether a second `safeUp()` on an
- * already-installed database is safe. Those are the three things an install
- * or an upgrade can get wrong, so they are asserted here against a real
- * MySQL schema.
- *
- * ## Why a table prefix
- *
- * The migration's table names are fixed, so running `safeDown()` against the
- * suite's own tables would drop the ones every other integration class is
- * using. This class therefore points a second `craft\db\Connection` at the
- * same database with a **table prefix of its own**, so `{{%menubuilder_groups}}`
- * resolves to a throwaway copy and the shared fixture is never touched. A
- * prefix rather than a second schema because the test database user is not
- * assumed to hold `CREATE DATABASE`.
- */
+*/
 class MenuBuilderInstallTest extends TestCase
 {
     private const GROUPS = '{{%menubuilder_groups}}';
     private const ITEMS = '{{%menubuilder_items}}';
 
-    /** Keeps this class's copy of the schema clear of the suite's own tables. */
+    /**
+     * Keeps this class's copy of the schema clear of the suite's own tables.
+    */
     private const PREFIX = 'mbinstall_';
 
     private static Connection $db;
@@ -44,9 +28,9 @@ class MenuBuilderInstallTest extends TestCase
     {
         parent::setUpBeforeClass();
 
-        // The app's own database config, so this connection is a real
-        // craft\db\Connection with Craft's command and schema classes — the
-        // migration calls `dropTableIfExists()`, which is Craft's, not Yii's.
+        // The app's own database config, so this connection is a real craft\db\Connection with
+        // Craft's command and schema classes — the migration calls `dropTableIfExists()`, which
+        // is Craft's, not Yii's.
         $config = App::dbConfig();
         $config['tablePrefix'] = self::PREFIX;
 
@@ -67,8 +51,8 @@ class MenuBuilderInstallTest extends TestCase
     {
         parent::setUp();
 
-        // Every test starts from an empty schema and installs into it, so no
-        // test can depend on what another one left behind.
+        // Every test starts from an empty schema and installs into it, so no test can depend on
+        // what another one left behind.
         $this->dropEverything();
         $this->assertTrue($this->migration()->safeUp());
         self::$db->schema->refresh();
@@ -91,9 +75,7 @@ class MenuBuilderInstallTest extends TestCase
         self::$db->schema->refresh();
     }
 
-    // ---------------------------------------------------------------------
     // Fresh install
-    // ---------------------------------------------------------------------
 
     public function testAFreshInstallCreatesBothTablesAndNothingElse(): void
     {
@@ -104,12 +86,10 @@ class MenuBuilderInstallTest extends TestCase
     }
 
     /**
-     * Every attribute the group model persists needs a column to persist
-     * into. The old test read this off the migration's source text; this one
-     * asks the database what it built.
+     * Every attribute the group model persists needs a column to persist into.
      *
      * @dataProvider groupColumnProvider
-     */
+    */
     public function testEveryGroupColumnExists(string $column): void
     {
         $this->assertArrayHasKey(
@@ -139,12 +119,11 @@ class MenuBuilderInstallTest extends TestCase
     }
 
     /**
-     * Both JSON bags are read back and decoded on every load, so a NULL in
-     * either is a decode error rather than an empty bag. The column, not the
-     * model, is what has to refuse it.
+     * Both JSON bags are read back and decoded on every load, so a NULL in either is a decode error
+     * rather than an empty bag.
      *
      * @dataProvider notNullBagProvider
-     */
+    */
     public function testTheJsonBagsCannotBeNull(string $table, string $column): void
     {
         $this->assertFalse(
@@ -188,10 +167,9 @@ class MenuBuilderInstallTest extends TestCase
     }
 
     /**
-     * The service refuses a duplicate handle before writing, but a race
-     * between two saves can only be lost by the database — so uniqueness has
-     * to be the database's rule as well.
-     */
+     * The service refuses a duplicate handle before writing, but a race between two saves can only
+     * be lost by the database — so uniqueness has to be the database's rule as well.
+    */
     public function testTheGroupHandleIsUniqueInTheDatabase(): void
     {
         $this->insertGroup('main');
@@ -201,17 +179,11 @@ class MenuBuilderInstallTest extends TestCase
     }
 
     /**
-     * The tree read orders by `(groupId, parentId, sortOrder)` and the health
-     * check looks items up by `elementId`; both are index scans or table
-     * scans depending only on this.
-     *
-     * `craft\db\mysql\Schema::findIndexes()` is not usable here — it reads
-     * the *application's* connection rather than the one it is called on, so
-     * it would report the shared fixture's tables. `SHOW INDEX` against this
-     * connection is the honest question.
+     * The tree read orders by `(groupId, parentId, sortOrder)` and the health check looks items up
+     * by `elementId`; both are index scans or table scans depending only on this.
      *
      * @dataProvider indexProvider
-     */
+    */
     public function testTheIndexesTheReadPathsDependOnExist(string $table, array $columns): void
     {
         $this->assertContains($columns, $this->indexedColumnSets($table));
@@ -225,15 +197,13 @@ class MenuBuilderInstallTest extends TestCase
             'item hierarchy' => [self::ITEMS, ['groupId', 'parentId', 'sortOrder']],
             'item handle' => [self::ITEMS, ['groupId', 'handle']],
             'item element' => [self::ITEMS, ['elementId']],
-            // Unique: a content element belongs to exactly one item, so two
-            // items sharing one would mean two items sharing field values.
+            // Unique: a content element belongs to exactly one item, so two items sharing one would
+            // mean two items sharing field values.
             'item content' => [self::ITEMS, ['contentId']],
         ];
     }
 
-    // ---------------------------------------------------------------------
     // Referential integrity — the part a text assertion cannot check
-    // ---------------------------------------------------------------------
 
     public function testDeletingAGroupTakesItsItemsWithIt(): void
     {
@@ -272,17 +242,14 @@ class MenuBuilderInstallTest extends TestCase
         $this->insertItem($groupId, 'Orphan', 999999);
     }
 
-    // ---------------------------------------------------------------------
     // Upgrade / re-run
-    // ---------------------------------------------------------------------
 
     /**
-     * There is one migration and one schema version, so "upgrade" today means
-     * exactly this: `safeUp()` running again over a database that already has
-     * the tables — which is what happens when the plugin's schema version is
-     * bumped for reasons that need no new columns, and what the `tableExists`
-     * guards in the migration exist for. It must neither fail nor touch data.
-     */
+     * There is one migration and one schema version, so "upgrade" today means exactly this:
+     * `safeUp()` running again over a database that already has the tables — which is what
+     * happens when the plugin's schema version is bumped for reasons that need no new columns, and
+     * what the `tableExists` guards in the migration exist for.
+    */
     public function testRunningTheInstallAgainKeepsTheSchemaAndTheData(): void
     {
         $groupId = $this->insertGroup('main');
@@ -300,8 +267,8 @@ class MenuBuilderInstallTest extends TestCase
 
     public function testAHalfInstalledDatabaseIsCompleted(): void
     {
-        // The groups table survives, the items table does not — the state a
-        // migration that failed part-way through leaves behind.
+        // The groups table survives, the items table does not — the state a migration that failed
+        // part-way through leaves behind.
         self::$db->createCommand()->dropTable(self::ITEMS)->execute();
         self::$db->schema->refresh();
 
@@ -311,9 +278,7 @@ class MenuBuilderInstallTest extends TestCase
         $this->assertNotNull(self::$db->schema->getTableSchema(self::ITEMS, true));
     }
 
-    // ---------------------------------------------------------------------
     // Uninstall
-    // ---------------------------------------------------------------------
 
     public function testUninstallDropsBothTables(): void
     {
@@ -349,26 +314,23 @@ class MenuBuilderInstallTest extends TestCase
     }
 
     /**
-     * Menu configuration is database-backed only, so an uninstall is the
-     * whole story — there is no project-config path left behind for a
-     * reinstall to replay.
-     */
+     * Menu configuration is database-backed only, so an uninstall is the whole story — there is
+     * no project-config path left behind for a reinstall to replay.
+    */
     public function testUninstallLeavesNoProjectConfigBehind(): void
     {
         $this->assertNull(Craft::$app->getProjectConfig()->get('menuBuilder'));
         $this->assertNull(Craft::$app->getProjectConfig()->get('menu-builder'));
     }
 
-    // ---------------------------------------------------------------------
     // Helpers
-    // ---------------------------------------------------------------------
 
     /**
-     * The tables this class owns, so the shared fixture's identically-named
-     * ones are never counted, asserted against, or dropped.
+     * The tables this class owns, so the shared fixture's identically-named ones are never counted,
+     * asserted against, or dropped.
      *
      * @return string[]
-     */
+    */
     private static function ownTables(): array
     {
         $tables = array_values(array_filter(
@@ -384,7 +346,7 @@ class MenuBuilderInstallTest extends TestCase
      * The column sets covered by an index on the given table, in index order.
      *
      * @return array<int,string[]>
-     */
+    */
     private function indexedColumnSets(string $table): array
     {
         $raw = self::$db->schema->getRawTableName($table);

@@ -15,16 +15,8 @@ use Tahadudhiya\MenuBuilder\linktypes\AnchorLinkResolver;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 
 /**
- * A single navigation node. `clickable` is an explicit, independent flag —
- * never inferred from whether a URL/element is set, so an editor can keep a
- * resolvable link on an item and still render it as a plain label.
- *
- * It is not, however, a way to *add* a link to a structural type: for
- * `nonclickable` and `separator`, {@see isLinkable()} is authoritative and
- * NonClickableLinkResolver never produces a URL regardless of `clickable` or
- * a leftover `customUrl` — and the editor exposes no link field for them
- * (see items/_fields.twig).
- */
+ * A single navigation node.
+*/
 class MenuBuilderItem extends Model
 {
     public const TYPE_ENTRY = 'entry';
@@ -47,16 +39,25 @@ class MenuBuilderItem extends Model
         self::TYPE_DYNAMIC,
     ];
 
-    /** Element sources a `dynamic` item's children can be pulled from. */
+    /**
+     * Element sources a `dynamic` item's children can be pulled from.
+    */
     public const DYNAMIC_SOURCE_TYPES = ['entries', 'categories', 'assets'];
 
-    /** Hard server-side cap, regardless of what's stored in metadata — see MenuBuilderDynamicNavigationService. */
+    /**
+     * Hard server-side cap, regardless of what's stored in metadata — see
+     * MenuBuilderDynamicNavigationService.
+    */
     public const DYNAMIC_SOURCE_MAX_LIMIT = 50;
 
-    /** Whitelisted sort orders for a dynamic source query — never raw editor-supplied SQL. */
+    /**
+     * Whitelisted sort orders for a dynamic source query — never raw editor-supplied SQL.
+    */
     public const DYNAMIC_SOURCE_ORDER_BY = ['dateCreated desc', 'dateCreated asc', 'title asc', 'title desc'];
 
-    /** Types that reference a Craft element by ID. */
+    /**
+     * Types that reference a Craft element by ID.
+    */
     public const ELEMENT_TYPES = [self::TYPE_ENTRY, self::TYPE_CATEGORY, self::TYPE_ASSET];
 
     public const FALLBACK_HIDE = 'hide';
@@ -78,7 +79,9 @@ class MenuBuilderItem extends Model
     public bool $enabled = true;
     public int $sortOrder = 0;
 
-    /** Explicit editor choice — see class docblock. */
+    /**
+     * Explicit editor choice — see class docblock.
+    */
     public bool $clickable = true;
 
     public ?int $elementId = null;
@@ -103,27 +106,24 @@ class MenuBuilderItem extends Model
     public string $fallbackBehavior = self::FALLBACK_HIDE;
     public ?string $fallbackUrl = null;
 
-    /** @var array<int,array<string,mixed>> Visibility rule configs, see MenuBuilderVisibilityService. */
+    /**
+     * @var array<int,array<string,mixed>> Visibility rule configs, see MenuBuilderVisibilityService.
+    */
     public array $visibility = [];
 
-    /** @var array<string,mixed> Open-ended extension point (e.g. future mega-menu column data). */
+    /**
+     * @var array<string,mixed> Open-ended extension point (e.g. future mega-menu column data).
+    */
     public array $metadata = [];
 
     /**
-     * @var int|null The `elements` row carrying this item's custom field
-     *      content — a {@see MenuBuilderItemContent}.
-     *
-     * Null until the owning menu has a field layout with at least one field
-     * in it; {@see MenuBuilderItemService::saveContent()} creates the
-     * element on the first save after that, so an install that uses no
-     * custom fields never writes an `elements` row at all.
-     */
+     * @var int|null The `elements` row carrying this item's custom field content — a {@see MenuBuilderItemContent}. Null until the owning menu has a field layout with at least one field in it; {@see MenuBuilderItemService::saveContent()} creates the element on the first save after that, so an install that uses no custom fields never writes an `elements` row at all.
+    */
     public ?int $contentId = null;
 
     /**
-     * @var MenuBuilderItemContent|null Lazily loaded, never persisted here —
-     *      see {@see getContent()}.
-     */
+     * @var MenuBuilderItemContent|null Lazily loaded, never persisted here — see {@see getContent()}.
+    */
     private ?MenuBuilderItemContent $content = null;
     private bool $contentLoaded = false;
 
@@ -139,16 +139,13 @@ class MenuBuilderItem extends Model
         return [
             [['groupId'], 'required'],
             [['type'], 'in', 'range' => self::TYPES],
-            // Element-backed types may leave title blank to inherit the linked
-            // element's own title at render time — an explicit
-            // title, once given, is never overwritten by that fallback.
+            // Element-backed types may leave title blank to inherit the linked element's own title
+            // at render time — an explicit title, once given, is never overwritten by that
+            // fallback.
             [['title'], 'required', 'when' => fn($model) => $model->type !== self::TYPE_SEPARATOR && !in_array($model->type, self::ELEMENT_TYPES, true)],
-            // …but an element-backed item that is meant to *survive* its
-            // element (fallback "keep the item" / "use a fallback URL") has
-            // nothing left to inherit a title from once that element is
-            // gone, and would render as an empty label. The title is
-            // therefore required up front for those two behaviours; only
-            // FALLBACK_HIDE can safely leave it blank.
+            // …but an element-backed item that is meant to *survive* its element (fallback "keep
+            // the item" / "use a fallback URL") has nothing left to inherit a title from once that
+            // element is gone, and would render as an empty label.
             [
                 ['title'], 'required',
                 'message' => Craft::t('menu-builder', 'A title is required unless the item is hidden when its linked element becomes unavailable.'),
@@ -165,19 +162,17 @@ class MenuBuilderItem extends Model
             [['fallbackUrl'], 'validateFallbackUrl', 'skipOnEmpty' => false],
             [['handle'], 'validateAnchorTarget', 'skipOnEmpty' => false],
             [['htmlAttributes'], 'validateHtmlAttributes', 'skipOnEmpty' => false],
-            // `description` is the only one of these on a TEXT column; the
-            // rest are varchar(255) (see migrations/Install.php), and without
-            // a matching max here an over-long value passed validation and
-            // then failed at the database, surfacing as a save that "didn't
+            // `description` is the only one of these on a TEXT column; the rest are varchar(255)
+            // (see migrations/Install.php), and without a matching max here an over-long value
+            // passed validation and then failed at the database, surfacing as a save that "didn't
             // work" with no field error to explain it.
             [['rel', 'cssClass', 'htmlId', 'ariaLabel', 'titleAttribute', 'icon', 'badge'], 'string', 'max' => 255],
             [['description'], 'string'],
             [['htmlId'], 'validateHtmlId', 'skipOnEmpty' => true],
             [['cssClass'], 'validateCssClass', 'skipOnEmpty' => true],
             [['icon'], 'validateIcon', 'skipOnEmpty' => true],
-            // Not skipOnEmpty: clearing the badge has to normalize an
-            // all-whitespace value to null, and the style lives in
-            // `metadata`, which is validated whether or not `badge` is set.
+            // Not skipOnEmpty: clearing the badge has to normalize an all-whitespace value to null,
+            // and the style lives in `metadata`, which is validated whether or not `badge` is set.
             [['badge'], 'validateBadge', 'skipOnEmpty' => false],
             [['visibility'], 'validateVisibility', 'skipOnEmpty' => false],
             [['metadata'], 'validateMegaMenu', 'skipOnEmpty' => false],
@@ -189,12 +184,9 @@ class MenuBuilderItem extends Model
 
     /**
      * Validates `metadata['megaMenu']` (mega-menu-enabled parent config) and
-     * `metadata['megaMenuColumn']` (a child's column assignment) — same
-     * fail-closed shape-validation pattern as {@see validateVisibility()}.
-     * Both are independent of `type`: any item can be a mega-menu parent or
-     * a column member, since mega menu is presentation on top of the
-     * existing hierarchy, not a separate item type.
-     */
+     * `metadata['megaMenuColumn']` (a child's column assignment) — same fail-closed
+     * shape-validation pattern as {@see validateVisibility()}.
+    */
     public function validateMegaMenu(): void
     {
         if (!is_array($this->metadata)) {
@@ -225,20 +217,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Validates `metadata['mobile']` — the item's mobile-presentation
-     * config (see {@see MobileHelper}).
-     *
-     * Validated even though every reader of it fails closed, for the same
-     * reason `megaMenu` is: a value the editor typed and that silently
-     * becomes something else is a bug report, not a safe default. The
-     * fail-closed reads stay as the backstop for rows this validator never
-     * saw — an import, a direct database write, an older release.
-     *
-     * The order is deliberately *not* rejected for being out of range —
-     * {@see MobileHelper::order()} clamps it. A sequence hint is not worth
-     * refusing to save an item over; a value of the wrong *kind* is, because
-     * it means the form sent something nobody meant.
-     */
+     * Validates `metadata['mobile']` — the item's mobile-presentation config (see {@see
+     * MobileHelper}).
+    */
     public function validateMobile(): void
     {
         if (!is_array($this->metadata)) {
@@ -275,34 +256,37 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * The item's normalized mobile config, as the CP form and the resolver
-     * both read it — `[]` when nothing is configured.
+     * The item's normalized mobile config, as the CP form and the resolver both read it — `[]`
+     * when nothing is configured.
      *
      * @return array{visibility?: string, order?: int, collapsible?: bool, megaMenu?: string}
-     */
+    */
     public function mobileConfig(): array
     {
         return MobileHelper::config($this->metadata);
     }
 
-    /** The stored mobile visibility, defaulted — what the CP select shows. */
+    /**
+     * The stored mobile visibility, defaulted — what the CP select shows.
+    */
     public function mobileVisibility(): string
     {
         return MobileHelper::visibility($this->mobileConfig()['visibility'] ?? null);
     }
 
-    /** The stored mobile mega-menu behaviour, defaulted — what the CP select shows. */
+    /**
+     * The stored mobile mega-menu behaviour, defaulted — what the CP select shows.
+    */
     public function mobileMegaMenuBehavior(): string
     {
         return MobileHelper::megaMenuBehavior($this->mobileConfig()['megaMenu'] ?? null);
     }
 
     /**
-     * `metadata['dynamicSource']` is required and validated only for
-     * `type === TYPE_DYNAMIC` — fails closed (rejects the save) on any
-     * malformed shape rather than letting a dynamic item persist with a
-     * config `MenuBuilderDynamicNavigationService` can't safely act on.
-     */
+     * `metadata['dynamicSource']` is required and validated only for `type === TYPE_DYNAMIC` —
+     * fails closed (rejects the save) on any malformed shape rather than letting a dynamic item
+     * persist with a config `MenuBuilderDynamicNavigationService` can't safely act on.
+    */
     public function validateDynamicSource(): void
     {
         if ($this->type !== self::TYPE_DYNAMIC) {
@@ -335,20 +319,8 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * This item's custom field content element, or null when the owning
-     * menu defines no fields.
-     *
-     * Lazy and memoized: most reads of an item (the CP tree, a hierarchy
-     * check, a bulk enable) never touch its fields, and the tree view loads
-     * hundreds of items at once — fetching an element per item eagerly
-     * would be an N+1 on every one of those paths. The render path does not
-     * come through here at all; it batches through
-     * {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderItemContentService}.
-     *
-     * A menu with no field layout returns null rather than an empty element:
-     * there is nothing to edit, nothing to save, and no `elements` row to
-     * write.
-     */
+     * This item's custom field content element, or null when the owning menu defines no fields.
+    */
     public function getContent(): ?MenuBuilderItemContent
     {
         if ($this->contentLoaded) {
@@ -362,9 +334,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Replaces the loaded content element — used by the save path, which
-     * builds one from the posted form before the item itself is written.
-     */
+     * Replaces the loaded content element — used by the save path, which builds one from the
+     * posted form before the item itself is written.
+    */
     public function setContent(?MenuBuilderItemContent $content): void
     {
         $this->content = $content;
@@ -372,10 +344,8 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * One custom field value by handle, or null when the menu defines no
-     * such field. The CP editor's read; the render path's equivalent is
-     * {@see \Tahadudhiya\MenuBuilder\models\MenuBuilderNode::custom()}.
-     */
+     * One custom field value by handle, or null when the menu defines no such field.
+    */
     public function customFieldValue(string $handle): mixed
     {
         $content = $this->getContent();
@@ -388,17 +358,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Known visibility rule types and the shape of their config, kept in
-     * sync with MenuBuilderVisibilityService's built-in rules. This is
-     * defense-in-depth: the CP editor can only ever produce well-formed
-     * configs via its checkboxes/selects (ItemsController::buildVisibilityRules),
-     * but a directly-posted/imported `visibility` array must not be able to
-     * persist a malformed rule that would later fail closed in a confusing
-     * way — or, for third-party rule types registered via
-     * MenuBuilderVisibilityService::EVENT_REGISTER_VISIBILITY_RULES, an
-     * unknown type is accepted here (this model can't know about them) and
-     * left to fail closed at evaluation time.
-     */
+     * Known visibility rule types and the shape of their config, kept in sync with
+     * MenuBuilderVisibilityService's built-in rules.
+    */
     private const BUILTIN_VISIBILITY_RULE_TYPES = [
         'always', 'loggedIn', 'loggedOut', 'userGroup', 'site', 'dateRange', 'environment',
     ];
@@ -420,9 +382,8 @@ class MenuBuilderItem extends Model
 
             $type = $ruleConfig['type'];
 
-            // Only the built-in types' shapes are known here; a
-            // third-party-registered type is validated by its own rule
-            // class at evaluation time instead (fails closed if wrong).
+            // Only the built-in types' shapes are known here; a third-party-registered type is
+            // validated by its own rule class at evaluation time instead (fails closed if wrong).
             if (!in_array($type, self::BUILTIN_VISIBILITY_RULE_TYPES, true)) {
                 continue;
             }
@@ -438,16 +399,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * An empty (or absent) ID list is rejected, not treated as a no-op:
-     * UserGroupRule/SiteRule exist only to restrict, so they fail closed on
-     * one (an item with nothing to match against would silently vanish from
-     * every menu). Erroring at save time turns that into a message the
-     * editor or importer can act on, and keeps the model in agreement with
-     * how the rule actually evaluates.
-     *
-     * Shares ConfigHelper::strictIdList() with the rules themselves so the
-     * two can't drift on what counts as a valid ID.
-     */
+     * An empty (or absent) ID list is rejected, not treated as a no-op: UserGroupRule/SiteRule
+     * exist only to restrict, so they fail closed on one (an item with nothing to match against
+     * would silently vanish from every menu).
+    */
     private function validateIdListRule(array $config, string $key, int|string $index): void
     {
         if (empty(ConfigHelper::strictIdList($config[$key] ?? null))) {
@@ -456,10 +411,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Deliberately excludes bool/float — a naive `ctype_digit((string) $v)`
-     * cast would accept `true` (casts to `"1"`), silently treating a
-     * malformed boolean as ID 1.
-     */
+     * Deliberately excludes bool/float — a naive `ctype_digit((string) $v)` cast would accept
+     * `true` (casts to `"1"`), silently treating a malformed boolean as ID 1.
+    */
     private static function isValidPositiveId(mixed $value): bool
     {
         if (is_int($value)) {
@@ -469,7 +423,9 @@ class MenuBuilderItem extends Model
         return is_string($value) && $value !== '' && ctype_digit($value) && (int)$value > 0;
     }
 
-    /** An empty (or absent) list is rejected, same reasoning as {@see validateIdListRule}. */
+    /**
+     * An empty (or absent) list is rejected, same reasoning as {@see validateIdListRule}.
+    */
     private function validateStringListRule(array $config, string $key, int|string $index): void
     {
         if (empty(ConfigHelper::strictStringList($config[$key] ?? null))) {
@@ -508,12 +464,11 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * `mixed` on purpose — a directly-posted/imported `visibility` array
-     * isn't guaranteed to even contain strings here, so this is the
-     * defensive boundary: anything that isn't a well-formed date string
-     * fails closed (null) rather than risking a TypeError, matching
-     * DateRangeRule's evaluation-time behavior.
-     */
+     * `mixed` on purpose — a directly-posted/imported `visibility` array isn't guaranteed to even
+     * contain strings here, so this is the defensive boundary: anything that isn't a well-formed
+     * date string fails closed (null) rather than risking a TypeError, matching DateRangeRule's
+     * evaluation-time behavior.
+    */
     private function parseDateOrNull(mixed $value): ?\DateTime
     {
         if (!is_string($value) || trim($value) === '') {
@@ -549,12 +504,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * An anchor link resolves from the editor's anchor field (`customUrl`),
-     * falling back to `handle` — the single source of that precedence is
-     * AnchorLinkResolver::anchorTarget(), so validation can never accept a
-     * different field than the one that ends up rendered. At least one must
-     * be set.
-     */
+     * An anchor link resolves from the editor's anchor field (`customUrl`), falling back to
+     * `handle` — the single source of that precedence is AnchorLinkResolver::anchorTarget(), so
+     * validation can never accept a different field than the one that ends up rendered.
+    */
     public function validateAnchorTarget(): void
     {
         if ($this->type !== self::TYPE_ANCHOR) {
@@ -575,10 +528,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Rejects malformed fragments (quotes, whitespace, angle brackets) while
-     * staying permissive about what's otherwise a valid HTML id/fragment. A leading '#' is tolerated since the resolver
-     * strips it before use.
-     */
+     * Rejects malformed fragments (quotes, whitespace, angle brackets) while staying permissive
+     * about what's otherwise a valid HTML id/fragment.
+    */
     public static function isValidAnchorTarget(string $value): bool
     {
         $value = trim($value);
@@ -606,21 +558,14 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Schemes that execute rather than navigate. `filter_var()` is not a
-     * safety check: it rejects `javascript:alert(1)` only because that has
-     * no authority component, and happily accepts
-     * `javascript://example.com%0Aalert(1)` — which browsers do execute,
-     * the `%0A` ending the `//` comment. Since a resolved URL is rendered
-     * straight into `href` (see `_macros/tree.twig`), where Twig's escaping
-     * stops injection but not scheme execution, the scheme is rejected up
-     * front instead.
-     */
+     * Schemes that execute rather than navigate.
+    */
     private const DENIED_URL_SCHEMES = ['javascript', 'data', 'vbscript'];
 
     /**
-     * Accepts absolute URLs, root-relative paths, fragments, and mailto:/tel:
-     * links without forcing a scheme onto internal paths.
-     */
+     * Accepts absolute URLs, root-relative paths, fragments, and mailto:/tel: links without forcing
+     * a scheme onto internal paths.
+    */
     public static function isPermissiveUrl(string $value): bool
     {
         $value = trim($value);
@@ -649,10 +594,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Browsers ignore whitespace and control characters embedded in a
-     * scheme ("java\tscript:", "\x01javascript:"), so both are stripped
-     * before the prefix comparison rather than trusting the literal string.
-     */
+     * Browsers ignore whitespace and control characters embedded in a scheme ("java\tscript:",
+     * "\x01javascript:"), so both are stripped before the prefix comparison rather than trusting
+     * the literal string.
+    */
     private static function hasDeniedScheme(string $value): bool
     {
         $normalized = strtolower((string)preg_replace('/[\s\x00-\x1f\x7f]+/', '', $value));
@@ -667,11 +612,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Defense-in-depth beyond Twig's own output escaping: rejects
-     * event-handler-shaped attribute keys and `javascript:`-scheme values so
-     * a custom Twig loop that renders `htmlAttributes` unescaped-as-markup
-     * can't be turned into script execution by editor input.
-     */
+     * Defense-in-depth beyond Twig's own output escaping: rejects event-handler-shaped attribute
+     * keys and `javascript:`-scheme values so a custom Twig loop that renders `htmlAttributes`
+     * unescaped-as-markup can't be turned into script execution by editor input.
+    */
     public function validateHtmlAttributes(): void
     {
         if (!is_array($this->htmlAttributes)) {
@@ -686,13 +630,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * `htmlId` and `cssClass` end up in exactly the same attribute position
-     * as the `htmlAttributes` bag, so they get the same treatment
-     * ({@see validateHtmlAttributes()}) rather than being trusted because
-     * they happen to have their own column. Twig escapes both on the way
-     * out; this is the defence-in-depth half, for the custom template that
-     * interpolates them somewhere Twig isn't looking.
-     */
+     * `htmlId` and `cssClass` end up in exactly the same attribute position as the `htmlAttributes`
+     * bag, so they get the same treatment ({@see validateHtmlAttributes()}) rather than being
+     * trusted because they happen to have their own column.
+    */
     public function validateHtmlId(): void
     {
         if ($this->htmlId !== null && !LinkAttributeHelper::isValidHtmlId($this->htmlId)) {
@@ -708,12 +649,9 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Normalizes the icon into its canonical stored form and rejects
-     * anything outside the grammar — see {@see IconHelper}. Normalizing
-     * here rather than in ItemsController means every write path (CP,
-     * console, a future import) stores the same shape, and the rejection
-     * is what keeps markup out of the column in the first place.
-     */
+     * Normalizes the icon into its canonical stored form and rejects anything outside the grammar
+     * — see {@see IconHelper}.
+    */
     public function validateIcon(): void
     {
         $this->icon = IconHelper::normalize($this->icon);
@@ -724,14 +662,10 @@ class MenuBuilderItem extends Model
     }
 
     /**
-     * Normalizes the badge text and validates `metadata['badgeStyle']`
-     * against {@see BadgeHelper::STYLES} — the enum half fails closed at
-     * the door, the same way an unknown style would fail closed on read.
-     *
-     * The badge *text* is never rejected for its characters: it is plain
-     * text, escaped where it is rendered (see BadgeHelper's docblock).
-     * Its only limit is the varchar(255) one already declared above.
-     */
+     * Normalizes the badge text and validates `metadata['badgeStyle']` against {@see
+     * BadgeHelper::STYLES} — the enum half fails closed at the door, the same way an unknown
+     * style would fail closed on read.
+    */
     public function validateBadge(): void
     {
         $this->badge = BadgeHelper::normalizeText($this->badge);
@@ -747,31 +681,42 @@ class MenuBuilderItem extends Model
         }
     }
 
-    /** The badge's style, or null for the default/none — fail-closed, see {@see BadgeHelper::style()}. */
+    /**
+     * The badge's style, or null for the default/none — fail-closed, see {@see
+     * BadgeHelper::style()}.
+    */
     public function badgeStyle(): ?string
     {
         return BadgeHelper::style($this->metadata['badgeStyle'] ?? null);
     }
 
-    /** True when this item has badge text to render; a style on its own is not a badge. */
+    /**
+     * True when this item has badge text to render; a style on its own is not a badge.
+    */
     public function hasBadge(): bool
     {
         return BadgeHelper::hasBadge($this->badge);
     }
 
-    /** `IconHelper::TYPE_CLASS` / `TYPE_ASSET`, or null when there is no usable icon. */
+    /**
+     * `IconHelper::TYPE_CLASS` / `TYPE_ASSET`, or null when there is no usable icon.
+    */
     public function iconType(): ?string
     {
         return IconHelper::type($this->icon);
     }
 
-    /** The icon's class list, or null when the icon is empty, an asset, or (fail-closed) unsafe. */
+    /**
+     * The icon's class list, or null when the icon is empty, an asset, or (fail-closed) unsafe.
+    */
     public function iconClass(): ?string
     {
         return IconHelper::classValue($this->icon);
     }
 
-    /** The icon's asset id, or null when the icon is empty or a class. */
+    /**
+     * The icon's asset id, or null when the icon is empty or a class.
+    */
     public function iconAssetId(): ?int
     {
         return IconHelper::assetId($this->icon);

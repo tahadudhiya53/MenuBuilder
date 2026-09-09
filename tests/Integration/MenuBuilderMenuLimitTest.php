@@ -15,30 +15,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 
 /**
  * The Free edition's one-menu limit, enforced against a real database.
- *
- * MenuBuilderLicensingTest pins the arithmetic without an app. This is the
- * half that arithmetic cannot answer: whether a second menu can actually
- * reach `menubuilder_groups` — through the service, through a duplicate,
- * and through a hand-written POST to the controller that never saw the
- * disabled button.
- *
- * ## How the edition is switched
- *
- * By assigning `MenuBuilder::getInstance()->edition`, which is precisely
- * what Craft's own `Plugins::switchEdition()` ends up doing to the running
- * plugin instance. Switching it here (rather than writing project config)
- * keeps the switch inside the test and makes the lapsed-license case
- * expressible: Pro, five menus, back to Free, and back to Pro again.
- *
- * ## How the database is kept honest
- *
- * The suite's shared fixture already holds several menus, and most cases
- * here need to control the count exactly. Each one runs inside
- * {@see withNoMenus()}: a transaction that empties `menubuilder_groups`,
- * runs the case, and rolls back — so the fixture every other test class
- * depends on is exactly as it was, including the entries whose field values
- * point at those menus by UID.
- */
+*/
 class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
 {
     private static ?int $adminId = null;
@@ -47,10 +24,8 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     {
         parent::setUpBeforeClass();
 
-        // Creating a second user needs a Craft edition that allows one, and
-        // the harness installs the default. Same reason (and same call) as
-        // ControllerAuthorizationTest; nothing here reads Craft's edition
-        // otherwise, and it is unrelated to *this plugin's* edition.
+        // Creating a second user needs a Craft edition that allows one, and the harness installs
+        // the default.
         Craft::$app->setEdition(Craft::Pro);
     }
 
@@ -61,8 +36,8 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     {
         parent::setUp();
 
-        // Every test states the edition it is about; this is only the
-        // baseline the harness installs (see tests/integration-bootstrap.php).
+        // Every test states the edition it is about; this is only the baseline the harness installs
+        // (see tests/integration-bootstrap.php).
         $this->setEdition(MenuBuilder::EDITION_PRO);
     }
 
@@ -80,9 +55,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         parent::tearDown();
     }
 
-    // ---------------------------------------------------------------------
     // Free
-    // ---------------------------------------------------------------------
 
     public function testFreeCanCreateItsFirstMenu(): void
     {
@@ -131,10 +104,9 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Duplicating is the plugin's other way to bring a menu into existence,
-     * so it meets the same ceiling — otherwise the limit would be one button
-     * away from meaningless.
-     */
+     * Duplicating is the plugin's other way to bring a menu into existence, so it meets the same
+     * ceiling — otherwise the limit would be one button away from meaningless.
+    */
     public function testFreeCannotDuplicateItsOnlyMenu(): void
     {
         $this->withNoMenus(function() {
@@ -152,10 +124,8 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The limit is on menus and on nothing else. One Free menu takes as many
-     * items, nested as deeply, as any Pro one — and can still be edited,
-     * renamed, disabled and re-enabled after it exists.
-     */
+     * The limit is on menus and on nothing else.
+    */
     public function testFreeCanEditItsMenuAndFillItWithUnlimitedNestedItems(): void
     {
         $this->withNoMenus(function() {
@@ -178,7 +148,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
                 $this->assertNotNull($this->addNestedItem($groupId, "Top $i")->id);
             }
 
-            // …and one deep branch. Ten levels, on a menu with no maxDepth.
+            // …and one deep branch.
             $parentId = null;
 
             for ($level = 1; $level <= 10; $level++) {
@@ -196,12 +166,10 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     /**
-     * "All features, one menu" is the product rule, so the Free menu has to
-     * be a fully configured one — depth cap, CSS class, HTML attributes, a
-     * site restriction, per-item visibility rules — and it has to resolve.
-     * Nothing in the plugin asks the edition for permission to do any of
-     * this; this case is what would fail if something ever started.
-     */
+     * "All features, one menu" is the product rule, so the Free menu has to be a fully configured
+     * one — depth cap, CSS class, HTML attributes, a site restriction, per-item visibility rules
+     * — and it has to resolve.
+    */
     public function testFreeGetsEveryFeatureInsideItsOneMenu(): void
     {
         $this->withNoMenus(function() {
@@ -242,16 +210,14 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
 
             $tree = MenuBuilder::getInstance()->resolver->getTree('freeFeatures');
             $this->assertNotNull($tree, 'A Free menu did not resolve.');
-            // Two top-level nodes: the logged-in-only one is filtered out for
-            // an anonymous audience, which is the visibility rule working.
+            // Two top-level nodes: the logged-in-only one is filtered out for an anonymous
+            // audience, which is the visibility rule working.
             $this->assertCount(1, $tree->items);
             $this->assertCount(1, $tree->items[0]->children);
         });
     }
 
-    // ---------------------------------------------------------------------
     // Pro
-    // ---------------------------------------------------------------------
 
     public function testProCanCreateManyMenus(): void
     {
@@ -279,17 +245,13 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
-    // ---------------------------------------------------------------------
     // License transitions — the non-destructive requirement
-    // ---------------------------------------------------------------------
 
     /**
-     * The case the whole design exists to protect: a Pro install with five
-     * menus whose edition goes back to Free keeps all five, keeps their
-     * items, keeps rendering them, and can still manage them. The only thing
-     * it loses is the ability to add a sixth — and it gets that back the
-     * moment Pro returns.
-     */
+     * The case the whole design exists to protect: a Pro install with five menus whose edition goes
+     * back to Free keeps all five, keeps their items, keeps rendering them, and can still manage
+     * them.
+    */
     public function testALapsedProEditionKeepsEveryMenuAndItsItems(): void
     {
         $this->withNoMenus(function() {
@@ -326,8 +288,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
                 $this->assertCount(2, $tree->items);
             }
 
-            // Still manageable: editing, disabling and deleting an existing
-            // menu are never limited.
+            // Still manageable: editing, disabling and deleting an existing menu are never limited.
             $footer = $groups->getByHandle('footerNav');
             $footer->name = 'Footer (edited on Free)';
             $this->assertTrue($groups->save($footer), 'Free could not edit a menu it inherited from Pro.');
@@ -353,20 +314,12 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
-    // ---------------------------------------------------------------------
     // Multi-site
-    // ---------------------------------------------------------------------
 
     /**
-     * Menus are global rows with an optional site *restriction*
-     * (`MenuBuilderGroup::$siteIds`), not per-site entities — so the Free
-     * ceiling is one menu per **install**. A second menu is refused however
-     * few sites the first one is restricted to, and whichever site is
-     * current when the question is asked.
-     *
-     * This is the behaviour the existing data model already implies; the
-     * test exists so that "one per site" cannot be introduced by accident.
-     */
+     * Menus are global rows with an optional site *restriction* (`MenuBuilderGroup::$siteIds`), not
+     * per-site entities — so the Free ceiling is one menu per **install**.
+    */
     public function testTheFreeLimitCountsMenusPerInstallNotPerSite(): void
     {
         $this->withNoMenus(function() {
@@ -408,8 +361,8 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
                 $sites->setCurrentSite($originalSite);
             }
 
-            // The restriction itself still behaves as it always has: the menu
-            // resolves on its own site and nowhere else.
+            // The restriction itself still behaves as it always has: the menu resolves on its own
+            // site and nowhere else.
             $sites->setCurrentSite($primaryId);
             $this->assertNotNull(MenuBuilder::getInstance()->resolver->getTree('perSitePrimary'));
 
@@ -426,15 +379,11 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
-    // ---------------------------------------------------------------------
     // Server-side enforcement
-    // ---------------------------------------------------------------------
 
     /**
-     * The button is not the boundary. This is the request that arrives when
-     * someone ignores it: a real admin, a real CP POST, straight at
-     * `menu-builder/groups/save`.
-     */
+     * The button is not the boundary.
+    */
     public function testTheLimitCannotBeBypassedByPostingToTheSaveAction(): void
     {
         $this->withNoMenus(function() {
@@ -475,10 +424,9 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     /**
-     * The service is the boundary, so it refuses even a caller that never
-     * went near a controller — a console command, a migration helper, or
-     * third-party code holding the service directly.
-     */
+     * The service is the boundary, so it refuses even a caller that never went near a controller
+     * — a console command, a migration helper, or third-party code holding the service directly.
+    */
     public function testTheServiceRefusesADirectCallerAtTheLimit(): void
     {
         $this->withNoMenus(function() {
@@ -487,17 +435,15 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
             $groups = MenuBuilder::getInstance()->groups;
             $this->assertTrue($groups->save($this->newMenu('serviceOnly', 'Service Only')));
 
-            // Validation off, as an internal caller would: the ceiling is not
-            // a validation rule and is not skipped with them.
+            // Validation off, as an internal caller would: the ceiling is not a validation rule and
+            // is not skipped with them.
             $second = $this->newMenu('serviceSecond', 'Service Second');
             $this->assertFalse($groups->save($second, runValidation: false));
             $this->assertSame(1, $this->menuRowCount());
         });
     }
 
-    // ---------------------------------------------------------------------
     // The CP summary
-    // ---------------------------------------------------------------------
 
     public function testTheControlPanelSummaryDescribesEachEdition(): void
     {
@@ -527,9 +473,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
-    // ---------------------------------------------------------------------
     // Harness
-    // ---------------------------------------------------------------------
 
     private function setEdition(string $edition): void
     {
@@ -537,13 +481,9 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     /**
-     * Runs `$body` against an empty `menubuilder_groups`, then puts the
-     * table (and everything cascading from it) back exactly as it was.
-     *
-     * The rollback is the whole point: the suite's shared fixture — five
-     * menus, plus entries whose Navigation field values reference them by
-     * UID — is built once per run and every other test class reads it.
-     */
+     * Runs `$body` against an empty `menubuilder_groups`, then puts the table (and everything
+     * cascading from it) back exactly as it was.
+    */
     private function withNoMenus(callable $body): void
     {
         $transaction = Craft::$app->getDb()->beginTransaction();
@@ -562,13 +502,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
 
     /**
      * A fresh MenuBuilderGroupService.
-     *
-     * The service memoizes the full menu list per request and clears that
-     * memo on every write *it* performs — which is the right behaviour and
-     * exactly wrong for a test that deletes rows underneath it and then
-     * rolls the deletion back. Replacing the component is the honest reset;
-     * nothing else in the plugin caches menu rows.
-     */
+    */
     private static function resetGroupService(): void
     {
         MenuBuilder::getInstance()->set('groups', MenuBuilderGroupService::class);
@@ -607,14 +541,8 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     /**
      * The GroupsController, wired to a real CP POST from a real admin.
      *
-     * JSON, because the alternative branch flashes to a session a
-     * console-booted application doesn't have — the same reason
-     * ControllerAuthorizationTest posts JSON for its write cases. The
-     * permission gate is not the subject here (an admin passes it); what is
-     * being tested is what the action does once it is through.
-     *
      * @param array<string,mixed> $body
-     */
+    */
     private function adminController(array $body): GroupsController
     {
         if (self::$originalComponents === []) {
@@ -657,9 +585,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
                 return $existing;
             }
 
-            // The user was created inside a case's transaction and rolled
-            // back with it. Nothing about this test depends on it being the
-            // same row twice.
+            // The user was created inside a case's transaction and rolled back with it.
             self::$adminId = null;
         }
 

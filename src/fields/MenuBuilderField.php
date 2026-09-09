@@ -20,72 +20,19 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use yii\db\Schema;
 
 /**
- * Lets a content author attach one MenuBuilder navigation to an element —
- * an entry, a Matrix block, a category, a user — and read it back in Twig as
- * `entry.navigation`.
- *
- * ## What is stored
- *
- * One menu **UID**, in a `varchar` content column.
- *
- * Not the handle: renaming a menu's handle would silently repoint every entry
- * that selected it. Not the row ID: an auto-increment ID is assigned by
- * whichever database created the row, so the same menu can legitimately have
- * different IDs in two databases, and a stored ID could collide with an
- * unrelated menu.
- *
- * A UID is a *stable reference*, not a portable menu. Menus are database-only
- * and are **not** project-config entities (see ARCHITECTURE.md "Group
- * persistence — database only"), so a UID resolves only in a database that
- * actually contains that menu row — which in practice means deploying the
- * database. Nothing here makes menus themselves travel between environments.
- *
- * Anything that isn't UID-shaped collapses to "nothing selected" before it
- * reaches a query — see {@see MenuBuilderFieldHelper::normalizeUid()}.
- *
- * ## What Twig gets
- *
- * A {@see MenuBuilderFieldValue}, never a record and never a bare string.
- * It resolves its tree lazily through the one resolver, so a field-rendered
- * menu is cached, visibility-filtered and active-state-marked exactly like
- * `craft.menuBuilder.get()`.
- *
- * ## Settings, and why they are project-config safe
- *
- * `allowedGroupUids` and `includeDisabledMenus` are the whole settings
- * surface, and Craft writes them into project config as part of the field.
- * Both are safe to *apply*: a list of UIDs and a boolean, no row IDs and no
- * site IDs, so `project-config/apply` can never fail on them.
- *
- * Safe to apply is not the same as self-sufficient. The UIDs are references
- * into a table project config knows nothing about, so the menus they name
- * must already exist in the target **database**. One that doesn't simply
- * offers one fewer option in the picker — it can't widen the field and can't
- * break an apply, but it also won't conjure the menu.
- *
- * ## Sites
- *
- * The field uses Craft's standard translation methods. Left untranslatable
- * (the default) one selection covers every site, which is what a single
- * shared navigation wants. Set to translate per site, each site gets its own
- * selection — and only *then* does picking a menu that is restricted away
- * from the element's site become a validation error, because only then can
- * the author fix it. See {@see MenuBuilderFieldHelper::validationError()}.
- */
+ * Lets a content author attach one MenuBuilder navigation to an element — an entry, a Matrix
+ * block, a category, a user — and read it back in Twig as `entry.navigation`.
+*/
 class MenuBuilderField extends Field implements InlineEditableFieldInterface, MergeableFieldInterface
 {
     /**
-     * @var string[] UIDs of the menus this field offers. Empty = every menu,
-     *               the same "empty means unrestricted" convention
-     *               {@see MenuBuilderGroup::$siteIds} uses.
-     */
+     * @var string[] UIDs of the menus this field offers. Empty = every menu, the same "empty means unrestricted" convention {@see MenuBuilderGroup::$siteIds} uses.
+    */
     public array $allowedGroupUids = [];
 
     /**
-     * @var bool Whether disabled menus appear in the picker. Off by default:
-     *           a disabled menu resolves to no tree, so offering one invites
-     *           an author to pick something that renders nothing.
-     */
+     * @var bool Whether disabled menus appear in the picker. Off by default: a disabled menu resolves to no tree, so offering one invites an author to pick something that renders nothing.
+    */
     public bool $includeDisabledMenus = false;
 
     public static function displayName(): string
@@ -109,10 +56,9 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
     }
 
     /**
-     * Normalized on the way *in* as well as on the way out, so a project
-     * config applied from YAML that somebody hand-edited can't leave a
-     * non-UID entry in the allow-list.
-     */
+     * Normalized on the way *in* as well as on the way out, so a project config applied from YAML
+     * that somebody hand-edited can't leave a non-UID entry in the allow-list.
+    */
     public function __construct($config = [])
     {
         if (isset($config['allowedGroupUids'])) {
@@ -132,10 +78,9 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
     }
 
     /**
-     * The settings are posted from a checkbox list, so the shape is checked
-     * rather than cast — the same treatment {@see MenuBuilderGroup::validateSiteIds()}
-     * gives its site restriction.
-     */
+     * The settings are posted from a checkbox list, so the shape is checked rather than cast —
+     * the same treatment {@see MenuBuilderGroup::validateSiteIds()} gives its site restriction.
+    */
     public function validateAllowedGroupUids(): void
     {
         if (!is_array($this->allowedGroupUids)) {
@@ -153,17 +98,14 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         }
     }
 
-    // ---------------------------------------------------------------------
     // Value
-    // ---------------------------------------------------------------------
 
     /**
-     * Null for "nothing selected", so `{% if entry.navigation %}` answers the
-     * question templates ask; a value object for every real selection, even
-     * one whose menu has since been deleted (that case is
-     * `value.exists() === false`, not a silently blank field — see
-     * {@see MenuBuilderFieldValue}).
-     */
+     * Null for "nothing selected", so `{% if entry.navigation %}` answers the question templates
+     * ask; a value object for every real selection, even one whose menu has since been deleted
+     * (that case is `value.exists() === false`, not a silently blank field — see {@see
+     * MenuBuilderFieldValue}).
+    */
     public function normalizeValue(mixed $value, ?ElementInterface $element = null): mixed
     {
         if ($value instanceof MenuBuilderFieldValue) {
@@ -183,7 +125,9 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         );
     }
 
-    /** The UID, and nothing else — the tree is per-request and never persisted. */
+    /**
+     * The UID, and nothing else — the tree is per-request and never persisted.
+    */
     public function serializeValue(mixed $value, ?ElementInterface $element = null): mixed
     {
         if ($value instanceof MenuBuilderFieldValue) {
@@ -203,10 +147,8 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
     }
 
     /**
-     * The menu's name and handle, so an entry is findable by the navigation
-     * attached to it. Never the resolved tree: search keywords are indexed
-     * once per element and a tree is per-site and per-visitor.
-     */
+     * The menu's name and handle, so an entry is findable by the navigation attached to it.
+    */
     protected function searchKeywords(mixed $value, ElementInterface $element): string
     {
         if (!$value instanceof MenuBuilderFieldValue) {
@@ -225,16 +167,13 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         return Html::encode((string)$value);
     }
 
-    // ---------------------------------------------------------------------
     // Validation
-    // ---------------------------------------------------------------------
 
     /**
-     * Scoped to the live scenario, as {@see \craft\fields\BaseRelationField}
-     * does, so a draft or a revision holding a now-broken selection still
-     * saves — the author is told when it matters, at publish time, not
-     * blocked from typing.
-     */
+     * Scoped to the live scenario, as {@see \craft\fields\BaseRelationField} does, so a draft or a
+     * revision holding a now-broken selection still saves — the author is told when it matters,
+     * at publish time, not blocked from typing.
+    */
     public function getElementValidationRules(): array
     {
         return [
@@ -267,9 +206,7 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         });
     }
 
-    // ---------------------------------------------------------------------
     // Control panel
-    // ---------------------------------------------------------------------
 
     public function getSettingsHtml(): ?string
     {
@@ -327,15 +264,9 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
     }
 
     /**
-     * The two things the picker itself can't say: that a stored selection has
-     * outlived its menu, and where to go and edit the selected one.
-     *
-     * Both are built with {@see Html} rather than concatenated markup, and
-     * the manage link is only rendered for a user who could actually follow
-     * it — rendering an affordance a permission check would then reject is
-     * the bug this plugin's CP templates avoid everywhere else (see
-     * ARCHITECTURE.md "Permissions & security").
-     */
+     * The two things the picker itself can't say: that a stored selection has outlived its menu,
+     * and where to go and edit the selected one.
+    */
     private function footnoteHtml(mixed $value, bool $inline): string
     {
         if ($inline || !$value instanceof MenuBuilderFieldValue) {
@@ -360,18 +291,14 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         ), ['class' => 'light smalltext']);
     }
 
-    // ---------------------------------------------------------------------
     // GraphQL
-    // ---------------------------------------------------------------------
 
     /**
-     * The **selection**, not the resolved tree: a tree is per-site,
-     * per-visitor and per-page, and a GraphQL response is cached and shared,
-     * so baking one into a query result would be the "user-specific state in
-     * a shared cache" mistake the whole resolver pipeline is arranged to
-     * avoid. Querying the menu itself is a separate, schema-scoped surface —
-     * that's the GraphQL phase, not this one.
-     */
+     * The **selection**, not the resolved tree: a tree is per-site, per-visitor and per-page, and a
+     * GraphQL response is cached and shared, so baking one into a query result would be the
+     * "user-specific state in a shared cache" mistake the whole resolver pipeline is arranged to
+     * avoid.
+    */
     public function getContentGqlType(): Type|array
     {
         return MenuBuilderMenuType::getType();

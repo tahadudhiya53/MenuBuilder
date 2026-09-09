@@ -16,13 +16,13 @@ use yii\base\Exception;
 use yii\db\Expression;
 
 /**
- * Owns menubuilder_items CRUD and hierarchy integrity. Trees are always built
- * from a single flat query per group (see getTree()) — never recursive
- * per-node queries — so rendering stays fast regardless of item count.
- */
+ * Owns menubuilder_items CRUD and hierarchy integrity.
+*/
 class MenuBuilderItemService extends Component
 {
-    /** Why the last {@see move()} was refused — read back by {@see getLastMoveError()}. */
+    /**
+     * Why the last {@see move()} was refused — read back by {@see getLastMoveError()}.
+    */
     private ?string $moveError = null;
 
     public function getById(int $id): ?MenuBuilderItem
@@ -32,9 +32,7 @@ class MenuBuilderItemService extends Component
         return $record ? $this->recordToModel($record) : null;
     }
 
-    /**
-     * @return MenuBuilderItem[] Flat list, unordered relative to hierarchy.
-     */
+    /** @return MenuBuilderItem[] Flat list, unordered relative to hierarchy. */
     public function getFlatForGroup(int $groupId, bool $includeDisabled = true): array
     {
         $query = MenuBuilderItemRecord::find()
@@ -54,24 +52,8 @@ class MenuBuilderItemService extends Component
     /**
      * The visibility rules of a group's items, keyed by item ID.
      *
-     * The lean counterpart to {@see getFlatForGroup()} for the one job the
-     * per-request half of the resolve pipeline actually has: re-checking
-     * visibility against the *current* rows behind an already-cached node
-     * tree (see MenuBuilderResolver::filterVisible()). That pass reads two
-     * things per node — whether the row is still there and enabled, and what
-     * its rules are — so hydrating a full MenuBuilderItem per row, JSON bags
-     * and all, was the dominant cost of every cache *hit*: measured at
-     * 10.4ms of a 13.1ms request for a 1000-item menu, against 0.55ms for
-     * these two columns.
-     *
-     * The `enabled` predicate is deliberately identical to
-     * {@see getFlatForGroup()}'s, because "absent from this map" is what
-     * makes filterVisible() fail closed on a row that has since been deleted
-     * or disabled. An empty array is a real answer — an item with no rules —
-     * and is not the same as a missing key.
-     *
      * @return array<int,array> Visibility rule bags, keyed by item ID.
-     */
+    */
     public function getVisibilityRulesForGroup(int $groupId, bool $includeDisabled = true): array
     {
         // No ORDER BY: the result is a lookup map, not a sequence.
@@ -96,15 +78,8 @@ class MenuBuilderItemService extends Component
     /**
      * Assembles the full nested tree for a group from one flat query.
      *
-     * With disabled items excluded, a disabled parent's descendants are
-     * excluded with it: they have no parent row left to nest under, and
-     * nesting-by-presence alone would promote them to the top level of the
-     * rendered menu — see
-     * {@see MenuBuilderHierarchyHelper::idsReachableFromRoots()}. The CP tree
-     * (`includeDisabled: true`) sees every row and is unaffected.
-     *
      * @return MenuBuilderItem[] Top-level items, each with ->children populated recursively.
-     */
+    */
     public function getTree(int $groupId, bool $includeDisabled = true): array
     {
         $flat = $this->getFlatForGroup($groupId, $includeDisabled);
@@ -137,9 +112,8 @@ class MenuBuilderItemService extends Component
         }
 
         $sort = function(array $items) use (&$sort) {
-            // `id` breaks a sortOrder tie, so rows left sharing a number by
-            // legacy data or a half-applied concurrent write still render in
-            // the same order on every request.
+            // `id` breaks a sortOrder tie, so rows left sharing a number by legacy data or a
+            // half-applied concurrent write still render in the same order on every request.
             usort($items, fn(MenuBuilderItem $a, MenuBuilderItem $b) => [$a->sortOrder, $a->id] <=> [$b->sortOrder, $b->id]);
             foreach ($items as $item) {
                 $item->children = $sort($item->children);
@@ -153,12 +127,8 @@ class MenuBuilderItemService extends Component
 
     public function save(MenuBuilderItem $item, bool $runValidation = true): bool
     {
-        // Custom field content is a Craft element beside the item row, so it
-        // validates through Craft rather than through defineRules(). Doing
-        // it here rather than in the controller means every write path is
-        // field-aware — the CP editor, a console script, an import — and
-        // that a bad Matrix block is refused *before* the item row is
-        // written, not after.
+        // Custom field content is a Craft element beside the item row, so it validates through
+        // Craft rather than through defineRules().
         if ($runValidation && !$item->validate()) {
             return false;
         }
@@ -185,26 +155,16 @@ class MenuBuilderItemService extends Component
 
         $isNew = $record->id === null;
 
-        // A reparent through the edit form lands the item in a sibling set
-        // it never had a position in, so its old sortOrder is meaningless
-        // there — keeping it would collide with whichever existing sibling
-        // already holds that number, leaving the tie broken by whatever
-        // order the database happened to return. Append instead.
+        // A reparent through the edit form lands the item in a sibling set it never had a position
+        // in, so its old sortOrder is meaningless there — keeping it would collide with whichever
+        // existing sibling already holds that number, leaving the tie broken by whatever order the
+        // database happened to return.
         $isReparent = !$isNew
             && ($record->parentId === null ? null : (int)$record->parentId) !== $item->parentId;
 
-        // A save that changes where the item sits is a hierarchy mutation,
-        // exactly like a drag, and has to serialise against one: the edit
-        // form's parent picker can create a cycle with a concurrent drag if
-        // each validates against the other's pre-commit state. Field-only
-        // edits (a title, a URL, an enabled toggle) touch no structure and
-        // stay lock-free.
-        //
-        // The content element is written inside the same transaction as the
-        // row that points at it, whether or not this save needed a lock —
-        // otherwise a failed row save leaves an `elements` row nothing
-        // references, and a failed content save leaves an item claiming a
-        // `contentId` that was rolled back.
+        // A save that changes where the item sits is a hierarchy mutation, exactly like a drag, and
+        // has to serialise against one: the edit form's parent picker can create a cycle with a
+        // concurrent drag if each validates against the other's pre-commit state.
         $needsLock = $isNew || $isReparent;
         $transaction = Craft::$app->getDb()->beginTransaction();
 
@@ -241,22 +201,15 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * The write half of {@see save()}: the checks that must see the state
-     * they're writing against, then the column assignments and the row
-     * itself. Split out so a structural save can run the whole thing inside
-     * one locked transaction without a field-only save paying for one.
-     */
+     * The write half of {@see save()}: the checks that must see the state they're writing against,
+     * then the column assignments and the row itself.
+    */
     private function saveRecord(MenuBuilderItemRecord $record, MenuBuilderItem $item, bool $isNew, bool $isReparent): bool
     {
-        // A new item is the only case where `groupId` is taken from the
-        // request, so it's the only case where it can name a group that
-        // isn't there (deleted in another tab, an imported or tampered
-        // payload) — an existing item can't change groups at all, and the
-        // FK cascade means its group is still there by definition. Without
-        // this the FK is the only thing standing between a stale groupId
-        // and a database integrity exception surfacing as a 500; an
-        // unsaveable item should fail as a field error, like every other
-        // invalid input.
+        // A new item is the only case where `groupId` is taken from the request, so it's the only
+        // case where it can name a group that isn't there (deleted in another tab, an imported or
+        // tampered payload) — an existing item can't change groups at all, and the FK cascade
+        // means its group is still there by definition.
         if ($isNew && !$this->groupExists($item->groupId)) {
             $item->addError('groupId', Craft::t('menu-builder', 'The selected navigation group does not exist.'));
 
@@ -307,31 +260,11 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Reparents and/or repositions one item — the single write path behind
-     * every drag/drop, keyboard move and reorder in the CP.
-     *
-     * The whole operation is one transaction that starts by taking a row
-     * lock on the owning group, so concurrent moves inside the same menu are
-     * serialised rather than each validating against the other's pre-commit
-     * state (two such moves are exactly how a cycle gets past a check that
-     * ran before the transaction). Everything is then re-read inside that
-     * lock and re-validated server-side — depth, circularity and cross-group
-     * — regardless of what the drag-and-drop UI already checked.
-     *
-     * `$requestedSiblingIds` is the client's view of the destination set's
-     * order. It is a preference, not the truth: it's reconciled against the
-     * set's real membership (see
-     * {@see MenuBuilderHierarchyHelper::resolveSiblingOrder()}) so a stale
-     * screen can't resurrect a deleted row, drop a row it never saw, or pull
-     * in a row from another parent.
-     *
-     * Descendants are carried along untouched — they reference their parent
-     * by id, so moving the item moves the whole subtree by construction, and
-     * the depth check measures the subtree's deepest row rather than the
-     * item's own.
+     * Reparents and/or repositions one item — the single write path behind every drag/drop,
+     * keyboard move and reorder in the CP.
      *
      * @param int[] $requestedSiblingIds Desired order of the destination sibling set, including $itemId.
-     */
+    */
     public function move(int $itemId, ?int $newParentId, int $newSortOrder, array $requestedSiblingIds = []): bool
     {
         $this->moveError = null;
@@ -349,9 +282,9 @@ class MenuBuilderItemService extends Component
         try {
             $this->lockGroup($groupId);
 
-            // Re-read under the lock: between findOne() above and the lock
-            // being granted, another request may have deleted this row or
-            // moved it somewhere that changes what's legal here.
+            // Re-read under the lock: between findOne() above and the lock being granted, another
+            // request may have deleted this row or moved it somewhere that changes what's legal
+            // here.
             $record = MenuBuilderItemRecord::findOne($itemId);
 
             if (!$record || (int)$record->groupId !== $groupId) {
@@ -372,10 +305,8 @@ class MenuBuilderItemService extends Component
                 return false;
             }
 
-            // One snapshot, one plan: what the new parent is and which
-            // sortOrders have to change in the destination set and in the
-            // set being left. Descendants are deliberately absent from it —
-            // they follow their parent by id, so the subtree moves whole.
+            // One snapshot, one plan: what the new parent is and which sortOrders have to change in
+            // the destination set and in the set being left.
             $plan = MenuBuilderHierarchyHelper::planMove(
                 $this->snapshotForGroup($groupId),
                 $itemId,
@@ -410,21 +341,17 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Why the last {@see move()} was refused, so the CP can say which rule
-     * was broken instead of a generic failure.
-     */
+     * Why the last {@see move()} was refused, so the CP can say which rule was broken instead of a
+     * generic failure.
+    */
     public function getLastMoveError(): ?string
     {
         return $this->moveError;
     }
 
     /**
-     * Persists an explicit sibling order (e.g. after a same-parent drag or a
-     * keyboard up/down move) without touching parentId. Shares move()'s
-     * reconciliation and renumbering, so a stale or tampered id list can only
-     * ever permute the set it names — never move a row between parents or
-     * groups.
-     */
+     * Persists an explicit sibling order (e.g.
+    */
     public function reorderSiblings(int $groupId, ?int $parentId, array $itemIdsInOrder): bool
     {
         $transaction = Craft::$app->getDb()->beginTransaction();
@@ -482,11 +409,9 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Clones every top-level item (and its descendants) from one group into
-     * another, preserving hierarchy and titles. Used by
-     * MenuBuilderGroupService::duplicate() — must run inside that method's
-     * own transaction.
-     */
+     * Clones every top-level item (and its descendants) from one group into another, preserving
+     * hierarchy and titles.
+    */
     public function duplicateAllForGroup(int $sourceGroupId, int $targetGroupId): void
     {
         /** @var MenuBuilderItemRecord[] $roots */
@@ -501,37 +426,20 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * IDs of items in the group whose linked element (entry/category/asset)
-     * no longer exists.
-     *
-     * Kept as the narrow, long-standing entry point for that one question,
-     * but no longer implemented here: "missing" is one of the states
-     * {@see MenuBuilderLinkHealthService} classifies, and two copies of the
-     * element lookup could disagree about what counts as gone. The CP tree
-     * reads the full health map instead — this remains for callers that only
-     * ever wanted the set.
+     * IDs of items in the group whose linked element (entry/category/asset) no longer exists.
      *
      * @return array<int,true> Item IDs, as a set for O(1) lookup in Twig.
-     */
+    */
     public function getOrphanedItemIds(int $groupId): array
     {
         return MenuBuilder::getInstance()->linkHealth->getMissingElementItemIds($groupId);
     }
 
     /**
-     * Groups containing at least one enabled `dynamic` item — a single
-     * indexed query on `type`. A newly-created entry/category/asset can't be
-     * matched by `elementId` the way
-     * MenuBuilderElementService::getAffectedGroupIds() matches an edited one,
-     * so dynamic items have to be considered on every watched element change.
-     * {@see getDynamicSourceConfigsByGroup()} narrows that to the items whose
-     * source could actually contain the element; this coarser list is the
-     * fail-open path for an element whose container can't be determined (e.g.
-     * a nested entry, whose `sectionId` is null). Empty — no behaviour change
-     * at all — when the install has no dynamic items.
+     * Groups containing at least one enabled `dynamic` item — a single indexed query on `type`.
      *
      * @return int[] Distinct group IDs.
-     */
+    */
     public function getGroupIdsWithDynamicItems(): array
     {
         return array_map(
@@ -545,15 +453,13 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Every enabled `dynamic` item's stored source config, grouped by group
-     * ID — one query on the same indexed `type` column
-     * {@see getGroupIdsWithDynamicItems()} uses, with `metadata` selected so
-     * the caller can decide *which* dynamic sources a changed element could
-     * belong to, instead of invalidating every group that has any dynamic
-     * item.
+     * Every enabled `dynamic` item's stored source config, grouped by group ID — one query on the
+     * same indexed `type` column {@see getGroupIdsWithDynamicItems()} uses, with `metadata`
+     * selected so the caller can decide *which* dynamic sources a changed element could belong to,
+     * instead of invalidating every group that has any dynamic item.
      *
      * @return array<int,array<int,array<string,mixed>>> groupId => list of `dynamicSource` configs.
-     */
+    */
     public function getDynamicSourceConfigsByGroup(): array
     {
         $rows = MenuBuilderItemRecord::find()
@@ -577,14 +483,10 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Bulk actions. Every ID is independently existence/group-
-     * checked and saved through the same {@see save()} path a single toggle
-     * uses (so hierarchy/validation rules are never bypassed for a bulk
-     * op) inside one transaction — a failure on any ID rolls back the whole
-     * batch rather than leaving a partial bulk change applied.
+     * Bulk actions.
      *
      * @param int[] $ids
-     */
+    */
     public function bulkSetEnabled(array $ids, bool $enabled): bool
     {
         $transaction = Craft::$app->getDb()->beginTransaction();
@@ -617,18 +519,16 @@ class MenuBuilderItemService extends Component
         return true;
     }
 
-    /**
-     * @param int[] $ids
-     */
+    /** @param int[] $ids */
     public function bulkDelete(array $ids): bool
     {
         $transaction = Craft::$app->getDb()->beginTransaction();
 
         try {
             foreach ($ids as $id) {
-                // deleteById() already invalidates the owning group's cache
-                // and relies on the cascading FK for descendants — a bulk
-                // delete is just that, repeated inside one transaction.
+                // deleteById() already invalidates the owning group's cache and relies on the
+                // cascading FK for descendants — a bulk delete is just that, repeated inside one
+                // transaction.
                 $this->deleteById((int)$id, keepChildren: false);
             }
 
@@ -659,12 +559,8 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Deletes an item. If it has children, `$keepChildren` decides their fate:
-     * false (default) relies on the cascading FK on parentId to remove the
-     * whole subtree; true reparents direct children up to the deleted item's
-     * own parent (appended after its existing siblings there) before the
-     * delete runs, so they survive.
-     */
+     * Deletes an item.
+    */
     public function deleteById(int $id, bool $keepChildren = false): bool
     {
         $record = MenuBuilderItemRecord::findOne($id);
@@ -676,11 +572,9 @@ class MenuBuilderItemService extends Component
         $groupId = (int)$record->groupId;
 
         if (!$keepChildren) {
-            // The subtree's content elements first: the parentId cascade
-            // below removes those item rows inside the database, so once it
-            // has run there is nothing left naming their content. (Whatever
-            // a crash between the two strands is swept by MenuBuilder's
-            // garbage collector.)
+            // The subtree's content elements first: the parentId cascade below removes those item
+            // rows inside the database, so once it has run there is nothing left naming their
+            // content.
             MenuBuilder::getInstance()->itemContent->deleteByIds($this->contentIdsInSubtree($id));
 
             $result = (bool)$record->delete();
@@ -709,8 +603,8 @@ class MenuBuilderItemService extends Component
                 }
             }
 
-            // Only this item's own content: its children have been
-            // reparented above, so they and their content survive.
+            // Only this item's own content: its children have been reparented above, so they and
+            // their content survive.
             MenuBuilder::getInstance()->itemContent->deleteByIds([
                 $record->contentId !== null ? (int)$record->contentId : null,
             ]);
@@ -730,28 +624,16 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * An item's groupId is fixed at creation. Reassigning it isn't a
-     * supported feature: children keep their own (unchanged) groupId, so
-     * moving only the parent would silently detach them from the tree —
-     * they'd become orphaned roots in the old group and vanish from the
-     * new one. $original is null for a not-yet-persisted item, which is
-     * always allowed to pick its group.
-     */
+     * An item's groupId is fixed at creation.
+    */
     public static function isGroupChangeAllowed(?int $original, int $requested): bool
     {
         return $original === null || $original === $requested;
     }
 
     /**
-     * Circular-reference, cross-group, and max-depth checks. Always runs
-     * server-side — the CP's drag-and-drop client validation is UX-only.
-     *
-     * The whole group is read once here (one indexed query) and every rule
-     * is computed from that snapshot by {@see MenuBuilderHierarchyHelper},
-     * rather than walking the ancestor chain a query at a time. move() calls
-     * it from inside its locked transaction, so what is validated is what
-     * gets written.
-     */
+     * Circular-reference, cross-group, and max-depth checks.
+    */
     private function validateHierarchy(MenuBuilderItem $item): bool
     {
         if ($item->parentId !== null) {
@@ -781,11 +663,10 @@ class MenuBuilderItemService extends Component
         $childMap = MenuBuilderHierarchyHelper::childMap($rows);
 
         if ($item->parentId !== null) {
-            // A cycle already present in the stored rows — two moves that
-            // each validated against the other's pre-commit state, or a row
-            // edited straight in the database — makes every depth answer
-            // below meaningless, so fail closed rather than nest anything
-            // into it.
+            // A cycle already present in the stored rows — two moves that each validated against
+            // the other's pre-commit state, or a row edited straight in the database — makes
+            // every depth answer below meaningless, so fail closed rather than nest anything into
+            // it.
             if (MenuBuilderHierarchyHelper::ancestryIsCyclic($parentMap, $item->parentId)) {
                 $item->addError('parentId', Craft::t('menu-builder', 'That move would create a circular reference.'));
 
@@ -802,16 +683,8 @@ class MenuBuilderItemService extends Component
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
 
         if ($group !== null && $group->maxDepth !== null) {
-            // Measured against the subtree's deepest row, not the item's own
-            // level, because the descendants travel with it. This runs for a
-            // move to the root too: a three-level subtree lifted to the top
-            // of a two-level menu still busts the limit, and skipping the
-            // check whenever parentId was null let exactly that through.
-            //
-            // A brand-new item passes `null`, not 0: it has no descendants,
-            // and 0 is `childMap`'s key for the root set, so passing it read
-            // back the height of the whole root forest and refused every
-            // insert into an already-deep menu.
+            // Measured against the subtree's deepest row, not the item's own level, because the
+            // descendants travel with it.
             $deepestLevel = MenuBuilderHierarchyHelper::deepestLevelAfterMove(
                 $parentMap,
                 $childMap,
@@ -830,19 +703,14 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * One group's hierarchy columns — everything
-     * {@see MenuBuilderHierarchyHelper} needs and nothing else. Covered by
-     * the `groupId, parentId, sortOrder` index, so this stays a single cheap
-     * read even for a 500-item menu.
+     * One group's hierarchy columns — everything {@see MenuBuilderHierarchyHelper} needs and
+     * nothing else.
      *
      * @return array<int,array{id:int,parentId:int|null,sortOrder:int}>
-     */
+    */
     /**
-     * The item that owns the given content element, or null when it has
-     * been stranded. The reverse of `MenuBuilderItem::$contentId`, and the
-     * only query that walks that direction — the index on `contentId` is
-     * unique, so this is a point lookup.
-     */
+     * The item that owns the given content element, or null when it has been stranded.
+    */
     public function getByContentId(int $contentId): ?MenuBuilderItem
     {
         $record = MenuBuilderItemRecord::findOne(['contentId' => $contentId]);
@@ -851,14 +719,8 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Deletes every content element belonging to a menu, without touching
-     * the items themselves.
-     *
-     * Called by MenuBuilderGroupService::deleteById() *before* the group is
-     * deleted, while the item rows naming these elements still exist — the
-     * cascading FK on `groupId` removes those rows inside the database,
-     * where this plugin can no longer read them.
-     */
+     * Deletes every content element belonging to a menu, without touching the items themselves.
+    */
     public function deleteContentForGroup(int $groupId): void
     {
         $contentIds = MenuBuilderItemRecord::find()
@@ -873,15 +735,11 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * The content element IDs of an item and everything under it — what a
-     * cascading subtree delete is about to strand.
-     *
-     * One query for the whole group, then a pure walk, for the same reason
-     * {@see validateHierarchy()} works that way: an ancestor-chain query per
-     * row is an N+1 on exactly the operation that touches the most rows.
+     * The content element IDs of an item and everything under it — what a cascading subtree
+     * delete is about to strand.
      *
      * @return int[]
-     */
+    */
     private function contentIdsInSubtree(int $itemId): array
     {
         $record = MenuBuilderItemRecord::findOne($itemId);
@@ -897,9 +755,9 @@ class MenuBuilderItemService extends Component
             ->all();
 
         $contentIds = [];
-        // `sortOrder` is selected because childMap() orders by it — the
-        // order is irrelevant to a delete, but a projection missing a column
-        // the helper reads is a fatal, not a wrong answer.
+        // `sortOrder` is selected because childMap() orders by it — the order is irrelevant to a
+        // delete, but a projection missing a column the helper reads is a fatal, not a wrong
+        // answer.
         $childMap = MenuBuilderHierarchyHelper::childMap(array_map(fn(array $row) => [
             'id' => (int)$row['id'],
             'parentId' => $row['parentId'] === null ? null : (int)$row['parentId'],
@@ -918,9 +776,9 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * A menu's field layout ID, or null when it defines no fields — what a
-     * duplicated item's new content element is built on.
-     */
+     * A menu's field layout ID, or null when it defines no fields — what a duplicated item's new
+     * content element is built on.
+    */
     private function fieldLayoutIdForGroup(int $groupId): ?int
     {
         $group = MenuBuilder::getInstance()->groups->getById($groupId);
@@ -946,28 +804,15 @@ class MenuBuilderItemService extends Component
     /**
      * @param array<int,array{id:int,parentId:int|null,sortOrder:int}> $rows
      * @return array<int,int> id => sortOrder
-     */
+    */
     private function sortOrderMap(array $rows): array
     {
         return array_column($rows, 'sortOrder', 'id');
     }
 
     /**
-     * Serialises every mutation of one group's hierarchy behind a row lock
-     * on the group itself.
-     *
-     * Validation that ran before a transaction can only prove a move was
-     * legal against a state that may no longer exist by the time it commits
-     * — two concurrent drags in the same menu are enough to build a cycle
-     * out of two individually valid moves, or to interleave two sibling
-     * renumberings into a set with duplicate positions. Locking the parent
-     * row makes them take turns, so each validates against the other's
-     * committed result.
-     *
-     * No-ops outside a transaction, and on any driver without
-     * `SELECT … FOR UPDATE` (Craft 5 ships MySQL and Postgres, which both
-     * have it).
-     */
+     * Serialises every mutation of one group's hierarchy behind a row lock on the group itself.
+    */
     private function lockGroup(int $groupId): void
     {
         $db = Craft::$app->getDb();
@@ -983,17 +828,12 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Writes a batch of `sortOrder` values as one statement per chunk
-     * (`CASE id WHEN … THEN …`) instead of one UPDATE per row, so
-     * repositioning inside a 500-item sibling set costs a couple of queries
-     * rather than 500 round trips inside a held lock.
-     *
-     * Only rows whose value actually changes are passed in (see
-     * {@see MenuBuilderHierarchyHelper::sortOrderAssignments()}), which also
-     * keeps a drag from rewriting rows nobody touched.
+     * Writes a batch of `sortOrder` values as one statement per chunk (`CASE id WHEN … THEN …`)
+     * instead of one UPDATE per row, so repositioning inside a 500-item sibling set costs a couple
+     * of queries rather than 500 round trips inside a held lock.
      *
      * @param array<int,int> $assignments id => new sortOrder
-     */
+    */
     private function applySortOrders(array $assignments): void
     {
         if (empty($assignments)) {
@@ -1027,11 +867,9 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * Authoritative (uncached) existence check for the owning group — a
-     * group deleted after this request's group cache was warmed must not
-     * still look present. {@see save()} is the only caller; it needs the
-     * truth at write time, not at read time.
-     */
+     * Authoritative (uncached) existence check for the owning group — a group deleted after this
+     * request's group cache was warmed must not still look present.
+    */
     private function groupExists(?int $groupId): bool
     {
         if ($groupId === null) {
@@ -1072,26 +910,24 @@ class MenuBuilderItemService extends Component
         $clone->fallbackUrl = $original->fallbackUrl;
         $clone->visibility = $original->visibility;
         $clone->metadata = $original->metadata;
-        // A *copy* of the content element, never a shared id: two items
-        // pointing at one would mean editing either one's fields silently
-        // rewrote the other's, and deleting either would empty both.
+        // A *copy* of the content element, never a shared id: two items pointing at one would mean
+        // editing either one's fields silently rewrote the other's, and deleting either would empty
+        // both.
         $clone->contentId = MenuBuilder::getInstance()->itemContent->duplicateContent(
             $original->contentId !== null ? (int)$original->contentId : null,
             $this->fieldLayoutIdForGroup($groupId),
         );
 
-        // Must throw rather than return a half-made clone: this runs inside
-        // a transaction, and a failed save leaves $clone->id null — every
-        // descendant below would then be written with parentId = null,
-        // committing the copied subtree as a pile of orphaned root items.
+        // Must throw rather than return a half-made clone: this runs inside a transaction, and a
+        // failed save leaves $clone->id null — every descendant below would then be written with
+        // parentId = null, committing the copied subtree as a pile of orphaned root items.
         if (!$clone->save(false)) {
             throw new Exception('Couldn’t duplicate navigation item ' . $original->id . '.');
         }
 
-        // Ordered, so the copy's sibling order matches the original's —
-        // nextSortOrder() numbers each child as it's written, so an
-        // unordered query hands the clone whatever order the database felt
-        // like returning.
+        // Ordered, so the copy's sibling order matches the original's — nextSortOrder() numbers
+        // each child as it's written, so an unordered query hands the clone whatever order the
+        // database felt like returning.
         /** @var MenuBuilderItemRecord[] $children */
         $children = MenuBuilderItemRecord::find()
             ->where(['parentId' => $original->id])
@@ -1115,15 +951,8 @@ class MenuBuilderItemService extends Component
     }
 
     /**
-     * One menu's cached tree only — never a blanket flush, and never another
-     * menu's. Menu **ID** rather than handle, so a rename can't leave an
-     * entry behind, and so no group lookup is needed at all: a bulk
-     * operation invalidating once per item does no extra query.
-     *
-     * Inside a transaction (every bulk operation is one) the cache service
-     * queues this until the outermost commit — see
-     * MenuBuilderCacheService, "Transactions".
-     */
+     * One menu's cached tree only — never a blanket flush, and never another menu's.
+    */
     private function invalidateGroup(int $groupId): void
     {
         MenuBuilder::getInstance()->cache->invalidateGroupId($groupId);

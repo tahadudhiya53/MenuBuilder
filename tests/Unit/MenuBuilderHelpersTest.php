@@ -8,17 +8,14 @@ use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 
 /**
- * The shared helpers that back several layers at once: the attribute-line
- * parser and link-attribute merging used by both controllers and the link
- * resolvers, the JSON bag decoder and ID-list normalizer used by the services
- * and GroupsController, and the calendar-date check used by MenuBuilderItem
- * and DateRangeRule.
- */
+ * The shared helpers that back several layers at once: the attribute-line parser and link-attribute
+ * merging used by both controllers and the link resolvers, the JSON bag decoder and ID-list
+ * normalizer used by the services and GroupsController, and the calendar-date check used by
+ * MenuBuilderItem and DateRangeRule.
+*/
 class MenuBuilderHelpersTest extends TestCase
 {
-    // ---------------------------------------------------------------------
     // LinkAttributeHelper: title fallback, rel merging, attribute safety
-    // ---------------------------------------------------------------------
 
     public function testResolveTitlePrefersExplicitTitle(): void
     {
@@ -100,11 +97,10 @@ class MenuBuilderHelpersTest extends TestCase
     }
 
     /**
-     * rel tokens are case-insensitive to a browser, so an editor-typed
-     * `NOOPENER` already satisfies the `_blank` requirement and a
-     * differently-cased repeat is still a duplicate — casing of the first
-     * occurrence is what gets emitted.
-     */
+     * rel tokens are case-insensitive to a browser, so an editor-typed `NOOPENER` already satisfies
+     * the `_blank` requirement and a differently-cased repeat is still a duplicate — casing of
+     * the first occurrence is what gets emitted.
+    */
     public function testMergeRelForTargetDeduplicatesCaseInsensitively(): void
     {
         $this->assertSame('NOOPENER', LinkAttributeHelper::mergeRelForTarget('_blank', 'NOOPENER'));
@@ -112,23 +108,22 @@ class MenuBuilderHelpersTest extends TestCase
         $this->assertSame('nofollow', LinkAttributeHelper::mergeRelForTarget('_self', 'nofollow NOFOLLOW'));
     }
 
-    /** Extra whitespace between tokens never becomes an empty rel token. */
+    /**
+     * Extra whitespace between tokens never becomes an empty rel token.
+    */
     public function testMergeRelForTargetIgnoresExtraWhitespace(): void
     {
         $this->assertSame('nofollow sponsored noopener', LinkAttributeHelper::mergeRelForTarget('_blank', "  nofollow \t sponsored  "));
         $this->assertNull(LinkAttributeHelper::mergeRelForTarget('_self', '   '));
     }
 
-    // ---------------------------------------------------------------------
     // filterHtmlAttributes: the render-time half of the same rule
-    // ---------------------------------------------------------------------
 
     /**
-     * Validation on save rejects with a message an editor can act on;
-     * filtering at render drops silently, because a page is being served and
-     * the useful answer there is a menu missing one attribute rather than an
-     * exception. Everything the validator refuses, the filter drops.
-     */
+     * Validation on save rejects with a message an editor can act on; filtering at render drops
+     * silently, because a page is being served and the useful answer there is a menu missing one
+     * attribute rather than an exception.
+    */
     public function testFilterDropsEverythingValidationWouldHaveRefused(): void
     {
         $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes([
@@ -156,11 +151,9 @@ class MenuBuilderHelpersTest extends TestCase
     }
 
     /**
-     * The attributes the bundled macros emit themselves, plus the ARIA
-     * states and `tabindex` that describe behaviour a rendered menu doesn't
-     * implement. A typed `aria-current="page"` would announce the wrong page;
-     * an `href` on a heading would turn a label into a link.
-     */
+     * The attributes the bundled macros emit themselves, plus the ARIA states and `tabindex` that
+     * describe behaviour a rendered menu doesn't implement.
+    */
     public function testFilterDropsEveryAttributeTheMacrosOwn(): void
     {
         $bag = array_fill_keys(LinkAttributeHelper::RESERVED_ATTRIBUTES, 'x');
@@ -170,7 +163,9 @@ class MenuBuilderHelpersTest extends TestCase
         $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes(['ARIA-Current' => 'page', ' href ' => '/x']), 'Attribute names are case-insensitive, and a padded one is the same name.');
     }
 
-    /** A bag from an import or a hand-written database row isn't necessarily strings. */
+    /**
+     * A bag from an import or a hand-written database row isn't necessarily strings.
+    */
     public function testFilterDropsNonStringKeysAndNonScalarValues(): void
     {
         $this->assertSame([], LinkAttributeHelper::filterHtmlAttributes([
@@ -180,9 +175,7 @@ class MenuBuilderHelpersTest extends TestCase
         ]));
     }
 
-    // ---------------------------------------------------------------------
     // Attribute lines, JSON bags, ID lists, calendar dates
-    // ---------------------------------------------------------------------
 
     public function testParseAttributeLinesBuildsKeyValueBag(): void
     {
@@ -198,7 +191,9 @@ class MenuBuilderHelpersTest extends TestCase
         $this->assertSame(['data-ok' => 'yes'], $parsed);
     }
 
-    /** A value may legitimately contain colons (a URL, a time) — only the first splits. */
+    /**
+     * A value may legitimately contain colons (a URL, a time) — only the first splits.
+    */
     public function testParseAttributeLinesSplitsOnTheFirstColonOnly(): void
     {
         $parsed = LinkAttributeHelper::parseAttributeLines('data-src: https://example.test/a:b');
@@ -225,9 +220,9 @@ class MenuBuilderHelpersTest extends TestCase
     }
 
     /**
-     * Craft's checkbox-select posts a bare string rather than an array when
-     * nothing is checked — that must read as "no restriction", not as one.
-     */
+     * Craft's checkbox-select posts a bare string rather than an array when nothing is checked —
+     * that must read as "no restriction", not as one.
+    */
     public function testNormalizeIdListTreatsANonArrayAsNoRestriction(): void
     {
         $this->assertSame([], ConfigHelper::normalizeIdList(''));
@@ -243,18 +238,19 @@ class MenuBuilderHelpersTest extends TestCase
         $this->assertTrue(DateValidationHelper::hasValidCalendarDate('2026-09-01T09:00+02:00'));
     }
 
-    /** Only a leading Y-m-d is checked; anything else is left to DateTime. */
+    /**
+     * Only a leading Y-m-d is checked; anything else is left to DateTime.
+    */
     public function testCalendarDateCheckPassesValuesWithoutALeadingDateComponent(): void
     {
         $this->assertTrue(DateValidationHelper::hasValidCalendarDate('now'));
         $this->assertTrue(DateValidationHelper::hasValidCalendarDate('tomorrow 09:00'));
     }
     /**
-     * The strict list normalizers behind the visibility rules — separate
-     * from normalizeIdList() on purpose: a rule that gates access must
-     * reject junk (`null`, "fail closed") rather than quietly dropping it,
-     * and must never intval a bool into a real group/site ID.
-     */
+     * The strict list normalizers behind the visibility rules — separate from normalizeIdList()
+     * on purpose: a rule that gates access must reject junk (`null`, "fail closed") rather than
+     * quietly dropping it, and must never intval a bool into a real group/site ID.
+    */
     public function testStrictIdListAcceptsIntsAndDigitStrings(): void
     {
         $this->assertSame([1, 2, 3], ConfigHelper::strictIdList([1, '2', 3]));

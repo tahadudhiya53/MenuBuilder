@@ -17,18 +17,7 @@ use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 
 /**
  * Menu items' custom fields, end to end against the real database.
- *
- * These are Craft fields on a real field layout now, stored on a
- * {@see MenuBuilderItemContent} element beside each item — so the questions
- * worth asking are the ones only a database answers: whether a value
- * round-trips, whether a duplicated item gets its own content rather than
- * sharing the original's, whether deleting an item takes its content, and
- * whether the `parentId` cascade — which removes rows without passing
- * through PHP at all — leaves anything behind that garbage collection
- * doesn't sweep.
- *
- * Each test works in a menu of its own, deleted afterwards.
- */
+*/
 class MenuBuilderItemContentTest extends TestCase
 {
     private const FIELD_HANDLE = 'mbTestSubtitle';
@@ -54,9 +43,7 @@ class MenuBuilderItemContentTest extends TestCase
         parent::tearDown();
     }
 
-    // ---------------------------------------------------------------------
     // The layout
-    // ---------------------------------------------------------------------
 
     public function testAMenuWithFieldsReportsThemAndAMenuWithoutDoesNot(): void
     {
@@ -67,8 +54,8 @@ class MenuBuilderItemContentTest extends TestCase
         $plain->handle = 'noFields' . bin2hex(random_bytes(4));
         $this->assertTrue(MenuBuilder::getInstance()->groups->save($plain));
 
-        // An empty layout is never given a row: `hasCustomFields()` would
-        // otherwise be true for every menu ever created.
+        // An empty layout is never given a row: `hasCustomFields()` would otherwise be true for
+        // every menu ever created.
         $this->assertNull($plain->fieldLayoutId);
         $this->assertFalse($plain->hasCustomFields());
 
@@ -76,9 +63,9 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * Emptying a menu's layout deletes the row rather than leaving one
-     * holding nothing — the state a menu that never had fields is in.
-     */
+     * Emptying a menu's layout deletes the row rather than leaving one holding nothing — the
+     * state a menu that never had fields is in.
+    */
     public function testEmptyingAMenusLayoutRemovesIt(): void
     {
         $menu = $this->reloadMenu();
@@ -91,9 +78,7 @@ class MenuBuilderItemContentTest extends TestCase
         $this->assertFalse($this->fieldLayoutExists($fieldLayoutId));
     }
 
-    // ---------------------------------------------------------------------
     // Values
-    // ---------------------------------------------------------------------
 
     public function testAFieldValueRoundTripsThroughTheContentElement(): void
     {
@@ -108,10 +93,9 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * An item in a menu with no field layout gets no content element at all
-     * — an install that uses no custom fields must never write a row to
-     * `elements`.
-     */
+     * An item in a menu with no field layout gets no content element at all — an install that
+     * uses no custom fields must never write a row to `elements`.
+    */
     public function testAnItemInAMenuWithoutFieldsGetsNoContentElement(): void
     {
         $plain = new MenuBuilderGroup();
@@ -132,7 +116,9 @@ class MenuBuilderItemContentTest extends TestCase
         MenuBuilder::getInstance()->groups->deleteById((int)$plain->id);
     }
 
-    /** A handle the menu's layout doesn't define reads as null, never as an error. */
+    /**
+     * A handle the menu's layout doesn't define reads as null, never as an error.
+    */
     public function testAnUnknownHandleReadsAsNull(): void
     {
         $item = $this->addItem('Home', 'Since 1998');
@@ -142,9 +128,7 @@ class MenuBuilderItemContentTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Duplication
-    // ---------------------------------------------------------------------
 
     public function testDuplicatingAnItemGivesTheCopyItsOwnContent(): void
     {
@@ -165,9 +149,7 @@ class MenuBuilderItemContentTest extends TestCase
         );
     }
 
-    // ---------------------------------------------------------------------
     // Deletion
-    // ---------------------------------------------------------------------
 
     public function testDeletingAnItemDeletesItsContentElement(): void
     {
@@ -179,10 +161,10 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * The `parentId` cascade removes a subtree inside the database, so the
-     * content of every descendant has to be collected *before* the delete
-     * runs — after it, there is no row left naming any of them.
-     */
+     * The `parentId` cascade removes a subtree inside the database, so the content of every
+     * descendant has to be collected *before* the delete runs — after it, there is no row left
+     * naming any of them.
+    */
     public function testDeletingAParentDeletesItsDescendantsContentToo(): void
     {
         $parent = $this->addItem('Products', 'Parent copy');
@@ -199,7 +181,9 @@ class MenuBuilderItemContentTest extends TestCase
         }
     }
 
-    /** Deleting a menu takes every item's content with it. */
+    /**
+     * Deleting a menu takes every item's content with it.
+    */
     public function testDeletingAMenuDeletesEveryItemsContent(): void
     {
         $first = $this->addItem('One', 'First');
@@ -212,22 +196,21 @@ class MenuBuilderItemContentTest extends TestCase
             $this->assertFalse($this->elementExists($contentId));
         }
 
-        // tearDown() deletes it again; a second delete of a missing menu is
-        // a no-op, so nothing here depends on that ordering.
+        // tearDown() deletes it again; a second delete of a missing menu is a no-op, so nothing
+        // here depends on that ordering.
     }
 
     /**
-     * The backstop for the one path PHP can't see: a content element
-     * stranded by a row that vanished with the cascade is swept by garbage
-     * collection.
-     */
+     * The backstop for the one path PHP can't see: a content element stranded by a row that
+     * vanished with the cascade is swept by garbage collection.
+    */
     public function testGarbageCollectionSweepsStrandedContent(): void
     {
         $item = $this->addItem('Home', 'Since 1998');
         $contentId = (int)$item->contentId;
 
-        // Exactly what the cascade does — delete the item row, and only the
-        // item row, behind the plugin's back.
+        // Exactly what the cascade does — delete the item row, and only the item row, behind the
+        // plugin's back.
         Craft::$app->getDb()->createCommand()
             ->delete('{{%menubuilder_items}}', ['id' => $item->id])
             ->execute();
@@ -239,16 +222,13 @@ class MenuBuilderItemContentTest extends TestCase
         $this->assertFalse($this->elementExists($contentId));
     }
 
-    // ---------------------------------------------------------------------
     // The read surfaces (Twig, GraphQL, REST)
-    // ---------------------------------------------------------------------
 
     /**
-     * `hasValueFor()` asks the *field* whether its value is empty rather
-     * than comparing to null, which is the only answer that holds for field
-     * types whose empty value is not null — and it is what a template's
-     * `node.hasCustom()` is deciding a whole markup branch on.
-     */
+     * `hasValueFor()` asks the *field* whether its value is empty rather than comparing to null,
+     * which is the only answer that holds for field types whose empty value is not null — and it
+     * is what a template's `node.hasCustom()` is deciding a whole markup branch on.
+    */
     public function testHasValueForDistinguishesEmptyFromAbsent(): void
     {
         $filled = $this->addItem('Home', 'Since 1998');
@@ -259,17 +239,16 @@ class MenuBuilderItemContentTest extends TestCase
         $this->assertTrue($content->hasValueFor((int)$filled->contentId, self::FIELD_HANDLE));
         $this->assertFalse($content->hasValueFor((int)$blank->contentId, self::FIELD_HANDLE));
 
-        // An unknown handle and a null content id are both "no value", not
-        // an exception: a live page must survive a field the menu has since
-        // lost.
+        // An unknown handle and a null content id are both "no value", not an exception: a live
+        // page must survive a field the menu has since lost.
         $this->assertFalse($content->hasValueFor((int)$filled->contentId, 'noSuchHandle'));
         $this->assertFalse($content->hasValueFor(null, self::FIELD_HANDLE));
     }
 
     /**
-     * `handlesFor()` is what "every custom field on this node" iterates when
-     * nothing names the fields — the GraphQL field list and the Twig loop.
-     */
+     * `handlesFor()` is what "every custom field on this node" iterates when nothing names the
+     * fields — the GraphQL field list and the Twig loop.
+    */
     public function testHandlesForListsTheMenusFieldsAndNothingElse(): void
     {
         $item = $this->addItem('Home', 'Since 1998');
@@ -283,10 +262,10 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * The wire shape: serialized values, keyed by handle, for every field on
-     * the layout — including the ones the item left empty, so a client gets
-     * a stable set of keys rather than one that varies per item.
-     */
+     * The wire shape: serialized values, keyed by handle, for every field on the layout —
+     * including the ones the item left empty, so a client gets a stable set of keys rather than one
+     * that varies per item.
+    */
     public function testSerializedValuesForReturnsEveryFieldOnTheLayout(): void
     {
         $filled = $this->addItem('Home', 'Since 1998');
@@ -304,11 +283,10 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * A content element whose row is gone must read as "no value" forever
-     * after, without going back to the database each time — that record of
-     * absence is what stops a stale cached `contentId` turning one dead
-     * reference into a query per node per request.
-     */
+     * A content element whose row is gone must read as "no value" forever after, without going back
+     * to the database each time — that record of absence is what stops a stale cached `contentId`
+     * turning one dead reference into a query per node per request.
+    */
     public function testAMissingContentElementReadsAsTheDefault(): void
     {
         $item = $this->addItem('Home', 'Since 1998');
@@ -324,10 +302,9 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * `preload()` is the resolver's promise that a whole tree's values cost
-     * one query, not one per node. Registering ids is idempotent and reading
-     * them afterwards must give the same answers as reading them cold.
-     */
+     * `preload()` is the resolver's promise that a whole tree's values cost one query, not one per
+     * node.
+    */
     public function testPreloadedContentReadsTheSameAsUnpreloaded(): void
     {
         $one = $this->addItem('Home', 'Since 1998');
@@ -345,11 +322,9 @@ class MenuBuilderItemContentTest extends TestCase
     }
 
     /**
-     * Two menus, two layouts: an item's content is rendered against the menu
-     * it belongs to, not against whichever layout its `elements` row happens
-     * to name. This is the case the dev site exercises with `mainNav` and
-     * `footerNav` holding different field sets.
-     */
+     * Two menus, two layouts: an item's content is rendered against the menu it belongs to, not
+     * against whichever layout its `elements` row happens to name.
+    */
     public function testContentIsRepointedAtItsOwnMenusLayout(): void
     {
         $other = new MenuBuilderGroup();
@@ -361,8 +336,8 @@ class MenuBuilderItemContentTest extends TestCase
         try {
             $item = $this->addItem('Home', 'Since 1998');
 
-            // Point the stored element at the *other* menu's layout, as a
-            // layout replaced wholesale would.
+            // Point the stored element at the *other* menu's layout, as a layout replaced wholesale
+            // would.
             Craft::$app->getDb()->createCommand()
                 ->update(Table::ELEMENTS, ['fieldLayoutId' => $other->fieldLayoutId], ['id' => $item->contentId])
                 ->execute();
@@ -378,9 +353,7 @@ class MenuBuilderItemContentTest extends TestCase
         }
     }
 
-    // ---------------------------------------------------------------------
     // Helpers
-    // ---------------------------------------------------------------------
 
     private function addItem(string $title, string $subtitle, ?int $parentId = null): MenuBuilderItem
     {
@@ -406,17 +379,18 @@ class MenuBuilderItemContentTest extends TestCase
         return MenuBuilder::getInstance()->groups->getById((int)$this->menu->id);
     }
 
-    /** Hard existence, including soft-deleted rows — this element is never soft-deleted. */
+    /**
+     * Hard existence, including soft-deleted rows — this element is never soft-deleted.
+    */
     private function elementExists(int $elementId): bool
     {
         return (new Query())->from(Table::ELEMENTS)->where(['id' => $elementId])->exists();
     }
 
     /**
-     * Asked of the table, not of `Fields::getLayoutById()`: that memoizes,
-     * so a layout deleted in this request still comes back from it. Craft
-     * soft-deletes layouts, so "gone" means `dateDeleted` is set.
-     */
+     * Asked of the table, not of `Fields::getLayoutById()`: that memoizes, so a layout deleted in
+     * this request still comes back from it.
+    */
     private function fieldLayoutExists(int $fieldLayoutId): bool
     {
         return (new Query())

@@ -9,6 +9,7 @@ use craft\helpers\StringHelper;
 use craft\models\FieldLayout;
 use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\TextHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\records\MenuBuilderGroupRecord;
@@ -186,7 +187,7 @@ class MenuBuilderGroupService extends Component
 
         try {
             $clone = new MenuBuilderGroupRecord();
-            $clone->name = self::truncate($original->name . ' Copy', self::MAX_STRING_LENGTH);
+            $clone->name = TextHelper::truncate($original->name . ' Copy', self::MAX_STRING_LENGTH);
             $clone->handle = $this->uniqueHandle($original->handle);
             $clone->description = $original->description;
             $clone->enabled = $original->enabled;
@@ -229,7 +230,7 @@ class MenuBuilderGroupService extends Component
     */
     private function uniqueHandle(string $baseHandle): string
     {
-        $handle = self::truncate($baseHandle, self::MAX_STRING_LENGTH);
+        $handle = TextHelper::truncate($baseHandle, self::MAX_STRING_LENGTH);
         $suffix = 2;
 
         while (MenuBuilderGroupRecord::find()->where(['handle' => $handle])->exists()) {
@@ -247,12 +248,7 @@ class MenuBuilderGroupService extends Component
     {
         $suffixString = (string)$suffix;
 
-        return self::truncate($baseHandle, self::MAX_STRING_LENGTH - strlen($suffixString)) . $suffixString;
-    }
-
-    private static function truncate(string $value, int $length): string
-    {
-        return strlen($value) > $length ? substr($value, 0, $length) : $value;
+        return TextHelper::truncate($baseHandle, self::MAX_STRING_LENGTH - strlen($suffixString)) . $suffixString;
     }
 
     public function deleteById(int $id): bool

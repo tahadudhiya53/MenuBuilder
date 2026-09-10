@@ -469,6 +469,43 @@ class MenuBuilderItemCrudTest extends TestCase
         $this->assertSame((int)$parent->id, (int)$this->items()->getById((int)$copy->id)->parentId);
     }
 
+    /**
+     * The ` 2` suffix has to fit the column it is written to. A title that already fills
+     * `varchar(255)` used to produce a 257-character row the database rejected, and because the
+     * copy runs inside a transaction that then throws, the editor was told the duplicate couldn't
+     * be done at all rather than getting one with a shortened name.
+    */
+    public function testDuplicatingAnItemWhoseTitleAlreadyFillsTheColumn(): void
+    {
+        $item = $this->add(str_repeat('a', MenuBuilderItem::MAX_TITLE_LENGTH));
+
+        $copy = $this->items()->duplicate((int)$item->id);
+
+        $this->assertNotNull($copy);
+        $this->assertSame(
+            MenuBuilderItem::MAX_TITLE_LENGTH,
+            mb_strlen($this->items()->getById((int)$copy->id)->title)
+        );
+    }
+
+    /**
+     * The column counts characters, so a title of accented characters that fits must survive the
+     * copy whole — and must never be cut inside a UTF-8 sequence.
+    */
+    public function testDuplicatingAnItemWithAMultibyteTitleAtTheLimit(): void
+    {
+        $item = $this->add(str_repeat('é', MenuBuilderItem::MAX_TITLE_LENGTH));
+
+        $copy = $this->items()->duplicate((int)$item->id);
+
+        $this->assertNotNull($copy);
+
+        $title = $this->items()->getById((int)$copy->id)->title;
+
+        $this->assertSame(MenuBuilderItem::MAX_TITLE_LENGTH, mb_strlen($title));
+        $this->assertTrue(mb_check_encoding($title, 'UTF-8'));
+    }
+
     public function testDuplicatingAnItemThatDoesNotExistIsNull(): void
     {
         $this->assertNull($this->items()->duplicate(999999));

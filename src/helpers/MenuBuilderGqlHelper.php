@@ -150,57 +150,38 @@ class MenuBuilderGqlHelper
         foreach ($values as $handle => $value) {
             $json = self::jsonOrNull($value);
 
-            if (is_bool($value)) {
-                $entries[] = [
-                    'handle' => (string)$handle,
-                    'value' => $value ? 'true' : 'false',
-                    'booleanValue' => $value,
-                    'numberValue' => null,
-                    'intValue' => null,
-                    'jsonValue' => $json,
-                ];
+            // Every entry has the same six keys and differs only in which
+            // typed accessor the value lands on, so the shape is stated once
+            // and each branch names its own difference from it. Written out
+            // per branch, four near-identical literals were four chances for
+            // one of them to grow a key the others don't have.
+            $typed = match (true) {
+                is_bool($value) => ['value' => $value ? 'true' : 'false', 'booleanValue' => $value],
+                is_int($value) => ['value' => (string)$value, 'numberValue' => (float)$value, 'intValue' => $value],
+                is_float($value) => ['value' => (string)$value, 'numberValue' => $value],
+                is_string($value) => ['value' => $value],
+                // Nothing storable and nothing encodable — a resource, a
+                // closure, an object with no JSON form. Dropped rather than
+                // reported as an empty field, which would be a lie about
+                // what the item holds.
+                $value === null || $json === null => null,
+                // A relation, Matrix or Table field: no honest scalar form,
+                // so only the JSON one is offered.
+                default => [],
+            };
 
+            if ($typed === null) {
                 continue;
             }
 
-            if (is_int($value) || is_float($value)) {
-                $entries[] = [
-                    'handle' => (string)$handle,
-                    'value' => (string)$value,
-                    'booleanValue' => null,
-                    'numberValue' => (float)$value,
-                    'intValue' => is_int($value) ? $value : null,
-                    'jsonValue' => $json,
-                ];
-
-                continue;
-            }
-
-            if (is_string($value)) {
-                $entries[] = [
-                    'handle' => (string)$handle,
-                    'value' => $value,
-                    'booleanValue' => null,
-                    'numberValue' => null,
-                    'intValue' => null,
-                    'jsonValue' => $json,
-                ];
-
-                continue;
-            }
-
-            if ($value === null || $json === null) {
-                // Nothing storable and nothing encodable — a resource, a closure, an object with
-                // no JSON form.
-                continue;
-            }
-
+            // Spelled out rather than merged so the key order is the same
+            // for every entry, whichever branch produced it.
             $entries[] = [
                 'handle' => (string)$handle,
-                'value' => null,
-                'booleanValue' => null,
-                'numberValue' => null,
-                'intValue' => null,
+                'value' => $typed['value'] ?? null,
+                'booleanValue' => $typed['booleanValue'] ?? null,
+                'numberValue' => $typed['numberValue'] ?? null,
+                'intValue' => $typed['intValue'] ?? null,
                 'jsonValue' => $json,
             ];
         }

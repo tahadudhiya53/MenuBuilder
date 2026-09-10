@@ -73,13 +73,7 @@ class MenuBuilderGroup extends Model implements FieldLayoutProviderInterface
     */
     public function validateHtmlAttributes(): void
     {
-        if (!is_array($this->htmlAttributes)) {
-            $this->addError('htmlAttributes', 'Invalid attributes.');
-
-            return;
-        }
-
-        foreach (LinkAttributeHelper::validateHtmlAttributes($this->htmlAttributes) as $error) {
+        foreach (LinkAttributeHelper::htmlAttributeErrors($this->htmlAttributes) as $error) {
             $this->addError('htmlAttributes', $error);
         }
     }

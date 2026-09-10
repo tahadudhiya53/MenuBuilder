@@ -4,16 +4,11 @@
     </p>
 {% endif %}
 <ul class="menu-builder-tree-list" data-parent-id="">
-    {% include "menu-builder/dashboard/_items" with {
+    {# `treeContext` comes from dashboard/index.twig — see the comment there. #}
+    {% include "menu-builder/dashboard/_items" with treeContext|merge({
         items: items,
         level: level,
         openColumns: [],
         parentId: parentId,
-        group: group,
-        canEdit: canEdit,
-        canCreate: canCreate,
-        canDelete: canDelete,
-        isFiltered: isFiltered,
-        itemHealth: itemHealth,
-    } %}
+    }) %}
 </ul>

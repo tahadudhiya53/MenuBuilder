@@ -3,7 +3,6 @@
 namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
-use craft\helpers\UrlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -27,22 +26,18 @@ class DashboardController extends BaseMenuBuilderController
         return self::requiredPermissionForAction($action->id);
     }
 
-    protected function permissionDeniedMessage(): string
-    {
-        return 'You are not permitted to view navigation.';
-    }
+    /** Both read-only screens say the same thing; see the base controller. */
+    protected const PERMISSION_DENIED_MESSAGE = 'You are not permitted to view navigation.';
 
     public function actionIndex(string $groupHandle): Response
     {
-        $groups = MenuBuilder::getInstance()->groups->getAll();
-        $group = MenuBuilder::getInstance()->groups->getByHandle($groupHandle);
+        $group = $this->groupByHandleOrRedirect($groupHandle);
 
-        if (!$group) {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'That navigation menu doesn’t exist.'));
-
-            return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+        if ($group instanceof Response) {
+            return $group;
         }
 
+        $groups = MenuBuilder::getInstance()->groups->getAll();
         $itemHealth = MenuBuilder::getInstance()->linkHealth->getForGroup($group->id);
         $search = trim((string)Craft::$app->getRequest()->getQueryParam('search', ''));
         $tree = MenuBuilder::getInstance()->items->getTree($group->id);

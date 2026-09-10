@@ -21,11 +21,6 @@ class GroupsController extends BaseMenuBuilderController
         return self::requiredPermissionForAction($action->id);
     }
 
-    protected function permissionDeniedMessage(): string
-    {
-        return 'You are not permitted to manage navigation menus.';
-    }
-
     /**
      * Pure mapping from action to the permission it requires, factored out so it's unit-testable
      * without a booted Craft app.
@@ -57,21 +52,14 @@ class GroupsController extends BaseMenuBuilderController
         $group->enabled = !$group->enabled;
         $success = MenuBuilder::getInstance()->groups->save($group, runValidation: false);
 
-        if (Craft::$app->getRequest()->getAcceptsJson()) {
-            return $success
-                ? $this->asSuccess(data: ['enabled' => $group->enabled])
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t update that menu.'));
-        }
-
-        if ($success) {
-            Craft::$app->getSession()->setSuccess($group->enabled
+        return $this->respondToMutation(
+            $success,
+            Craft::t('menu-builder', 'Couldn’t update that menu.'),
+            data: ['enabled' => $group->enabled],
+            successMessage: $group->enabled
                 ? Craft::t('menu-builder', 'Menu enabled.')
-                : Craft::t('menu-builder', 'Menu disabled.'));
-        } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t update that menu.'));
-        }
-
-        return $this->redirectToPostedUrl();
+                : Craft::t('menu-builder', 'Menu disabled.'),
+        );
     }
 
     public function actionIndex(): Response
@@ -147,8 +135,7 @@ class GroupsController extends BaseMenuBuilderController
         $group->description = is_scalar($description) ? (string)$description : null;
         $group->enabled = (bool)$request->getBodyParam('enabled', false);
         $group->cssClass = $this->bodyString('cssClass') ?: null;
-        $maxDepth = $request->getBodyParam('maxDepth');
-        $group->maxDepth = ($maxDepth !== null && $maxDepth !== '') ? (int)$maxDepth : null;
+        $group->maxDepth = $this->bodyIntOrNull('maxDepth');
         $group->htmlAttributes = LinkAttributeHelper::parseAttributeLines($this->bodyString('htmlAttributes'));
         $group->siteIds = ConfigHelper::normalizeIdList($request->getBodyParam('siteIds'));
         // Craft assembles the field layout from the designer's own posted payload — this plugin
@@ -204,18 +191,13 @@ class GroupsController extends BaseMenuBuilderController
         $id = (int)Craft::$app->getRequest()->getRequiredBodyParam('id');
         $success = MenuBuilder::getInstance()->groups->deleteById($id);
 
-        if (Craft::$app->getRequest()->getAcceptsJson()) {
-            return $success
-                ? $this->asSuccess()
-                : $this->asFailure(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
-        }
-
-        if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu deleted.'));
-        } else {
-            Craft::$app->getSession()->setError(Craft::t('menu-builder', 'Couldn’t delete that menu.'));
-        }
-
-        return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+        // The index, not the posted redirect: the screen this was posted
+        // from may well have been the deleted menu's own.
+        return $this->respondToMutation(
+            $success,
+            Craft::t('menu-builder', 'Couldn’t delete that menu.'),
+            successMessage: Craft::t('menu-builder', 'Menu deleted.'),
+            redirectUrl: UrlHelper::cpUrl('menu-builder'),
+        );
     }
 }

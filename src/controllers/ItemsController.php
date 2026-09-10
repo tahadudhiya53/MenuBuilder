@@ -10,6 +10,7 @@ use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
+use Tahadudhiya\MenuBuilder\models\MenuBuilderMegaMenuConfig;
 use yii\base\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -131,8 +132,7 @@ class ItemsController extends BaseMenuBuilderController
         // field and must not be trusted to move an existing item into a different group.
         $postedGroupId = (int)$request->getRequiredBodyParam('groupId');
         $item->groupId = $item->id !== null ? $item->groupId : $postedGroupId;
-        $parentId = $request->getBodyParam('parentId');
-        $item->parentId = ($parentId !== null && $parentId !== '') ? (int)$parentId : null;
+        $item->parentId = $this->bodyIntOrNull('parentId');
         $item->type = $this->bodyString('type', MenuBuilderItem::TYPE_URL);
         $item->title = $this->bodyString('title');
         $item->handle = $this->bodyString('handle') ?: null;
@@ -142,8 +142,7 @@ class ItemsController extends BaseMenuBuilderController
         $item->enabled = (bool)$request->getBodyParam('enabled', $item->id === null);
         $item->clickable = (bool)$request->getBodyParam('clickable', false);
 
-        $elementId = $request->getBodyParam('elementId');
-        $item->elementId = ($elementId !== null && $elementId !== '') ? (int)$elementId : null;
+        $item->elementId = $this->bodyIntOrNull('elementId');
 
         $item->customUrl = $this->bodyString('customUrl') ?: null;
         $item->target = $this->bodyString('target', '_self');
@@ -166,8 +165,7 @@ class ItemsController extends BaseMenuBuilderController
         $item->badge = BadgeHelper::normalizeText($this->bodyString('badge'));
         $item->description = $this->bodyString('description') ?: null;
 
-        $image = $request->getBodyParam('image');
-        $item->image = ($image !== null && $image !== '') ? (int)$image : null;
+        $item->image = $this->bodyIntOrNull('image');
         $item->featured = (bool)$request->getBodyParam('featured', false);
 
         $item->fallbackBehavior = $this->bodyString('fallbackBehavior', MenuBuilderItem::FALLBACK_HIDE);
@@ -227,7 +225,7 @@ class ItemsController extends BaseMenuBuilderController
 
         $success = $itemsService->deleteById($id, (bool)$keepChildrenParam);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t delete that menu item.'));
+        return $this->respondToMutation($success, Craft::t('menu-builder', 'Couldn’t delete that menu item.'));
     }
 
     public function actionDuplicate(): Response
@@ -258,7 +256,7 @@ class ItemsController extends BaseMenuBuilderController
         $item->enabled = !$item->enabled;
         $success = MenuBuilder::getInstance()->items->save($item, runValidation: false);
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'Couldn’t update that menu item.'), ['enabled' => $item->enabled]);
+        return $this->respondToMutation($success, Craft::t('menu-builder', 'Couldn’t update that menu item.'), ['enabled' => $item->enabled]);
     }
 
     /**
@@ -271,8 +269,7 @@ class ItemsController extends BaseMenuBuilderController
         $request = Craft::$app->getRequest();
         $itemId = (int)$request->getRequiredBodyParam('itemId');
         $groupId = (int)$request->getRequiredBodyParam('groupId');
-        $newParentId = $request->getBodyParam('newParentId');
-        $newParentId = ($newParentId !== null && $newParentId !== '') ? (int)$newParentId : null;
+        $newParentId = $this->bodyIntOrNull('newParentId');
         $siblingIds = $request->getBodyParam('siblingIds', []);
         $siblingIds = is_array($siblingIds) ? array_values(array_map('intval', $siblingIds)) : [];
 
@@ -307,7 +304,6 @@ class ItemsController extends BaseMenuBuilderController
     {
         $this->requirePostRequest();
 
-        $request = Craft::$app->getRequest();
         $op = $this->bodyString('op');
         $ids = array_filter(array_map('intval', $this->bodyArray('ids')));
 
@@ -324,22 +320,7 @@ class ItemsController extends BaseMenuBuilderController
             default => false,
         };
 
-        return $this->asJsonResult($success, Craft::t('menu-builder', 'That bulk action couldn’t be completed.'));
-    }
-
-    private function asJsonResult(bool $success, string $failureMessage, array $extraData = []): Response
-    {
-        if (Craft::$app->getRequest()->getAcceptsJson()) {
-            return $success ? $this->asSuccess(data: $extraData) : $this->asFailure($failureMessage);
-        }
-
-        if ($success) {
-            Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Changes saved.'));
-        } else {
-            Craft::$app->getSession()->setError($failureMessage);
-        }
-
-        return $this->redirectToPostedUrl();
+        return $this->respondToMutation($success, Craft::t('menu-builder', 'That bulk action couldn’t be completed.'));
     }
 
     /**
@@ -425,8 +406,11 @@ class ItemsController extends BaseMenuBuilderController
         $metadata = [];
 
         if ((bool)$request->getBodyParam('megaMenuEnabled', false)) {
-            $columns = (int)$request->getBodyParam('megaMenuColumns', 1);
-            $metadata['megaMenu'] = ['enabled' => true, 'columns' => max(1, min(6, $columns))];
+            $columns = (int)$request->getBodyParam('megaMenuColumns', MenuBuilderMegaMenuConfig::MIN_COLUMNS);
+            $metadata['megaMenu'] = [
+                'enabled' => true,
+                'columns' => MenuBuilderMegaMenuConfig::clampColumns($columns),
+            ];
         }
 
         // Only stored alongside actual badge text: a style left behind by a cleared badge would
@@ -437,9 +421,10 @@ class ItemsController extends BaseMenuBuilderController
             $metadata['badgeStyle'] = $badgeStyle;
         }
 
-        $column = $request->getBodyParam('megaMenuColumn');
-        if ($column !== null && $column !== '') {
-            $metadata['megaMenuColumn'] = max(1, min(6, (int)$column));
+        $column = $this->bodyIntOrNull('megaMenuColumn');
+
+        if ($column !== null) {
+            $metadata['megaMenuColumn'] = MenuBuilderMegaMenuConfig::clampColumns($column);
         }
 
         // Four discrete fields, one bag key, and nothing stored when they are all at their defaults
@@ -456,13 +441,12 @@ class ItemsController extends BaseMenuBuilderController
         }
 
         if ($itemType === MenuBuilderItem::TYPE_DYNAMIC) {
-            $sourceId = $request->getBodyParam('dynamicSourceId');
-            $limit = $request->getBodyParam('dynamicSourceLimit');
+            $limit = $this->bodyIntOrNull('dynamicSourceLimit');
 
             $metadata['dynamicSource'] = array_filter([
                 'sourceType' => $this->bodyString('dynamicSourceType') ?: null,
-                'sourceId' => ($sourceId !== null && $sourceId !== '') ? (int)$sourceId : null,
-                'limit' => ($limit !== null && $limit !== '') ? min((int)$limit, MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT) : null,
+                'sourceId' => $this->bodyIntOrNull('dynamicSourceId'),
+                'limit' => $limit !== null ? min($limit, MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT) : null,
                 'orderBy' => $this->bodyString('dynamicSourceOrderBy') ?: null,
             ], fn($value) => $value !== null);
         }

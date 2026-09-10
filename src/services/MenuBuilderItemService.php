@@ -7,6 +7,7 @@ use craft\base\Component;
 use craft\helpers\Json;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderHierarchyHelper;
+use Tahadudhiya\MenuBuilder\helpers\TextHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
 use Tahadudhiya\MenuBuilder\records\MenuBuilderGroupRecord;
@@ -442,14 +443,10 @@ class MenuBuilderItemService extends Component
     */
     public function getGroupIdsWithDynamicItems(): array
     {
-        return array_map(
-            'intval',
-            MenuBuilderItemRecord::find()
-                ->select(['groupId'])
-                ->distinct()
-                ->where(['type' => MenuBuilderItem::TYPE_DYNAMIC, 'enabled' => true])
-                ->column()
-        );
+        return MenuBuilderItemRecord::distinctGroupIds([
+            'type' => MenuBuilderItem::TYPE_DYNAMIC,
+            'enabled' => true,
+        ]);
     }
 
     /**
@@ -887,7 +884,14 @@ class MenuBuilderItemService extends Component
         $clone->groupId = $groupId;
         $clone->parentId = $newParentId;
         $clone->type = $original->type;
-        $clone->title = $renameTitle ? $original->title . ' 2' : $original->title;
+        // Truncated, not just suffixed: `title` fills a varchar(255), so appending to one that
+        // already fills it produced a row the database rejected — and because this runs inside a
+        // transaction that then throws, the editor was told the duplicate "couldn't be done"
+        // rather than getting a copy with a shortened name. Same answer, and the same helper, as
+        // the menu-name side of MenuBuilderGroupService::duplicate().
+        $clone->title = $renameTitle
+            ? TextHelper::truncate($original->title . ' 2', MenuBuilderItem::MAX_TITLE_LENGTH)
+            : $original->title;
         $clone->handle = null;
         $clone->enabled = $original->enabled;
         $clone->sortOrder = $this->nextSortOrder($groupId, $newParentId);

@@ -47,11 +47,26 @@
         <p class="menu-builder-edition-notice light">{{ edition.limitMessage }}</p>
     {% endif %}
 
+    {#
+       Reordering needs the same permission every other menu-level mutation does, and needs more
+       than one row to mean anything.
+    #}
+    {% set canReorder = canManageSettings and rows|length > 1 %}
+
+    {% if canReorder %}
+        <p id="menu-builder-group-reorder-help" class="visually-hidden">
+            {{ "Up and down arrows move this menu within the list. Changes save as you go."|t('menu-builder') }}
+        </p>
+    {% endif %}
+
     {% if rows|length %}
         <div class="tablepane">
             <table class="data fullwidth" id="menu-builder-groups">
                 <thead>
                     <tr>
+                        {% if canReorder %}
+                            <td class="thin"><span class="visually-hidden">{{ "Reorder"|t('menu-builder') }}</span></td>
+                        {% endif %}
                         <th scope="col">{{ "Name"|t('menu-builder') }}</th>
                         <th scope="col">{{ "Handle"|t('menu-builder') }}</th>
                         <th scope="col">{{ "Status"|t('menu-builder') }}</th>
@@ -64,6 +79,22 @@
                     {% for row in rows %}
                         {% set group = row.group %}
                         <tr data-id="{{ group.id }}" data-handle="{{ group.handle }}" data-name="{{ group.name }}">
+                            {% if canReorder %}
+                                {#
+                                   Focusable and operable from the keyboard, for the same reason the
+                                   item tree's handle is (see dashboard/_items.twig): a
+                                   `role="button"` that answers only to a mouse is an inaccessible
+                                   control. `.move` is what Craft.DataTableSorter drags by.
+                                #}
+                                <td class="thin">
+                                    <a class="menu-builder-drag-handle move icon"
+                                       role="button"
+                                       tabindex="0"
+                                       title="{{ 'Drag to reorder, or use the arrow keys'|t('menu-builder') }}"
+                                       aria-label="{{ 'Reorder {name}. Use the up and down arrow keys to move it within the list.'|t('menu-builder', { name: group.name }) }}"
+                                       aria-describedby="menu-builder-group-reorder-help"></a>
+                                </td>
+                            {% endif %}
                             <th scope="row">
                                 <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ group.name }}</a>
                             </th>
@@ -237,6 +268,97 @@
                 });
         });
     });
+
+    // Reordering the menus list.
+    (function() {
+        var table = document.getElementById('menu-builder-groups');
+
+        // The handles are rendered only when this user may reorder and there is more than one
+        // menu, so their absence is the whole check.
+        if (!table || !table.querySelector('a.menu-builder-drag-handle')) {
+            return;
+        }
+
+        var $table = $(table);
+        var saving = false;
+
+        // The one persistence path, whether the order came from a drop or from an arrow key —
+        // the same rule tree.js follows, so a keyboard move can't drift from a drag.
+        function persist() {
+            if (saving) {
+                return;
+            }
+
+            saving = true;
+
+            var ids = [].map.call(
+                table.querySelectorAll('tbody tr[data-id]'),
+                function(row) { return row.getAttribute('data-id'); }
+            );
+
+            Craft.sendActionRequest('POST', 'menu-builder/groups/reorder', { data: { ids: ids } })
+                .then(function() {
+                    saving = false;
+                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menus reordered.'));
+                })
+                .catch(function(error) {
+                    saving = false;
+                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t reorder the menus.'));
+
+                    // The server is the order of record, and it just refused this one.
+                    window.location.reload();
+                });
+        }
+
+        new Craft.DataTableSorter($table, {
+            onSortChange: persist
+        });
+
+        // Keyboard equivalent: move the row, keep focus on the handle that moved it, persist
+        // through the same call a drop makes.
+        $table.on('keydown', 'a.menu-builder-drag-handle', function(event) {
+            // Cmd/Ctrl/Alt + arrow belongs to the browser.
+            if (event.metaKey || event.ctrlKey || event.altKey) {
+                return;
+            }
+
+            var row = event.currentTarget.closest('tr');
+
+            if (!row) {
+                return;
+            }
+
+            var moved = false;
+
+            if (event.keyCode === Garnish.UP_KEY) {
+                var previous = row.previousElementSibling;
+
+                if (previous) {
+                    row.parentNode.insertBefore(row, previous);
+                    moved = true;
+                }
+            } else if (event.keyCode === Garnish.DOWN_KEY) {
+                var next = row.nextElementSibling;
+
+                if (next) {
+                    row.parentNode.insertBefore(next, row);
+                    moved = true;
+                }
+            } else {
+                return;
+            }
+
+            // Claimed either way: an unhandled arrow scrolls the page, which reads as "the control
+            // did something" when it did not.
+            event.preventDefault();
+
+            if (moved) {
+                // Moving a row in the DOM doesn't move focus with it in every browser.
+                event.currentTarget.focus();
+                persist();
+            }
+        });
+    })();
 
     document.querySelectorAll('[data-mb-action="delete-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {

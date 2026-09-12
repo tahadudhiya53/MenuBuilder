@@ -9,6 +9,7 @@ use craft\helpers\StringHelper;
 use craft\models\FieldLayout;
 use Tahadudhiya\MenuBuilder\elements\MenuBuilderItemContent;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderHierarchyHelper;
 use Tahadudhiya\MenuBuilder\helpers\TextHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
@@ -285,14 +286,41 @@ class MenuBuilderGroupService extends Component
 
     /**
      * Persists an explicit menu order.
+     *
+     * The posted order is treated as a **preference, not as truth** — exactly as a drag's
+     * `siblingIds` are on the item side ({@see MenuBuilderItemService::reorderSiblings()}): it is a
+     * snapshot of one editor's screen, which may name a menu somebody has since deleted, omit one
+     * created since the page loaded, or repeat an id. `MenuBuilderHierarchyHelper::resolveSiblingOrder()`
+     * reconciles it against the real set, so what is written is always a permutation of the menus
+     * that actually exist, which is what keeps the resulting `sortOrder` values gap-free.
+     *
+     * No cache invalidation: `sortOrder` decides the order menus are *listed* in, and a menu's
+     * cached tree is keyed by its own id, handle and `dateUpdated` (see MenuBuilderCacheService).
+     * Nothing about a resolved tree changes when the list is re-ordered.
+     *
+     * @param int[] $groupIdsInOrder
     */
     public function reorder(array $groupIdsInOrder): bool
     {
+        $current = array_map(static fn(MenuBuilderGroup $group): int => (int)$group->id, $this->getAll());
+        $ordered = MenuBuilderHierarchyHelper::resolveSiblingOrder($current, $groupIdsInOrder);
+        $sortOrders = [];
+
+        foreach ($this->getAll() as $group) {
+            $sortOrders[(int)$group->id] = (int)$group->sortOrder;
+        }
+
+        $assignments = MenuBuilderHierarchyHelper::sortOrderAssignments($ordered, $sortOrders);
+
+        if ($assignments === []) {
+            return true;
+        }
+
         $transaction = Craft::$app->getDb()->beginTransaction();
 
         try {
-            foreach ($groupIdsInOrder as $index => $groupId) {
-                MenuBuilderGroupRecord::updateAll(['sortOrder' => $index], ['id' => (int)$groupId]);
+            foreach ($assignments as $groupId => $sortOrder) {
+                MenuBuilderGroupRecord::updateAll(['sortOrder' => $sortOrder], ['id' => $groupId]);
             }
             $transaction->commit();
         } catch (\Throwable $exception) {

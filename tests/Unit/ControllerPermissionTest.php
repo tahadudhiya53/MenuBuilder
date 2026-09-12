@@ -112,6 +112,15 @@ class ControllerPermissionTest extends TestCase
         $this->assertSame('menuBuilder:manageSettings', GroupsController::requiredPermissionForAction('duplicate'));
     }
 
+    /**
+     * Reordering the menus list is a menu-level mutation, so it sits with the other three rather
+     * than with `menuBuilder:edit`, which means "edit items".
+    */
+    public function testGroupsReorderRequiresManageSettings(): void
+    {
+        $this->assertSame('menuBuilder:manageSettings', GroupsController::requiredPermissionForAction('reorder'));
+    }
+
     public function testItemsEditRequiresView(): void
     {
         $this->assertSame('menuBuilder:view', ItemsController::requiredPermissionForAction('edit', false));

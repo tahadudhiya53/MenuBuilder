@@ -30,9 +30,23 @@ class MenuBuilderApiHelper
     public const ERROR_RATE_LIMITED = 'rate_limited';
 
     /**
-     * The rate limiter's fixed window, in seconds.
+     * The rate limiter's fixed window, in seconds. Shared by both limiters below.
     */
     public const RATE_WINDOW = 60;
+
+    /**
+     * How many *failed* authentications one address may make per window.
+     *
+     * A second budget, deliberately separate from `rateLimit`: the request limiter is keyed partly
+     * by token, so it cannot count a caller who hasn't presented a usable one, and it runs after
+     * authentication, so a 401 never reaches it. Without this, the one-minute window is no
+     * obstacle to guessing at bearer tokens.
+     *
+     * Lower than any sensible `rateLimit`, because a legitimate consumer authenticates correctly
+     * or not at all: ten wrong tokens a minute from one address is already a client that is
+     * misconfigured rather than busy.
+    */
+    public const AUTH_FAILURE_LIMIT = 10;
 
     // Input
 
@@ -333,6 +347,18 @@ class MenuBuilderApiHelper
     public static function rateLimitKey(?string $tokenUid, ?string $ip, int $window): string
     {
         return 'menu-builder:api:rate:' . hash('xxh128', ($tokenUid ?? 'public') . '|' . ($ip ?? 'unknown')) . ':' . $window;
+    }
+
+    /**
+     * The failed-authentication counter's cache key for one address in one window.
+     *
+     * Keyed by address alone, and deliberately not by the presented token: the whole point is to
+     * count a caller who has *not* produced a usable one, and a key that included the token would
+     * give every guess its own fresh budget.
+    */
+    public static function authFailureKey(?string $ip, int $window): string
+    {
+        return 'menu-builder:api:auth-fail:' . hash('xxh128', $ip ?? 'unknown') . ':' . $window;
     }
 
     /**

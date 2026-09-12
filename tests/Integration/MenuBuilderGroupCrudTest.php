@@ -270,6 +270,90 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame([0, 1, 2], $order);
     }
 
+    /**
+     * The posted order is one editor's screen, not the truth: a menu somebody deleted since the
+     * page loaded, an id from nowhere, and a repeat all have to be discarded rather than written.
+     * Same rule as a drag's `siblingIds` on the item side.
+    */
+    public function testReorderIgnoresIdsThatArentMenus(): void
+    {
+        $a = $this->makeMenu($this->handle('ra'));
+        $b = $this->makeMenu($this->handle('rb'));
+
+        $gone = $this->makeMenu($this->handle('rgone'));
+        $goneId = (int)$gone->id;
+        $this->menus()->deleteById($goneId);
+        $this->created = array_values(array_diff($this->created, [$goneId]));
+
+        $this->assertTrue($this->menus()->reorder([$b->id, $goneId, 999999, $b->id, $a->id]));
+
+        $this->assertSame(0, (int)$this->menus()->getById((int)$b->id)->sortOrder);
+        $this->assertSame(1, (int)$this->menus()->getById((int)$a->id)->sortOrder);
+        $this->assertNull($this->menus()->getById($goneId), 'A reorder must not resurrect a deleted menu.');
+    }
+
+    /**
+     * A menu the client never mentioned keeps its place in the list rather than being dropped out
+     * of the ordering — it simply follows the ones that were named.
+    */
+    public function testReorderKeepsMenusTheClientDidNotMention(): void
+    {
+        $a = $this->makeMenu($this->handle('rk1'));
+        $b = $this->makeMenu($this->handle('rk2'));
+
+        $this->assertTrue($this->menus()->reorder([$b->id]));
+
+        $all = $this->menus()->getAll();
+        $ids = array_map(static fn(MenuBuilderGroup $g): int => (int)$g->id, $all);
+
+        $this->assertContains((int)$a->id, $ids, 'An unmentioned menu must survive a reorder.');
+        $this->assertSame(0, (int)$this->menus()->getById((int)$b->id)->sortOrder);
+    }
+
+    /**
+     * Whatever was posted, what lands is a contiguous 0..n-1 sequence over the menus that exist —
+     * which is what keeps `getAll()`'s order stable and repeatable.
+    */
+    public function testReorderLeavesAGapFreeSequence(): void
+    {
+        $this->makeMenu($this->handle('rg1'));
+        $this->makeMenu($this->handle('rg2'));
+
+        $all = $this->menus()->getAll();
+        $ids = array_map(static fn(MenuBuilderGroup $g): int => (int)$g->id, $all);
+
+        $this->assertTrue($this->menus()->reorder(array_reverse($ids)));
+
+        $orders = array_map(
+            static fn(MenuBuilderGroup $g): int => (int)$g->sortOrder,
+            $this->menus()->getAll(),
+        );
+
+        $this->assertSame(range(0, count($orders) - 1), $orders);
+    }
+
+    /**
+     * The list order is not part of any cache key — a menu's cached tree is keyed by its own id,
+     * handle and `dateUpdated` — so reordering must leave the menus themselves untouched.
+    */
+    public function testReorderChangesNothingButSortOrder(): void
+    {
+        $a = $this->makeMenu($this->handle('rt1'));
+        $b = $this->makeMenu($this->handle('rt2'));
+
+        $before = $this->menus()->getById((int)$a->id);
+        $fingerprint = [$before->name, $before->handle, $before->enabled, $before->uid, $before->dateUpdated];
+
+        $this->assertTrue($this->menus()->reorder([$b->id, $a->id]));
+
+        $after = $this->menus()->getById((int)$a->id);
+
+        $this->assertSame(
+            $fingerprint,
+            [$after->name, $after->handle, $after->enabled, $after->uid, $after->dateUpdated],
+        );
+    }
+
     // Validation
 
     public function testASecondMenuCannotTakeAHandleAlreadyInUse(): void
@@ -523,6 +607,7 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->menus()->save($menu);
         $copy = $this->menus()->duplicate((int)$menu->id);
         $this->created[] = (int)$copy->id;
+        $this->menus()->reorder([(int)$copy->id, (int)$menu->id]);
         $this->menus()->deleteById((int)$copy->id);
         $this->created = array_values(array_diff($this->created, [(int)$copy->id]));
 

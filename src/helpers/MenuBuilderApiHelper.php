@@ -44,15 +44,8 @@ class MenuBuilderApiHelper
     */
     public static function invalidParam(array $params): ?string
     {
-        $checks = [
-            'site' => static fn(mixed $v) => MenuBuilderGqlHelper::normalizeHandle($v) !== null,
-            'siteId' => static fn(mixed $v) => MenuBuilderGqlHelper::normalizeSiteId($v) !== null,
-            'currentUri' => static fn(mixed $v) => MenuBuilderGqlHelper::normalizeCurrentUri($v) !== null,
-            'viewport' => static fn(mixed $v) => MenuBuilderGqlHelper::normalizeViewport($v) !== null,
-        ];
-
-        foreach ($checks as $param => $isValid) {
-            if (array_key_exists($param, $params) && !$isValid($params[$param])) {
+        foreach (self::PARAMS as $param) {
+            if (array_key_exists($param, $params) && self::normalize($param, $params[$param]) === null) {
                 return $param;
             }
         }
@@ -61,8 +54,34 @@ class MenuBuilderApiHelper
     }
 
     /**
-     * The subset of a query string the resolve pipeline understands, with every value already
-     * normalized.
+     * One recognised query parameter, run through the GraphQL surface's own
+     * normalizer for it — the single mapping from parameter name to
+     * normalizer, so {@see invalidParam()} (is this usable?) and
+     * {@see arguments()} (what does it mean?) cannot answer for different
+     * sets of parameters. Null means "not a usable value", which is exactly
+     * what each normalizer already returns.
+     */
+    private static function normalize(string $param, mixed $value): mixed
+    {
+        return match ($param) {
+            'site' => MenuBuilderGqlHelper::normalizeHandle($value),
+            'siteId' => MenuBuilderGqlHelper::normalizeSiteId($value),
+            'currentUri' => MenuBuilderGqlHelper::normalizeCurrentUri($value),
+            'viewport' => MenuBuilderGqlHelper::normalizeViewport($value),
+            default => null,
+        };
+    }
+
+    /**
+     * The subset of a query string the resolve pipeline understands, with
+     * every value already normalized.
+     *
+     * Built by allowlist rather than by passing the query string through:
+     * `$arguments` reaches
+     * {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderScopeService::resolveTree()},
+     * which asks `isset($arguments['site'])` to tell "named nothing usable"
+     * from "named nothing" — so an unrecognized parameter must not be able
+     * to arrive there at all.
      *
      * @param array<string,mixed> $params
      * @return array<string,mixed>
@@ -76,12 +95,7 @@ class MenuBuilderApiHelper
                 continue;
             }
 
-            $arguments[$param] = match ($param) {
-                'site' => MenuBuilderGqlHelper::normalizeHandle($params[$param]),
-                'siteId' => MenuBuilderGqlHelper::normalizeSiteId($params[$param]),
-                'currentUri' => MenuBuilderGqlHelper::normalizeCurrentUri($params[$param]),
-                'viewport' => MenuBuilderGqlHelper::normalizeViewport($params[$param]),
-            };
+            $arguments[$param] = self::normalize($param, $params[$param]);
         }
 
         return $arguments;

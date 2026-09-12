@@ -152,10 +152,36 @@ class LinkAttributeHelper
     private const DENIED_ATTRIBUTE_VALUE_SCHEMES = ['javascript', 'vbscript'];
 
     /**
-     * Validates an HTML-attributes bag for injection-shaped keys/values — event-handler-shaped
-     * attribute names (`onclick`, `onload`, `onerror`, anything else starting `on`) and
-     * executing-scheme values ({@see DENIED_ATTRIBUTE_VALUE_SCHEMES}) — as defense-in-depth
-     * beyond Twig's own output escaping.
+     * {@see validateHtmlAttributes()} for a bag whose *type* isn't known yet
+     * — a directly-posted or imported `htmlAttributes` value that may not be
+     * an array at all.
+     *
+     * The one place the two models' `validateHtmlAttributes()` rules used to
+     * be written out twice: MenuBuilderItem and MenuBuilderGroup both hold a
+     * bag that ends up on markup, so both need the same "not a bag at all"
+     * answer as well as the same per-attribute one. Returning the messages
+     * rather than adding them keeps this free of Model, so it stays testable
+     * without one.
+     *
+     * @return string[] Human-readable error messages; empty when safe.
+     */
+    public static function htmlAttributeErrors(mixed $attributes): array
+    {
+        if (!is_array($attributes)) {
+            return ['Invalid attributes.'];
+        }
+
+        return self::validateHtmlAttributes($attributes);
+    }
+
+    /**
+     * Validates an HTML-attributes bag for injection-shaped keys/values —
+     * event-handler-shaped attribute names (`onclick`, `onload`, `onerror`,
+     * anything else starting `on`) and executing-scheme values
+     * ({@see DENIED_ATTRIBUTE_VALUE_SCHEMES}) — as defense-in-depth beyond Twig's own
+     * output escaping. Shared by MenuBuilderItem and MenuBuilderGroup, whose
+     * `htmlAttributes` bags are both eventually rendered onto markup by
+     * downstream Twig templates.
      *
      * @param array<mixed,mixed> $attributes
      * @return string[] Human-readable error messages; empty when safe.

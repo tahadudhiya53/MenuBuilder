@@ -1997,6 +1997,13 @@ nor an address is stored in the clear, and TTL'd to the window's own remaining l
 leak one caller's budget into the next window. The token is part of the key so one noisy anonymous
 network can't spend an authenticated integration's budget. `rateLimit => 0` turns it off.
 
+It runs **after** authentication (see "Order of the gates"), which has a consequence worth stating:
+a request rejected with 401 is never counted, so the limiter does not slow down guessing at bearer
+tokens. That is the same placement `craft\controllers\GraphqlController` uses, and a Craft GraphQL
+token is a long random string, so this is a hardening gap rather than a reachable one — but
+counting failed authentications against a second, IP-keyed window is the fix if it is ever wanted.
+See "Known limitations".
+
 ### No write surface
 
 Same answer as GraphQL's, and for the same reason: a GraphQL token is not a user and holds no
@@ -2131,10 +2138,10 @@ same moment. Don't collapse them.
 
 Two suites, with different bootstraps and different jobs.
 
-**`composer test`** — 1,160 unit tests in 24 files (`tests/Unit`), no booted Craft app. Fast, and covers the
+**`composer test`** — 1,147 unit tests in 24 files (`tests/Unit`), no booted Craft app. Fast, and covers the
 pure logic every layer is factored into.
 
-**`composer test-integration`** — 464 integration tests in 15 files (`tests/Integration`) against a **real booted
+**`composer test-integration`** — 489 integration tests in 16 files (`tests/Integration`) against a **real booted
 Craft 5 application and a real database**. `tests/integration-bootstrap.php` stands up a throwaway
 install: its own database (`MENUBUILDER_TEST_DB_DATABASE`, default `menubuilder_test`), its own
 `config`/`storage` under `tests/_craft`, and the plugin's own `vendor/` — which registers MenuBuilder
@@ -2259,7 +2266,15 @@ defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explic
    This is **pinned by a regression test** (`MenuBuilderFieldMultiSiteTest::testATreeResolvesForTheRequestsSiteNotTheElementsSite`)
    rather than left implicit, so changing the behaviour has to be a deliberate decision that
    updates the test, not an accident nobody notices.
-9. **`MenuBuilderGroup::$settings` is still open-ended.** One key lives in it — `siteIds`
+9. **The REST rate limiter doesn't count rejected authentications.** It runs after the
+   authentication gate, so a 401 costs a caller nothing and the one-minute window is no obstacle to
+   guessing at bearer tokens. Craft's own GraphQL controller places its gates the same way and a
+   Craft GraphQL access token is a long random string, so this is defence-in-depth that is missing
+   rather than an opening — and the endpoint is off by default. Closing it means a second,
+   IP-keyed window counting failed authentications *before* the token is resolved; it is not a
+   reordering of the existing gates, because the existing key is partly the token.
+
+10. **`MenuBuilderGroup::$settings` is still open-ended.** One key lives in it — `siteIds`
    (`MenuBuilderGroupService::SITE_IDS_KEY`), lifted back out on read so `$settings` stays a plain
    bag. (`customFields` used to be the second, until custom fields became a real Craft field
    layout with a column of its own.) Whoever adds the next per-menu frontend setting should decide

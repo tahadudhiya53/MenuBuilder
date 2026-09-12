@@ -6,6 +6,7 @@ use PHPUnit\Framework\TestCase;
 use Tahadudhiya\MenuBuilder\helpers\ConfigHelper;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\TextHelper;
 
 /**
  * The shared helpers that back several layers at once: the attribute-line parser and link-attribute
@@ -15,6 +16,46 @@ use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 */
 class MenuBuilderHelpersTest extends TestCase
 {
+    // TextHelper: fitting a value to a varchar column
+
+    public function testTruncateLeavesValuesThatAlreadyFitAlone(): void
+    {
+        $this->assertSame('main', TextHelper::truncate('main', 255));
+        $this->assertSame(str_repeat('a', 255), TextHelper::truncate(str_repeat('a', 255), 255));
+    }
+
+    public function testTruncateTrimsOverLongValuesToTheLimit(): void
+    {
+        $this->assertSame(255, mb_strlen(TextHelper::truncate(str_repeat('a', 300), 255)));
+    }
+
+    /**
+     * The bug this helper replaced a byte-based `substr()` for: a name of accented or CJK
+     * characters is well within a `varchar(255)`, which MySQL counts in characters, but is twice
+     * that in bytes — so the old check trimmed it for no reason, and trimmed it *inside* a UTF-8
+     * sequence, producing a string the database then rejected outright.
+    */
+    public function testTruncateCountsCharactersNotBytes(): void
+    {
+        $accented = str_repeat('é', 255);
+
+        $this->assertSame($accented, TextHelper::truncate($accented, 255));
+    }
+
+    public function testTruncateNeverSplitsAMultibyteCharacter(): void
+    {
+        $truncated = TextHelper::truncate(str_repeat('é', 300), 255);
+
+        $this->assertSame(255, mb_strlen($truncated));
+        $this->assertTrue(mb_check_encoding($truncated, 'UTF-8'));
+    }
+
+    public function testTruncateToNoRoomIsEmpty(): void
+    {
+        $this->assertSame('', TextHelper::truncate('main', 0));
+        $this->assertSame('', TextHelper::truncate('main', -3));
+    }
+
     // LinkAttributeHelper: title fallback, rel merging, attribute safety
 
     public function testResolveTitlePrefersExplicitTitle(): void

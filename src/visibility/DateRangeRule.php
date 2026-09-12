@@ -49,23 +49,15 @@ class DateRangeRule implements VisibilityRuleInterface
     }
 
     /**
-     * `mixed` on purpose — this is the defensive boundary for persisted config that may not even
-     * be a string (a bool, array, or object left over from malformed/legacy data).
-    */
+     * The shared reader ({@see DateValidationHelper::parseOrNull()}), given
+     * this evaluation's timezone: a naive bound means the instant the editor
+     * meant in the application's configured zone, not in PHP's ambient one.
+     */
     private function toDate(mixed $value, VisibilityContext $context): ?DateTime
     {
-        if (!is_string($value) || trim($value) === '') {
-            return null;
-        }
-
-        if (!DateValidationHelper::hasValidCalendarDate($value)) {
-            return null;
-        }
-
-        try {
-            return new DateTime($value, $context->timezone ?? $context->now->getTimezone());
-        } catch (\Throwable) {
-            return null;
-        }
+        return DateValidationHelper::parseOrNull(
+            $value,
+            $context->timezone ?? $context->now->getTimezone()
+        );
     }
 }

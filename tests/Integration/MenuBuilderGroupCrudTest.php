@@ -390,6 +390,38 @@ class MenuBuilderGroupCrudTest extends TestCase
         $this->assertSame($handle . '3', $second->handle);
     }
 
+    /**
+     * `name` is a `varchar(255)`, which MySQL counts in **characters**. A byte-based trim both
+     * shortened a perfectly storable multibyte name and cut it inside a UTF-8 sequence, so
+     * duplicating a menu named in accented or CJK characters failed outright.
+    */
+    public function testDuplicatingAMenuWithAMultibyteNameAtTheLimit(): void
+    {
+        $original = $this->makeMenu($this->handle('multibyte'), function(MenuBuilderGroup $group) {
+            $group->name = str_repeat('é', 255);
+        });
+
+        $copy = $this->menus()->duplicate((int)$original->id);
+
+        $this->assertNotNull($copy);
+        $this->created[] = (int)$copy->id;
+        $this->assertSame(255, mb_strlen($copy->name));
+        $this->assertTrue(mb_check_encoding($copy->name, 'UTF-8'));
+    }
+
+    public function testDuplicatingAMenuWhoseNameAlreadyFillsTheColumn(): void
+    {
+        $original = $this->makeMenu($this->handle('longname'), function(MenuBuilderGroup $group) {
+            $group->name = str_repeat('a', 255);
+        });
+
+        $copy = $this->menus()->duplicate((int)$original->id);
+
+        $this->assertNotNull($copy);
+        $this->created[] = (int)$copy->id;
+        $this->assertSame(255, mb_strlen($copy->name));
+    }
+
     public function testDuplicatingAMenuThatDoesNotExistIsNull(): void
     {
         $this->assertNull($this->menus()->duplicate(999999));

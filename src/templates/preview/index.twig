@@ -3,6 +3,7 @@
 
 {# The *production* renderer, imported unchanged. #}
 {% import "menu-builder/_macros/tree" as menuMacros %}
+{% import "menu-builder/_macros/cp" as cp %}
 
 {% set title = "Preview: {name}"|t('menu-builder', { name: group.name }) %}
 {% set crumbs = [
@@ -14,19 +15,7 @@
 {% set previewUrl = url('menu-builder/' ~ group.handle ~ '/preview') %}
 
 {% block sidebar %}
-    <nav aria-label="{{ 'Menus'|t('menu-builder') }}">
-        <ul>
-            {% for g in groups %}
-                <li>
-                    <a href="{{ url('menu-builder/' ~ g.handle ~ '/preview') }}"
-                       class="{{ g.id == group.id ? 'sel' }}"
-                       {{ g.id == group.id ? 'aria-current="page"' : '' }}>
-                        <span class="label">{{ g.name }}</span>
-                    </a>
-                </li>
-            {% endfor %}
-        </ul>
-    </nav>
+    {{ cp.menuSidebar(groups, group, '/preview') }}
 {% endblock %}
 
 {% block content %}

@@ -167,21 +167,14 @@
     </li>
 
     {% if item.hasChildren() %}
-        {#
-           This item's own column (level - 1) stays open for its descendants only while it still has
-           a sibling below to reach.
-        #}
-        {% include "menu-builder/dashboard/_items" with {
+        {# This item's own column (level - 1) stays open for its descendants
+           only while it still has a sibling below to reach. Level-1 rows own
+           no column, hence the level check. #}
+        {% include "menu-builder/dashboard/_items" with treeContext|merge({
             items: item.children,
             level: level + 1,
             parentId: item.id,
             openColumns: openColumns|merge(level >= 2 and not loop.last ? [level - 1] : []),
-            group: group,
-            canEdit: canEdit,
-            canCreate: canCreate,
-            canDelete: canDelete,
-            isFiltered: isFiltered,
-            itemHealth: itemHealth,
-        } %}
+        }) %}
     {% endif %}
 {% endfor %}

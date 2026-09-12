@@ -785,8 +785,10 @@ structure. The list endpoint omits menus you can't read.
 Every response carries an `ETag` and `Vary: Authorization, Origin`; send `If-None-Match` for a
 `304`. `Cache-Control` is `no-store` until you set `cacheDuration`, then `public, max-age=N` for a
 public-schema response and `private, max-age=N` for a token-authenticated one. CORS matching is
-exact, with no credentials. Rate limiting is a fixed one-minute window per caller with
-`X-RateLimit-*` headers. The URL carries the major version (`/v1/`); additive changes stay on it, so
+exact — no suffix or subdomain matching — with no credentials ever sent; the single entry `'*'`
+is honoured and echoed as `*`. Rate limiting is a fixed one-minute window per caller (counted
+after authentication, so a rejected token isn't charged to anyone's budget) with `X-RateLimit-*`
+headers. The URL carries the major version (`/v1/`); additive changes stay on it, so
 write your consumer to ignore unknown fields.
 
 ## Extending
@@ -885,23 +887,27 @@ classes' shape, is hashed into every cache key, so an upgrade reads fresh keys.
 ## Development
 
 ```sh
-composer test              # PHPUnit — 1,160 unit tests, no booted Craft
-composer test-integration  # PHPUnit — 464 integration tests, real Craft + real database
-composer check-cs          # ECS
-composer phpstan           # PHPStan (level 5)
+composer test      # PHPUnit — 1,147 unit tests, no booted Craft
+composer check-cs  # ECS
+composer phpstan   # PHPStan (level 5)
 ```
 
 The unit suite covers pure logic: link resolvers, visibility rules, mega-menu grouping, validation,
-permission mapping, cache keys, link attributes. The integration suite boots a real Craft 5 app
-against a real database for what only a real install can answer — the Navigation field end to end,
-controller authorization, GraphQL against a real schema, and the REST API through the real
-controller. It builds a throwaway install (`tests/integration-bootstrap.php`) under `tests/_craft`,
-dropped and recreated each run, and refuses to start against a database whose name doesn't contain
-`test`:
+permission mapping, cache keys, link attributes.
+
+The **integration** suite — 489 tests — boots a real Craft 5 app against a real database for what
+only a real install can answer: the Navigation field end to end, controller authorization, GraphQL
+against a real schema, and the REST API through the real controller. It builds a throwaway install
+(`tests/integration-bootstrap.php`) under `tests/_craft`, dropped and recreated each run, and
+refuses to start against a database whose name doesn't contain `test`.
+
+Because it needs a database it is run on its own. The connection defaults (`db:3306`, user and
+password `db`) are DDEV's *from inside the web container*, so run it there — the same command on
+the host can't resolve the `db` hostname:
 
 ```sh
 ddev exec composer test-integration
-# or point it elsewhere:
+# or point it at any other database:
 MENUBUILDER_TEST_DB_SERVER=127.0.0.1 MENUBUILDER_TEST_DB_PORT=55012 composer test-integration
 ```
 

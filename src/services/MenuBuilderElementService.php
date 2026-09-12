@@ -219,14 +219,7 @@ class MenuBuilderElementService extends Component
     */
     private function getAffectedGroupIds(int $elementId): array
     {
-        return array_map(
-            'intval',
-            MenuBuilderItemRecord::find()
-                ->select(['groupId'])
-                ->distinct()
-                ->where(['elementId' => $elementId])
-                ->column()
-        );
+        return MenuBuilderItemRecord::distinctGroupIds(['elementId' => $elementId]);
     }
 
     /**
@@ -243,14 +236,9 @@ class MenuBuilderElementService extends Component
             ->from([$table])
             ->where([$column => $containerId]);
 
-        return array_map(
-            'intval',
-            MenuBuilderItemRecord::find()
-                ->select(['groupId'])
-                ->distinct()
-                ->where(['type' => $itemType])
-                ->andWhere(['elementId' => $elementIds])
-                ->column()
+        return MenuBuilderItemRecord::distinctGroupIds(
+            ['type' => $itemType],
+            ['elementId' => $elementIds],
         );
     }
 

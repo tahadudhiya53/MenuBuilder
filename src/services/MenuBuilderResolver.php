@@ -194,7 +194,11 @@ class MenuBuilderResolver extends Component
 
         $columns = $config['columns'] ?? 1;
 
-        return new MenuBuilderMegaMenuConfig(columns: is_int($columns) && $columns >= 1 && $columns <= 6 ? $columns : 1);
+        return new MenuBuilderMegaMenuConfig(
+            columns: MenuBuilderMegaMenuConfig::isValidColumns($columns)
+                ? $columns
+                : MenuBuilderMegaMenuConfig::MIN_COLUMNS,
+        );
     }
 
     private function intOrNull(mixed $value): ?int

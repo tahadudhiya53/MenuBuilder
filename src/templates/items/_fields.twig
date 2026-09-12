@@ -1,4 +1,5 @@
 {% import "_includes/forms" as forms %}
+{% import "menu-builder/_macros/cp" as cp %}
 
 {% set megaMenuConfig = item.metadata.megaMenu ?? [] %}
 {% set badgeStyleOptions = [
@@ -59,22 +60,7 @@
 <div data-mb-section="basic" data-mb-description="{{ "Choose what this item links to and the label shown in the menu."|t('menu-builder') }}">
     <h2>{{ "Basic"|t('menu-builder') }}</h2>
 
-    {{ forms.selectField({
-        label: "Link type"|t('menu-builder'),
-        id: 'type',
-        name: 'type',
-        value: item.type,
-        options: [
-            { label: "Entry"|t('menu-builder'), value: 'entry' },
-            { label: "Category"|t('menu-builder'), value: 'category' },
-            { label: "Asset"|t('menu-builder'), value: 'asset' },
-            { label: "Custom URL"|t('menu-builder'), value: 'url' },
-            { label: "Anchor"|t('menu-builder'), value: 'anchor' },
-            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
-            { label: "Separator"|t('menu-builder'), value: 'separator' },
-            { label: "Dynamic navigation"|t('menu-builder'), value: 'dynamic' },
-        ],
-    }) }}
+    {{ cp.linkTypeField("Link type"|t('menu-builder'), 'type', item.type) }}
 
     {{ forms.textField({
         label: "Title"|t('menu-builder'),
@@ -86,43 +72,15 @@
     }) }}
 
     <div data-link-section="entry" class="menu-builder-link-section">
-        {{ forms.elementSelectField({
-            label: "Entry"|t('menu-builder'),
-            id: 'entryElementId',
-            name: 'elementId',
-            elementType: 'craft\\elements\\Entry',
-            sources: '*',
-            single: true,
-            limit: 1,
-            elements: entryElement ? [entryElement] : [],
-            errors: item.getErrors('elementId'),
-        }) }}
+        {{ cp.elementPickerField("Entry"|t('menu-builder'), 'entryElementId', 'craft\\elements\\Entry', entryElement ? [entryElement] : [], item.getErrors('elementId')) }}
     </div>
 
     <div data-link-section="category" class="menu-builder-link-section">
-        {{ forms.elementSelectField({
-            label: "Category"|t('menu-builder'),
-            id: 'categoryElementId',
-            name: 'elementId',
-            elementType: 'craft\\elements\\Category',
-            sources: '*',
-            single: true,
-            limit: 1,
-            elements: categoryElement ? [categoryElement] : [],
-        }) }}
+        {{ cp.elementPickerField("Category"|t('menu-builder'), 'categoryElementId', 'craft\\elements\\Category', categoryElement ? [categoryElement] : []) }}
     </div>
 
     <div data-link-section="asset" class="menu-builder-link-section">
-        {{ forms.elementSelectField({
-            label: "Asset"|t('menu-builder'),
-            id: 'assetElementId',
-            name: 'elementId',
-            elementType: 'craft\\elements\\Asset',
-            sources: '*',
-            single: true,
-            limit: 1,
-            elements: assetElement ? [assetElement] : [],
-        }) }}
+        {{ cp.elementPickerField("Asset"|t('menu-builder'), 'assetElementId', 'craft\\elements\\Asset', assetElement ? [assetElement] : []) }}
     </div>
 
     <div data-link-section="url" class="menu-builder-link-section">
@@ -148,63 +106,26 @@
     </div>
 
     <div data-link-section="dynamic" class="menu-builder-link-section">
-        {{ forms.selectField({
-            label: "Source"|t('menu-builder'),
-            id: 'dynamicSourceType',
-            name: 'dynamicSourceType',
-            value: dynamicSource.sourceType ?? 'entries',
-            options: [
-                { label: "Entries (by section)"|t('menu-builder'), value: 'entries' },
-                { label: "Categories (by group)"|t('menu-builder'), value: 'categories' },
-                { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
-            ],
-        }) }}
-        {#
-           One picker per source type, all posting the same `dynamicSourceId` the controller already
-           reads — item-fields.js shows the one that matches and disables the rest, exactly as the
-           link-type sections work, so a hidden picker's value can never be submitted.
-        #}
-        <div data-dynamic-source="entries">
-            {{ forms.selectField({
-                label: "Section"|t('menu-builder'),
-                instructions: "Children are pulled from this section."|t('menu-builder'),
-                id: 'dynamicSourceIdEntries',
-                name: 'dynamicSourceId',
-                value: dynamicSource.sourceId ?? '',
-                options: [{ label: "Select a section…"|t('menu-builder'), value: '' }]
-                    |merge(craft.app.entries.getAllSections()|map(section => { label: section.name, value: section.id })|values),
-            }) }}
-        </div>
+        {{ cp.dynamicSourceTypeField('dynamicSourceType', dynamicSource.sourceType ?? 'entries') }}
+        {# One picker per source type, all posting the same `dynamicSourceId`
+           the controller already reads — item-fields.js shows the one that
+           matches and disables the rest, exactly as the link-type sections
+           work, so a hidden picker's value can never be submitted.
 
-        <div data-dynamic-source="categories">
-            {{ forms.selectField({
-                label: "Category group"|t('menu-builder'),
-                instructions: "Children are pulled from this category group."|t('menu-builder'),
-                id: 'dynamicSourceIdCategories',
-                name: 'dynamicSourceId',
-                value: dynamicSource.sourceId ?? '',
-                options: [{ label: "Select a category group…"|t('menu-builder'), value: '' }]
-                    |merge(craft.app.categories.getAllGroups()|map(categoryGroup => { label: categoryGroup.name, value: categoryGroup.id })|values),
-            }) }}
-        </div>
-
-        <div data-dynamic-source="assets">
-            {{ forms.selectField({
-                label: "Volume"|t('menu-builder'),
-                instructions: "Children are pulled from this asset volume."|t('menu-builder'),
-                id: 'dynamicSourceIdAssets',
-                name: 'dynamicSourceId',
-                value: dynamicSource.sourceId ?? '',
-                options: [{ label: "Select a volume…"|t('menu-builder'), value: '' }]
-                    |merge(craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values),
-            }) }}
-        </div>
-        {#
-           Blank means "no limit stored", which
-           MenuBuilderDynamicNavigationService::normalizeConfig() reads as the maximum — that is
-           the state a quick-added dynamic item starts in, so showing a made-up 10 here would report
-           a value the item doesn't have.
-        #}
+           This used to be a bare number field asking the editor to go and
+           look an internal ID up under Settings first. Nothing about the
+           stored value changed. #}
+        {{ cp.dynamicSourcePickers({
+            entries: 'dynamicSourceIdEntries',
+            categories: 'dynamicSourceIdCategories',
+            assets: 'dynamicSourceIdAssets',
+        }, dynamicSource.sourceId ?? '', null, true) }}
+        {# Blank means "no limit stored", which
+           MenuBuilderDynamicNavigationService::normalizeConfig() reads as the
+           maximum — that is the state a quick-added dynamic item starts in, so
+           showing a made-up 10 here would report a value the item doesn't have.
+           The cap comes from MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT rather
+           than being written out again. #}
         {{ forms.textField({
             label: "Limit"|t('menu-builder'),
             instructions: "How many children to pull in. Leave blank for the maximum ({max}), which is enforced server-side regardless of what's entered here."|t('menu-builder', { max: dynamicSourceMaxLimit }),

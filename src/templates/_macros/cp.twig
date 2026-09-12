@@ -1,0 +1,165 @@
+{#
+ # Control-panel macros shared by more than one CP screen. Nothing here is
+ # part of the public front-end surface — that is `_macros/tree.twig`, which
+ # a site's own templates import and which must stay stable. These exist for
+ # one reason: several of these controls are rendered by *two* screens, and a
+ # closed option list written out twice is a list that drifts.
+ #
+ # Three of them did drift before this file existed: the dashboard's
+ # quick-add panel and the full item editor each carried their own copy of
+ # the link-type options, the dynamic-source options and the three
+ # section/category-group/volume pickers. The item type an editor picks and
+ # the metadata key the controller reads are the same in both places, so the
+ # controls have to be too.
+ #
+ #   {% import "menu-builder/_macros/cp" as cp %}
+ #}
+
+{#
+ # The menus list in the CP sidebar. `urlSuffix` is appended to each menu's
+ # own URL, so the preview screen's sidebar links stay on the preview screen
+ # ('/preview') while the dashboard's link to the tree ('').
+ #
+ # `showStatus` adds the disabled dot the dashboard shows; the preview
+ # sidebar has never shown it, because a disabled menu still previews.
+ #}
+{% macro menuSidebar(groups, currentGroup, urlSuffix = '', showStatus = false) %}
+    <nav aria-label="{{ 'Menus'|t('menu-builder') }}">
+        <ul>
+            {% for g in groups %}
+                {% set isCurrent = currentGroup and g.id == currentGroup.id %}
+                <li>
+                    <a href="{{ url('menu-builder/' ~ g.handle ~ urlSuffix) }}"
+                       class="{{ isCurrent ? 'sel' }}"
+                       {% if isCurrent %}aria-current="page"{% endif %}>
+                        <span class="label">{{ g.name }}</span>
+                        {% if showStatus and not g.enabled %}
+                            <span class="status disabled" title="{{ 'Disabled'|t('menu-builder') }}"></span>
+                            <span class="visually-hidden">{{ "Disabled"|t('menu-builder') }}</span>
+                        {% endif %}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+{% endmacro %}
+
+{#
+ # The item's link type. One closed list, matching MenuBuilderItem's TYPE_*
+ # constants — the quick-add panel creates items of every one of these types
+ # (it is the only creation path; see ARCHITECTURE.md, "Single path per
+ # behaviour"), so it must offer exactly what the editor can then edit.
+ #}
+{% macro linkTypeField(label, id, value) %}
+    {% import "_includes/forms" as forms %}
+    {{ forms.selectField({
+        label: label,
+        id: id,
+        name: 'type',
+        value: value,
+        options: [
+            { label: "Entry"|t('menu-builder'), value: 'entry' },
+            { label: "Category"|t('menu-builder'), value: 'category' },
+            { label: "Asset"|t('menu-builder'), value: 'asset' },
+            { label: "Custom URL"|t('menu-builder'), value: 'url' },
+            { label: "Anchor"|t('menu-builder'), value: 'anchor' },
+            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
+            { label: "Separator"|t('menu-builder'), value: 'separator' },
+            { label: "Dynamic navigation"|t('menu-builder'), value: 'dynamic' },
+        ],
+    }) }}
+{% endmacro %}
+
+{#
+ # One element picker, posting the shared `elementId` name. Several sections
+ # deliberately share that name because only one applies at a time — see
+ # MenuBuilder.setFieldsDisabled() in item-fields.js, which is what keeps a
+ # hidden picker's value out of the submission.
+ #}
+{% macro elementPickerField(label, id, elementType, elements = [], errors = []) %}
+    {% import "_includes/forms" as forms %}
+    {{ forms.elementSelectField({
+        label: label,
+        id: id,
+        name: 'elementId',
+        elementType: elementType,
+        sources: '*',
+        single: true,
+        limit: 1,
+        elements: elements,
+        errors: errors,
+    }) }}
+{% endmacro %}
+
+{# Which kind of thing a dynamic item pulls its children from. #}
+{% macro dynamicSourceTypeField(id, value) %}
+    {% import "_includes/forms" as forms %}
+    {{ forms.selectField({
+        label: "Source"|t('menu-builder'),
+        id: id,
+        name: 'dynamicSourceType',
+        value: value,
+        options: [
+            { label: "Entries (by section)"|t('menu-builder'), value: 'entries' },
+            { label: "Categories (by group)"|t('menu-builder'), value: 'categories' },
+            { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
+        ],
+    }) }}
+{% endmacro %}
+
+{#
+ # One picker per source type, all posting the same `dynamicSourceId` the
+ # controller already reads. `MenuBuilder.syncDynamicSourcePickers()` shows
+ # the one matching the chosen source and disables the rest, so a hidden
+ # picker's value can never be submitted.
+ #
+ # `ids` names each picker's HTML id, because the two screens' ids are
+ # already in the wild (`#dynamicSourceType` is read by item-fields.js, and
+ # every id here is a label's `for`). `activeSourceType` renders that state
+ # before any script runs — without it all three would post
+ # `dynamicSourceId` and the last would win, sending a blank over the real
+ # choice. Pass null where the markup is initialised by JS on load anyway.
+ #}
+{% macro dynamicSourcePickers(ids, value = '', activeSourceType = null, withInstructions = false) %}
+    {% import "_includes/forms" as forms %}
+    {% set sources = [
+        {
+            key: 'entries',
+            id: ids.entries,
+            label: "Section"|t('menu-builder'),
+            instructions: "Children are pulled from this section."|t('menu-builder'),
+            placeholder: "Select a section…"|t('menu-builder'),
+            options: craft.app.entries.getAllSections()|map(section => { label: section.name, value: section.id })|values,
+        },
+        {
+            key: 'categories',
+            id: ids.categories,
+            label: "Category group"|t('menu-builder'),
+            instructions: "Children are pulled from this category group."|t('menu-builder'),
+            placeholder: "Select a category group…"|t('menu-builder'),
+            options: craft.app.categories.getAllGroups()|map(categoryGroup => { label: categoryGroup.name, value: categoryGroup.id })|values,
+        },
+        {
+            key: 'assets',
+            id: ids.assets,
+            label: "Volume"|t('menu-builder'),
+            instructions: "Children are pulled from this asset volume."|t('menu-builder'),
+            placeholder: "Select a volume…"|t('menu-builder'),
+            options: craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values,
+        },
+    ] %}
+
+    {% for source in sources %}
+        <div data-dynamic-source="{{ source.key }}">
+            {{ forms.selectField({
+                label: source.label,
+                instructions: withInstructions ? source.instructions : null,
+                id: source.id,
+                name: 'dynamicSourceId',
+                value: value,
+                disabled: activeSourceType is not null and activeSourceType != source.key,
+                options: [{ label: source.placeholder, value: '' }]|merge(source.options),
+            }) }}
+        </div>
+    {% endfor %}
+{% endmacro %}

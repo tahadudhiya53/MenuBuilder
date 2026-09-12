@@ -283,22 +283,6 @@ class MenuBuilderGroupTest extends TestCase
 
     private const MAX_LENGTH = 255;
 
-    public function testTruncateLeavesShortValuesAlone(): void
-    {
-        $this->assertSame('main', $this->callPrivate('truncate', ['main', self::MAX_LENGTH]));
-        $this->assertSame(
-            str_repeat('a', self::MAX_LENGTH),
-            $this->callPrivate('truncate', [str_repeat('a', self::MAX_LENGTH), self::MAX_LENGTH])
-        );
-    }
-
-    public function testTruncateTrimsOverLongValues(): void
-    {
-        $truncated = $this->callPrivate('truncate', [str_repeat('a', 300), self::MAX_LENGTH]);
-
-        $this->assertSame(self::MAX_LENGTH, strlen($truncated));
-    }
-
     /**
      * The whole point of the suffix trimming: duplicating a group whose handle already fills the
      * column must not produce a handle the column can't hold (which MySQL would either reject or

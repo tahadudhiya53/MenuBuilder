@@ -3,7 +3,6 @@
 namespace Tahadudhiya\MenuBuilder\models;
 
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
-use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
@@ -14,6 +13,9 @@ use Tahadudhiya\MenuBuilder\MenuBuilder;
 */
 class MenuBuilderNode
 {
+    /** The three derived readers over the stored `icon` column, plus `hasIcon()`. */
+    use IconAccessors;
+
     /** @var MenuBuilderNode[] */
     public array $children = [];
 
@@ -100,33 +102,17 @@ class MenuBuilderNode
     }
 
     /**
-     * The icon, as three read-only derived accessors over the single stored `icon` string — see
-     * {@see IconHelper} for the grammar.
-    */
-    public function iconType(): ?string
-    {
-        return IconHelper::type($this->icon);
-    }
-
-    public function iconClass(): ?string
-    {
-        return IconHelper::classValue($this->icon);
-    }
-
-    public function iconAssetId(): ?int
-    {
-        return IconHelper::assetId($this->icon);
-    }
-
-    public function hasIcon(): bool
-    {
-        return $this->iconType() !== null;
-    }
-
-    /**
-     * The badge, as derived accessors over the two stored values (`badge` text +
-     * `metadata['badgeStyle']`) — see {@see BadgeHelper}.
-    */
+     * The badge, as derived accessors over the two stored values
+     * (`badge` text + `metadata['badgeStyle']`) — see {@see BadgeHelper}.
+     *
+     * Text is deliberately *not* sanitized here: it is plain text and is
+     * escaped where it is rendered. The style is the half that reaches a
+     * `class` attribute, and {@see badgeClass()} fails closed on it, so an
+     * unknown style can never leave this object as markup.
+     *
+     * A style with no text is not a badge: {@see hasBadge()} is keyed off
+     * the text alone, and the bundled macro renders nothing without it.
+     */
     public function hasBadge(): bool
     {
         return BadgeHelper::hasBadge($this->badge);

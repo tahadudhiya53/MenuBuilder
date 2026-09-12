@@ -19,6 +19,9 @@ use Tahadudhiya\MenuBuilder\MenuBuilder;
 */
 class MenuBuilderItem extends Model
 {
+    /** The three derived readers over the stored `icon` column, plus `hasIcon()`. */
+    use IconAccessors;
+
     public const TYPE_ENTRY = 'entry';
     public const TYPE_CATEGORY = 'category';
     public const TYPE_ASSET = 'asset';
@@ -38,6 +41,14 @@ class MenuBuilderItem extends Model
         self::TYPE_SEPARATOR,
         self::TYPE_DYNAMIC,
     ];
+
+    /**
+     * The width of the `title` column (see migrations/Install.php), named rather than repeated so
+     * the validator below and {@see \Tahadudhiya\MenuBuilder\services\MenuBuilderItemService::duplicate()}
+     * — which appends to a title and so can push a full one past the column — cannot disagree
+     * about it.
+    */
+    public const MAX_TITLE_LENGTH = 255;
 
     /**
      * Element sources a `dynamic` item's children can be pulled from.
@@ -151,7 +162,7 @@ class MenuBuilderItem extends Model
                 'message' => Craft::t('menu-builder', 'A title is required unless the item is hidden when its linked element becomes unavailable.'),
                 'when' => fn($model) => in_array($model->type, self::ELEMENT_TYPES, true) && $model->fallbackBehavior !== self::FALLBACK_HIDE,
             ],
-            [['title'], 'string', 'max' => 255],
+            [['title'], 'string', 'max' => self::MAX_TITLE_LENGTH],
             [['handle'], 'match', 'pattern' => '/^[a-zA-Z][a-zA-Z0-9_-]*$/', 'message' => 'Handle must start with a letter and contain only letters, numbers, underscores, and hyphens.', 'skipOnEmpty' => true],
             [['enabled', 'clickable', 'featured'], 'boolean'],
             [['sortOrder', 'groupId', 'parentId', 'elementId', 'image'], 'integer'],
@@ -203,7 +214,7 @@ class MenuBuilderItem extends Model
                     $this->addError('metadata', Craft::t('menu-builder', 'Mega menu "enabled" must be a boolean.'));
                 }
 
-                if (isset($megaMenu['columns']) && (!is_int($megaMenu['columns']) || $megaMenu['columns'] < 1 || $megaMenu['columns'] > 6)) {
+                if (isset($megaMenu['columns']) && !MenuBuilderMegaMenuConfig::isValidColumns($megaMenu['columns'])) {
                     $this->addError('metadata', Craft::t('menu-builder', 'Mega menu columns must be an integer between 1 and 6.'));
                 }
             }
@@ -211,7 +222,7 @@ class MenuBuilderItem extends Model
 
         $column = $this->metadata['megaMenuColumn'] ?? null;
 
-        if ($column !== null && (!is_int($column) || $column < 1 || $column > 6)) {
+        if ($column !== null && !MenuBuilderMegaMenuConfig::isValidColumns($column)) {
             $this->addError('metadata', Craft::t('menu-builder', 'Mega menu column must be an integer between 1 and 6.'));
         }
     }
@@ -447,8 +458,10 @@ class MenuBuilderItem extends Model
             return;
         }
 
-        $startDate = $this->parseDateOrNull($start);
-        $endDate = $this->parseDateOrNull($end);
+        // The same reader DateRangeRule uses at evaluation time, so what a
+        // save accepts and what an evaluation honours cannot drift apart.
+        $startDate = DateValidationHelper::parseOrNull($start);
+        $endDate = DateValidationHelper::parseOrNull($end);
 
         if ($hasStart && $startDate === null) {
             $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s start date is invalid.', ['index' => $index]));
@@ -460,29 +473,6 @@ class MenuBuilderItem extends Model
 
         if ($startDate !== null && $endDate !== null && $startDate > $endDate) {
             $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s start date must be before its end date.', ['index' => $index]));
-        }
-    }
-
-    /**
-     * `mixed` on purpose — a directly-posted/imported `visibility` array isn't guaranteed to even
-     * contain strings here, so this is the defensive boundary: anything that isn't a well-formed
-     * date string fails closed (null) rather than risking a TypeError, matching DateRangeRule's
-     * evaluation-time behavior.
-    */
-    private function parseDateOrNull(mixed $value): ?\DateTime
-    {
-        if (!is_string($value) || trim($value) === '') {
-            return null;
-        }
-
-        if (!DateValidationHelper::hasValidCalendarDate($value)) {
-            return null;
-        }
-
-        try {
-            return new \DateTime($value);
-        } catch (\Throwable) {
-            return null;
         }
     }
 
@@ -618,13 +608,7 @@ class MenuBuilderItem extends Model
     */
     public function validateHtmlAttributes(): void
     {
-        if (!is_array($this->htmlAttributes)) {
-            $this->addError('htmlAttributes', 'Invalid attributes.');
-
-            return;
-        }
-
-        foreach (LinkAttributeHelper::validateHtmlAttributes($this->htmlAttributes) as $error) {
+        foreach (LinkAttributeHelper::htmlAttributeErrors($this->htmlAttributes) as $error) {
             $this->addError('htmlAttributes', $error);
         }
     }
@@ -696,30 +680,6 @@ class MenuBuilderItem extends Model
     public function hasBadge(): bool
     {
         return BadgeHelper::hasBadge($this->badge);
-    }
-
-    /**
-     * `IconHelper::TYPE_CLASS` / `TYPE_ASSET`, or null when there is no usable icon.
-    */
-    public function iconType(): ?string
-    {
-        return IconHelper::type($this->icon);
-    }
-
-    /**
-     * The icon's class list, or null when the icon is empty, an asset, or (fail-closed) unsafe.
-    */
-    public function iconClass(): ?string
-    {
-        return IconHelper::classValue($this->icon);
-    }
-
-    /**
-     * The icon's asset id, or null when the icon is empty or a class.
-    */
-    public function iconAssetId(): ?int
-    {
-        return IconHelper::assetId($this->icon);
     }
 
     public function isLinkable(): bool

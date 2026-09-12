@@ -29,11 +29,7 @@
 
 {% block sidebar %}
     {{ cp.menuSidebar(groups, group, '', true) }}
-    {% if canManageSettings %}
-        <div class="menu-builder-sidebar-footer">
-            <a href="{{ url('menu-builder/groups/new') }}" class="btn dashed icon add fullwidth">{{ "New menu"|t('menu-builder') }}</a>
-        </div>
-    {% endif %}
+    {% include "menu-builder/dashboard/_sidebar-footer" %}
 {% endblock %}
 
 {% block content %}

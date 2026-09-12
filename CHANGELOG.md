@@ -21,7 +21,9 @@ First release. Everything in the plugin is new, so this entry lists what 1.0.0 s
 - Non-destructive by design: a lapsed Pro license removes no menus and changes no data. Existing
   menus keep working; only creating another is refused until Pro returns.
 - The menus index states the edition, the menu count against its ceiling, and — on Free — an
-  upgrade link into Craft's Plugin Store.
+  upgrade link into Craft's Plugin Store. On a Free install that already has its one menu, the
+  sidebar's **New menu** button becomes **Upgrade to Pro** rather than linking to a create screen
+  the server would refuse.
 - Licensed under [The Craft License](LICENSE.md); `composer.json` declares `proprietary`, as Craft
   requires for a commercial plugin.
 
@@ -123,7 +125,7 @@ First release. Everything in the plugin is new, so this entry lists what 1.0.0 s
 
 ### Tests
 
-- 1,160 unit tests (no booted Craft) and 464 integration tests against a real Craft install and
+- 1,101 unit tests (no booted Craft) and 488 integration tests against a real Craft install and
   database, plus PHPStan level 5 and ECS.
 
 ### Known limitations

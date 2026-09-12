@@ -963,8 +963,11 @@ command and third-party code all arrive there. `save()` checks it *after* valida
 `$group->id === null`, so editing, renaming, toggling, reordering and deleting an existing menu are
 never limited — including on an install that is over the limit. The controller asks the same
 question a moment earlier for one reason only: so the interface can state the limit and offer the
-upgrade instead of rendering a button whose request would be refused. Hiding the button is not the
-boundary, and `MenuBuilderMenuLimitTest` posts straight at both actions to prove it.
+upgrade instead of rendering a button whose request would be refused. `GroupsController` (the menus
+index) and `DashboardController` (a menu's sidebar) both read the one
+`MenuBuilderMenuLimitService::cpSummary()`, so one answer stands behind both screens. Hiding the
+button is not the boundary, and `MenuBuilderMenuLimitTest` posts straight at both actions to prove
+it.
 
 ### Non-destructive by construction
 

@@ -1,0 +1,15 @@
+{#
+   The sidebar's create affordance. On Free, once the one included menu exists there is nothing
+   left to create, so the button becomes the upgrade path rather than a dead end.
+#}
+{% if canManageSettings %}
+    <div class="menu-builder-sidebar-footer">
+        {% if edition.canCreate %}
+            <a href="{{ url('menu-builder/groups/new') }}" class="btn dashed icon add fullwidth">{{ "New menu"|t('menu-builder') }}</a>
+        {% elseif edition.upgradeUrl %}
+            <a href="{{ edition.upgradeUrl }}" class="btn dashed fullwidth menu-builder-sidebar-upgrade" title="{{ edition.limitMessage }}">{{ "Upgrade to Pro"|t('menu-builder') }}</a>
+        {% else %}
+            <p class="light">{{ edition.limitMessage }}</p>
+        {% endif %}
+    </div>
+{% endif %}

@@ -473,6 +473,84 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
+    // The dashboard sidebar
+
+    /**
+     * Free with its one menu already created has nothing left to create, so the sidebar's button
+     * becomes the upgrade path instead of a link to a create screen that would refuse the save.
+    */
+    public function testTheSidebarOffersUpgradeToProInsteadOfNewMenuOnceFreeIsAtItsLimit(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+            $this->assertTrue(MenuBuilder::getInstance()->groups->save($this->newMenu('sidebarFree', 'Sidebar Free')));
+
+            $html = $this->renderSidebarFooter();
+
+            $this->assertStringContainsString('Upgrade to Pro', $html);
+            $this->assertStringNotContainsString('New menu', $html);
+            $this->assertStringNotContainsString('menu-builder/groups/new', $html);
+        });
+    }
+
+    /**
+     * Free below the limit, and Pro, still get the create button.
+    */
+    public function testTheSidebarStillOffersNewMenuWhenAMenuMayBeCreated(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+
+            $free = $this->renderSidebarFooter();
+
+            $this->assertStringContainsString('New menu', $free);
+            $this->assertStringContainsString('menu-builder/groups/new', $free);
+            $this->assertStringNotContainsString('Upgrade to Pro', $free);
+
+            $this->setEdition(MenuBuilder::EDITION_PRO);
+            $this->assertTrue(MenuBuilder::getInstance()->groups->save($this->newMenu('sidebarPro', 'Sidebar Pro')));
+
+            $pro = $this->renderSidebarFooter();
+
+            $this->assertStringContainsString('New menu', $pro);
+            $this->assertStringNotContainsString('Upgrade to Pro', $pro);
+        });
+    }
+
+    /**
+     * Without `menuBuilder:manageSettings` the footer renders nothing at all — neither button.
+    */
+    public function testTheSidebarFooterIsEmptyWithoutTheSettingsPermission(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+            $this->assertTrue(MenuBuilder::getInstance()->groups->save($this->newMenu('sidebarPerm', 'Sidebar Perm')));
+
+            $html = $this->renderSidebarFooter(canManageSettings: false);
+
+            $this->assertSame('', trim($html));
+        });
+    }
+
+    /**
+     * The sidebar partial, rendered with the same variables DashboardController passes it.
+    */
+    private function renderSidebarFooter(bool $canManageSettings = true): string
+    {
+        $view = Craft::$app->getView();
+        $mode = $view->getTemplateMode();
+        $view->setTemplateMode($view::TEMPLATE_MODE_CP);
+
+        try {
+            return $view->renderTemplate('menu-builder/dashboard/_sidebar-footer', [
+                'canManageSettings' => $canManageSettings,
+                'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
+            ]);
+        } finally {
+            $view->setTemplateMode($mode);
+        }
+    }
+
     // Harness
 
     private function setEdition(string $edition): void

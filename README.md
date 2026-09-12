@@ -9,6 +9,17 @@ types, mega menus, dynamic navigation, per-item visibility rules, and a small, s
 - Internals and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)** · Release history:
   **[CHANGELOG.md](CHANGELOG.md)**
 
+**In one paragraph.** Editors build navigation in the control panel — menus, items dragged into a
+hierarchy, links to entries, categories, assets or plain URLs — and templates read the result back
+as plain data with `craft.menuBuilder.get('main')`. Nothing about a link is frozen at save time:
+element URLs and titles resolve per request and per site, so renaming or moving an entry never
+leaves a stale link behind. Rendering stays yours — bundled macros give you accessible markup out of
+the box, and GraphQL and a REST API serve headless front ends the same tree.
+
+**New here?** [Install](#install) → [Quick start](#quick-start) → [Menus](#menus). **Building
+templates?** Start at [Resolving a menu](#resolving-a-menu). **Headless?**
+[GraphQL](#graphql) / [REST API](#rest-api).
+
 ## Contents
 
 **Using it** — [Install](#install) · [Free vs Pro](#free-vs-pro) · [Quick start](#quick-start) ·
@@ -75,8 +86,8 @@ you have keeps running unchanged, you just stop getting new releases until you r
 Prices are set and charged by the Craft Plugin Store. They appear nowhere in this plugin's code,
 which only ever asks Craft which edition is active.
 
-Upgrade from **MenuBuilder → Menus**, or from **Settings → Plugins**; both take you to Craft's
-Plugin Store checkout for this plugin.
+Upgrade from **MenuBuilder → Menus**, from the sidebar of any menu screen, or from
+**Settings → Plugins**; each takes you to Craft's Plugin Store checkout for this plugin.
 
 > **All MenuBuilder features are available in Free. Upgrade to Pro when you need more than one
 > menu.**
@@ -156,9 +167,10 @@ Not included: import/export (menus move with the database), and menu reordering 
 **Duplicate** clones a menu's settings *and* all its items in one transaction, with a unique handle.
 
 The menus list states the active edition and the menu count against its ceiling — `Menus 1 / 1` on
-[Free](#free-vs-pro), `Unlimited` on Pro. On Free, **New menu** and **Duplicate** explain the limit
-and offer the upgrade instead of creating a second menu; both refusals come from the server, not
-from a hidden button.
+[Free](#free-vs-pro), `Unlimited` on Pro. On Free, once the one menu exists, **New menu** and
+**Duplicate** explain the limit and offer the upgrade instead of creating a second menu, and the
+sidebar's button on a menu screen becomes **Upgrade to Pro**. Every refusal comes from the server,
+not from a hidden button.
 
 ## Menu items
 
@@ -706,7 +718,7 @@ return [
         'allowPublicSchema' => true,      // may an unauthenticated request use the public schema?
         'rateLimit' => 60,                // requests per minute per caller; 0 disables
         'cacheDuration' => 0,             // Cache-Control max-age; 0 sends no-store
-        'allowedOrigins' => [],           // exact CORS origins; empty sends no CORS headers
+        'allowedOrigins' => [],           // exact CORS origins, or ['*']; empty sends no CORS headers
     ],
 ];
 ```
@@ -887,9 +899,10 @@ classes' shape, is hashed into every cache key, so an upgrade reads fresh keys.
 ## Development
 
 ```sh
-composer test      # PHPUnit — 1,147 unit tests, no booted Craft
-composer check-cs  # ECS
-composer phpstan   # PHPStan (level 5)
+composer test              # PHPUnit — 1,147 unit tests, no booted Craft
+composer test-integration  # PHPUnit — 489 integration tests, real Craft + real database
+composer check-cs          # ECS
+composer phpstan           # PHPStan (level 5)
 ```
 
 The unit suite covers pure logic: link resolvers, visibility rules, mega-menu grouping, validation,

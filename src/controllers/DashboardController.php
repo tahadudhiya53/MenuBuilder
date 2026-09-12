@@ -65,6 +65,9 @@ class DashboardController extends BaseMenuBuilderController
             'itemHealth' => $itemHealth,
             'healthSummary' => MenuBuilderLinkHealth::summarize($itemHealth),
             'parentOptions' => $parentOptions,
+            // Edition facts, so the sidebar's create button knows whether there is a menu left to
+            // create — see templates/dashboard/_sidebar-footer.twig.
+            'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
         ] + $this->currentUserAffordances());
     }
 

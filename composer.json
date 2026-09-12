@@ -19,9 +19,9 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/tahadudhiya53/MenuBuilder/issues?state=open",
+        "issues": "https://github.com/tahadudhiya53/MenuBuilder/issues",
         "source": "https://github.com/tahadudhiya53/MenuBuilder",
-        "docs": "https://github.com/tahadudhiya53/MenuBuilder",
+        "docs": "https://github.com/tahadudhiya53/MenuBuilder#readme",
         "rss": "https://github.com/tahadudhiya53/MenuBuilder/releases.atom"
     },
     "require": {
@@ -48,7 +48,7 @@
         "handle": "menu-builder",
         "name": "MenuBuilder",
         "developer": "Tahadudhiya",
-        "documentationUrl": "https://github.com/tahadudhiya53/MenuBuilder",
+        "documentationUrl": "https://github.com/tahadudhiya53/MenuBuilder#readme",
         "changelogUrl": "https://raw.githubusercontent.com/tahadudhiya53/MenuBuilder/main/CHANGELOG.md"
     },
     "scripts": {

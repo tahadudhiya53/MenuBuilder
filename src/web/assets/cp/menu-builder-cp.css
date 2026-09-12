@@ -125,6 +125,15 @@
 }
 
 /*
+ * The Free install's upgrade link stands in for "New menu" once the included menu exists. It has
+ * no icon, so it centres its own label.
+*/
+.menu-builder-sidebar-upgrade {
+    justify-content: center;
+    text-align: center;
+}
+
+/*
  * Craft's details pane is 350px, which crams the quick-add form's labels, instructions, and element
  * selects.
 */

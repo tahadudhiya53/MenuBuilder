@@ -2,7 +2,6 @@
     "name": "tahadudhiya/craft-menu-builder",
     "description": "Advanced, flexible navigation management for Craft CMS — multiple menus, drag-and-drop hierarchy, mixed link types, non-clickable headings, mega menus, dynamic navigation, per-item visibility rules, and a clean Twig API.",
     "type": "craft-plugin",
-    "version": "1.0.0",
     "license": "proprietary",
     "keywords": [
         "craft",

@@ -1,152 +1,161 @@
 # Changelog
 
-All notable changes to MenuBuilder are documented here. This project follows
-[Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/).
+All notable changes to MenuBuilder are documented in this file.
 
-## 1.0.0 — Unreleased
+This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/).
 
-**Status: release candidate.** The code is feature-complete for 1.0.0, but no Git tag or Plugin
-Store release exists yet. The released version comes from the Git tag, not from `composer.json`.
-This entry becomes `1.0.0 - YYYY-MM-DD` when the release is tagged.
+## [1.0.0] - 2026-09-13
 
-First release, so everything is new. This entry lists what 1.0.0 ships rather than what changed.
+First stable release of MenuBuilder for Craft CMS 5.
 
 ### Added
 
-**Menus**
+#### Menus
 
-- Named menus with a handle, description, enable/disable switch and sort order. One menu on the
-  Free edition, any number on Pro.
-- Optional maximum nesting depth (1–10), enforced server-side on every move.
-- Per-menu site restriction, CSS class and validated HTML attributes.
-- Duplicate a menu — settings and every item — in one transaction, with a uniqued handle.
-- Reorder the menus list by drag or by keyboard, which sets the order menus are listed in across the
-  control panel, GraphQL and the REST list endpoint.
+* Create and manage multiple named menus with handles, descriptions, enable/disable status, and ordering.
+* Free edition supports one menu; Pro supports unlimited menus.
+* Configure maximum menu nesting depth from 1–10.
+* Restrict menus to specific sites.
+* Configure menu CSS classes and validated HTML attributes.
+* Duplicate complete menus, including their settings and menu items.
+* Reorder menus using drag-and-drop or keyboard controls.
 
-**Menu items**
+#### Menu Items
 
-- Eight item types: entry, category, asset, custom URL, anchor, non-clickable heading, separator and
-  dynamic navigation.
-- Element links resolved live per request and per site — titles included, with a blank title
-  inheriting the linked element's own.
-- Explicit clickable flag, per-item fallback behaviour (hide, unlink, fallback URL), new-tab target
-  with automatic `rel="noopener"`, `rel` presets and free-form `rel`.
-- Presentation: icon (icon class or Craft asset), badge with five styles, description, image,
-  featured flag, CSS class, HTML id and custom HTML attributes — all validated server-side.
-- Accessibility fields: ARIA label and `title` attribute.
-- Enable/disable and duplicate, both applying to the item's whole subtree.
-- Custom fields per menu, on a real Craft field layout (menu → **Item Fields**): any installed field
-  type, Matrix and relational fields included, in as many tabs as wanted, with Craft's field
-  conditions. Content lives on a `MenuBuilderItemContent` element beside each item and is read fresh
-  per request, batched into one query per tree.
+* Eight menu item types:
 
-**Visibility, mega menus, mobile and dynamic navigation**
+  * Entry
+  * Category
+  * Asset
+  * Custom URL
+  * Anchor
+  * Non-clickable heading
+  * Separator
+  * Dynamic navigation
+* Live element-link resolution per request and site.
+* Configurable fallback behavior for unavailable linked elements.
+* New-tab targets with automatic `rel="noopener"` handling.
+* Preset and custom `rel` attributes.
+* Icons, badges, descriptions, images, featured status, CSS classes, HTML IDs, and custom HTML attributes.
+* Accessibility fields including ARIA labels and `title` attributes.
+* Enable/disable and duplicate menu items, including their complete subtrees.
+* Custom fields for menu items using Craft field layouts, including Matrix and relational fields.
+* Field conditions and multiple field-layout tabs are supported.
 
-- Seven visibility rule types — `loggedIn`, `loggedOut`, `userGroup`, `site`, `dateRange`,
-  `environment`, `always` — combined with AND, evaluated per request and never cached. Unknown,
-  empty or malformed rules fail closed and are rejected at save time.
-- Mega menus on any item, 1–6 columns, children assigned per column, rendered as a native
-  `<details>` disclosure.
-- Mobile presentation per item: viewport, mobile order, collapsible children and mega-menu
-  behaviour — one menu reshaped, never a second menu. No breakpoint, media query or user-agent
-  sniffing is stored or emitted.
-- Dynamic items whose children are generated from entries by section, categories by group or assets
-  by volume, with a limit capped at 50 and a whitelisted order.
+#### Visibility, Mega Menus, Mobile & Dynamic Navigation
 
-**Control panel**
+* Visibility rules for:
 
-- Drag-and-drop tree with a drop indicator, full keyboard equivalents and server-side depth checks.
-- Slide-out item editor with a full-page fallback, quick-add panel, search/filter, bulk
-  enable/disable/delete, and child/disabled/mega badges.
-- Link-health badges for internal links, with a menu-wide summary and a route into the editor to fix
-  each cause. External URLs are never crawled.
-- Drag-and-drop and keyboard reordering of the menus list itself, gated by `menuBuilder:manageSettings`.
-- Preview screen rendering the saved menu through the production macros for a chosen site, audience,
-  region and device, plus the rendered markup as text.
+  * Logged-in users
+  * Logged-out users
+  * User groups
+  * Sites
+  * Date ranges
+  * Environments
+  * Always-visible items
+* Combine visibility rules using AND logic.
+* Mega menus with 1–6 columns and configurable child-item placement.
+* Mobile-specific menu presentation settings without maintaining a separate mobile menu.
+* Dynamic navigation generated from:
 
-**Developer surface**
+  * Entries by section
+  * Categories by group
+  * Assets by volume
+* Dynamic navigation limits and supported ordering are validated server-side.
 
-- Twig: `craft.menuBuilder.get()`, `.breadcrumbs()`, `.getGroup()`, `.getItem()`, `.iconAsset()`.
-- `MenuBuilderNode` as the stable public object; breadcrumbs derived from the menu hierarchy, never
-  from URL segments.
-- Optional macros: `_macros/tree.twig`, `_macros/breadcrumbs.twig`, and an optional `NavAsset` script
-  for mega-menu keyboard extras.
-- Navigation field for any Craft field layout (entries, Matrix blocks, categories, users), storing
-  the menu's UID.
-- GraphQL: `menuBuilder` and `menuBuilderNavigations` queries, read-only, absent until a menu is
-  ticked into a schema's scope.
-- REST API: `GET {basePath}/v1/navigations` and `/v1/navigations/{handle}`, read-only, off until
-  enabled in `config/menu-builder.php`, with ETags, a CORS allowlist, and rate limiting of both
-  requests and failed authentications.
-- Two extension events: register a link type, register a visibility rule.
+#### Control Panel
 
-**Editions**
+* Drag-and-drop hierarchical menu editor.
+* Full keyboard alternatives for menu and item reordering.
+* Slide-out item editor with full-page fallback.
+* Quick-add panel.
+* Search and filtering.
+* Bulk enable, disable, and delete actions.
+* Visual indicators for children, disabled items, and mega menus.
+* Link-health indicators for internal links.
+* Menu-wide link-health summary with direct navigation to affected items.
+* Preview screen for saved menus across selected site, audience, region, and device settings.
+* Preview of rendered markup.
 
-- Two editions, one implementation: **Free** (1 menu) and **Pro** (unlimited menus). Every other
-  feature is available in both.
-- Edition detection uses Craft's own commercial-plugin mechanism (`Plugin::editions()` and the
-  project-config edition Craft's Plugin Store sets); the plugin stores no license data of its own.
-- The limit is enforced in `MenuBuilderGroupService` — the only path a menu can be created through —
-  so it holds for direct POSTs, console callers and duplicates alike, and never applies to editing,
-  items or rendering.
-- Non-destructive by design: a lapsed Pro license removes no menus and changes no data. Existing
-  menus keep working; only creating another is refused until Pro returns.
-- Licensed under [The Craft License](LICENSE.md); `composer.json` declares `proprietary`, as Craft
-  requires for a commercial plugin.
+#### Developer Features
+
+* Twig API:
+
+  * `craft.menuBuilder.get()`
+  * `.breadcrumbs()`
+  * `.getGroup()`
+  * `.getItem()`
+  * `.iconAsset()`
+* `MenuBuilderNode` as the stable public navigation object.
+* Breadcrumbs based on the menu hierarchy rather than URL segments.
+* Optional Twig macros for trees and breadcrumbs.
+* Optional navigation asset for enhanced mega-menu keyboard behavior.
+* Navigation field for integrating MenuBuilder navigation with Craft field layouts.
+* GraphQL queries for MenuBuilder navigation.
+* REST API endpoints for read-only navigation access.
+* REST API support for ETags, CORS allowlists, and rate limiting.
+* Extension events for registering custom link types and visibility rules.
+
+#### Editions
+
+* Free and Pro editions using Craft's commercial plugin licensing system.
+* Free edition supports one menu.
+* Pro edition supports unlimited menus.
+* All other MenuBuilder features are available in both editions.
+* Edition limits are enforced server-side through the menu service.
+* Existing menus and data are preserved when Pro access expires or is downgraded.
+* Menu rendering and existing menu editing remain available after downgrade.
+* Commercial licensing uses Craft's licensing infrastructure; MenuBuilder does not maintain its own license system.
 
 ### Performance
 
-- Resolved menus cached per menu, per site, per configuration version — the link-resolution pass
-  only. Visibility filtering and active-state marking always run fresh.
-- Targeted invalidation on menu, item, element, container and site changes; draft and revision saves
-  are ignored.
-- Batch-loaded element links, batch-loaded custom field content and flat tree queries: a cache hit is
-  one query at any menu size, and query-budget tests keep it that way.
+* Resolved menu data is cached per menu, site, and configuration version.
+* Visibility rules and active-state resolution are evaluated for each request.
+* Targeted cache invalidation is used for menu, item, element, container, and site changes.
+* Draft and revision saves do not unnecessarily invalidate menu caches.
+* Element links and custom-field content are batch loaded.
+* Menu trees use efficient flat queries and batch loading to maintain predictable query counts.
 
 ### Security
 
-- Five permissions (`menuBuilder:view`, `:create`, `:edit`, `:delete`, `:manageSettings`), enforced
-  server-side on every action, on top of Craft's own control-panel permission.
-- Every mutation is a POST behind Craft's CSRF token; every control-panel action requires a
-  control-panel request.
-- Attribute, URL, id and class validation rejects event handlers and executing schemes, matched after
-  whitespace and control characters are stripped.
-- GraphQL and REST resolve for the anonymous audience, so a shared cache entry can never carry one
-  caller's visibility decision to another.
-- The REST API rate-limits **failed authentications** on a second, address-keyed one-minute window
-  that runs before the token is resolved, so repeated bad bearer tokens are refused rather than being
-  free. Both limiters are switched by the one `rateLimit` setting; a valid token is never charged to
-  the failure budget.
+* Five MenuBuilder permissions:
+
+  * `menuBuilder:view`
+  * `menuBuilder:create`
+  * `menuBuilder:edit`
+  * `menuBuilder:delete`
+  * `menuBuilder:manageSettings`
+* Server-side permission enforcement for all protected actions.
+* All control-panel mutations require POST requests and Craft CSRF protection.
+* Control-panel actions require valid control-panel requests.
+* URL, HTML attribute, ID, and CSS class validation rejects unsafe values and executable schemes.
+* Custom HTML attributes are validated during saving and filtered again during rendering.
+* GraphQL and REST visibility resolution is performed independently of the caller's identity to prevent cached visibility decisions from leaking between users.
+* REST API request and failed-authentication rate limiting.
+* Rate limiting can be controlled through the plugin's `rateLimit` configuration.
 
 ### Accessibility
 
-- The bundled macros emit one named `<nav>` landmark per menu, real lists, `aria-current="page"` on
-  the active link only, `<hr>` separators, a hidden "(opens in a new tab)" hint, and native
-  `<details>` disclosures with no `aria-expanded` to fall out of step.
-- Custom HTML attributes are filtered at render as well as validated on save.
-- The guarantees are summarized in [README.md](README.md#accessibility); the reasoning and the manual
-  release checklist are in [ARCHITECTURE.md](ARCHITECTURE.md#accessibility).
+* Navigation output uses named `<nav>` landmarks and semantic lists.
+* Active links use `aria-current="page"`.
+* Separators use semantic `<hr>` elements.
+* New-tab links provide a hidden accessibility hint.
+* Mega-menu disclosures use native `<details>` elements.
+* Menu management provides keyboard alternatives to drag-and-drop interactions.
+* Custom HTML attributes are filtered during rendering to maintain safe output.
 
-### Known limitations
+### Known Limitations
 
-These are accepted for 1.0.0, not planned work.
+The following limitations are accepted for the 1.0.0 release:
 
-- **No before/after save/delete events on menus or items.** The two registration events are the only
-  extension points.
-- **No import/export command or interchange format.** Menus travel with the database; **Duplicate
-  menu** copies one within an install.
-- **A Navigation field resolves its menu for the current request's site**, not the element's.
-- **Clock-driven entry status changes** (`postDate`/`expiryDate`) fire no event; Craft's
-  `cacheDuration` bounds the staleness rather than eliminating it.
-- **Third-party element types are not synced.** Commerce products and the like have no link type, and
-  a link type added through `EVENT_REGISTER_LINK_TYPES` must invalidate menu caches itself.
-- **Orphaned items are surfaced, not repaired.** An item whose linked element was hard-deleted is
-  badged; nothing reassigns or cleans it up.
-- **Preview shows saved data only**, and does not simulate time.
-- **Control-panel template shape is verified manually.** The permission *gate* is covered by
-  automated tests; whether a control is offered to someone the gate would refuse is not.
-- **Some Craft-dependent code is covered by integration tests and manual verification rather than
-  unit tests** — `ElementLinkResolver`, `MenuBuilderElementService`,
-  `MenuBuilderDynamicNavigationService` and the services' database writes.
+* Menu and item save/delete events are not currently provided. MenuBuilder exposes registration events for custom link types and visibility rules.
+* There is no built-in menu import/export format or command.
+* Navigation fields resolve their menu for the current request's site.
+* Changes driven only by Craft entry `postDate` or `expiryDate` do not trigger an immediate menu cache invalidation; cache duration determines the maximum staleness.
+* Third-party element types without a built-in MenuBuilder link type are not automatically supported.
+* Custom link types registered through the extension API are responsible for invalidating affected menu caches when necessary.
+* Orphaned menu items are reported rather than automatically repaired.
+* Preview renders saved menu data and does not simulate future time-based changes.
+* Some Craft-dependent behavior requires integration testing and manual verification in addition to unit tests.
 
-The reasoning behind each of these is in [ARCHITECTURE.md](ARCHITECTURE.md#known-limitations).
+For detailed architecture, implementation decisions, API documentation, testing procedures, and release guidance, see the documentation in the `docs/` directory.

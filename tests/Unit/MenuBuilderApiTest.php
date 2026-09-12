@@ -3,6 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Tahadudhiya\MenuBuilder\controllers\ApiController;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderApiHelper;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderApiConfig;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
@@ -557,6 +558,126 @@ class MenuBuilderApiTest extends TestCase
         $this->assertNotSame($anonymous, MenuBuilderApiHelper::rateLimitKey(null, '203.0.113.10', 42));
         $this->assertNotSame($anonymous, MenuBuilderApiHelper::rateLimitKey(null, '203.0.113.9', 43));
         $this->assertSame($anonymous, MenuBuilderApiHelper::rateLimitKey(null, '203.0.113.9', 42));
+    }
+
+    // The failed-authentication limiter
+
+    /**
+     * Same treatment as the request limiter's key: an address is hashed, never stored in the clear.
+    */
+    public function testAuthFailureKeyLeaksNoAddress(): void
+    {
+        $key = MenuBuilderApiHelper::authFailureKey('203.0.113.9', 42);
+
+        $this->assertStringNotContainsString('203.0.113.9', $key);
+        $this->assertStringStartsWith('menu-builder:api:auth-fail:', $key);
+        $this->assertStringEndsWith(':42', $key);
+    }
+
+    /**
+     * One budget per address per window — and, critically, **not** per token: a key that varied
+     * with the presented credential would hand every guess a fresh budget, which is the whole
+     * thing this counter exists to prevent.
+    */
+    public function testAuthFailureKeySeparatesAddressesAndWindowsOnly(): void
+    {
+        $key = MenuBuilderApiHelper::authFailureKey('203.0.113.9', 42);
+
+        $this->assertNotSame($key, MenuBuilderApiHelper::authFailureKey('203.0.113.10', 42));
+        $this->assertNotSame($key, MenuBuilderApiHelper::authFailureKey(null, 42));
+        $this->assertNotSame($key, MenuBuilderApiHelper::authFailureKey('203.0.113.9', 43));
+        $this->assertSame($key, MenuBuilderApiHelper::authFailureKey('203.0.113.9', 42));
+    }
+
+    /**
+     * It must not share a key with the request limiter, or a caller's successful requests would
+     * spend their failure budget and vice versa.
+    */
+    public function testTheTwoLimitersCannotShareACounter(): void
+    {
+        $this->assertNotSame(
+            MenuBuilderApiHelper::rateLimitKey(null, '203.0.113.9', 42),
+            MenuBuilderApiHelper::authFailureKey('203.0.113.9', 42),
+        );
+    }
+
+    /**
+     * The failure budget is deliberately tighter than any sensible request budget: a legitimate
+     * consumer authenticates correctly or not at all.
+    */
+    public function testTheFailureBudgetIsTighterThanTheDefaultRequestBudget(): void
+    {
+        $this->assertGreaterThan(0, MenuBuilderApiHelper::AUTH_FAILURE_LIMIT);
+        $this->assertLessThan(MenuBuilderApiConfig::DEFAULT_RATE_LIMIT, MenuBuilderApiHelper::AUTH_FAILURE_LIMIT);
+    }
+
+    /**
+     * Both limiters share one window, so a caller cannot be inside one and outside the other.
+    */
+    public function testBothLimitersShareOneWindow(): void
+    {
+        $now = 1_700_000_041;
+
+        $this->assertSame(
+            MenuBuilderApiHelper::rateLimitWindow($now),
+            MenuBuilderApiHelper::rateLimitWindow($now),
+        );
+        $this->assertStringEndsWith(
+            ':' . MenuBuilderApiHelper::rateLimitWindow($now),
+            MenuBuilderApiHelper::authFailureKey('203.0.113.9', MenuBuilderApiHelper::rateLimitWindow($now)),
+        );
+    }
+
+    /**
+     * The gate runs *before* authentication and the counter is written by the 401 path, which is
+     * the entire point — the request limiter runs after, and is keyed partly by token, so neither
+     * can see a stream of rejected credentials.
+    */
+    public function testTheFailureGateRunsBeforeAuthenticationAndIsFedByTheRefusal(): void
+    {
+        $beforeAction = self::methodSource('beforeAction');
+
+        $gate = strpos($beforeAction, 'enforceAuthFailureLimit()');
+        $authenticate = strpos($beforeAction, '$this->authenticate()');
+        $requestLimit = strpos($beforeAction, 'enforceRateLimit()');
+
+        $this->assertNotFalse($gate, 'The failed-authentication gate must run in beforeAction().');
+        $this->assertNotFalse($authenticate);
+        $this->assertNotFalse($requestLimit);
+        $this->assertLessThan($authenticate, $gate, 'The failure gate must run before authentication.');
+        $this->assertLessThan($requestLimit, $authenticate, 'The request limiter must stay after authentication.');
+
+        $this->assertStringContainsString(
+            'recordAuthFailure()',
+            self::methodSource('unauthorized'),
+            'Every 401 this controller sends must be counted.',
+        );
+    }
+
+    /**
+     * One switch, not two: an install that set `rateLimit => 0` asked for no limiting.
+    */
+    public function testBothLimitersAreGovernedByTheOneSetting(): void
+    {
+        foreach (['enforceAuthFailureLimit', 'recordAuthFailure', 'enforceRateLimit'] as $method) {
+            $this->assertStringContainsString(
+                'rateLimit',
+                self::methodSource($method),
+                "ApiController::$method() must respect the rateLimit setting.",
+            );
+        }
+    }
+
+    private static function methodSource(string $method): string
+    {
+        $reflection = new \ReflectionMethod(ApiController::class, $method);
+        $lines = file((string)$reflection->getFileName());
+
+        return implode('', array_slice(
+            (array)$lines,
+            $reflection->getStartLine() - 1,
+            $reflection->getEndLine() - $reflection->getStartLine() + 1,
+        ));
     }
 
 

@@ -62,6 +62,29 @@ class GroupsController extends BaseMenuBuilderController
         );
     }
 
+    /**
+     * Drag-and-drop / keyboard reorder endpoint for the menus list, the counterpart to
+     * `ItemsController::actionReorder()`.
+     *
+     * Menus are flat, so there is no parent to validate and no depth to check: the whole request is
+     * one ordered list of ids, and the service reconciles it against the menus that actually exist.
+    */
+    public function actionReorder(): Response
+    {
+        $this->requirePostRequest();
+
+        $ids = $this->bodyArray('ids');
+        $ids = array_values(array_map('intval', array_filter($ids, 'is_scalar')));
+
+        $success = MenuBuilder::getInstance()->groups->reorder($ids);
+
+        return $this->respondToMutation(
+            $success,
+            Craft::t('menu-builder', 'Couldn’t reorder the menus.'),
+            successMessage: Craft::t('menu-builder', 'Menus reordered.'),
+        );
+    }
+
     public function actionIndex(): Response
     {
         $groups = MenuBuilder::getInstance()->groups->getAll();

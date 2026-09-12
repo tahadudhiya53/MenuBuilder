@@ -1,11 +1,62 @@
 # MenuBuilder architecture
 
+[← README](README.md) · [Changelog](CHANGELOG.md)
+
 This document describes the plugin's internals **as they exist today** — layers, invariants, and
-the reasoning behind decisions that aren't obvious from the code. It is not a feature list (see
-[README.md](README.md)) and not a history (see [CHANGELOG.md](CHANGELOG.md)).
+the reasoning behind decisions that aren't obvious from the code. It is not a feature list and not a
+usage guide: everything a site developer needs to *integrate* MenuBuilder is in
+[README.md](README.md), and the release history is in [CHANGELOG.md](CHANGELOG.md).
 
 Read this before changing the resolve pipeline, the cache boundary, hierarchy validation, or the
 permission mapping. Those four places carry most of the plugin's invariants.
+
+## In one page
+
+**Where data lives.** Menus and items are **database-only**; the database is the single source of
+truth and nothing about a menu is written to project config. Full answer:
+[Where data lives](#where-data-lives).
+
+**How a rendered menu is produced:**
+
+```
+Twig / GraphQL / REST
+        │
+        ▼
+MenuBuilderResolver::getTree(handle)
+        │  1. load the menu, bail if missing/disabled/not on this site
+        │
+        ├─ 2. CACHED ── item rows → element preload → link resolution → dynamic
+        │               children → MenuBuilderNode[]        (per menu, per site,
+        │                                                    per config version)
+        │
+        ├─ 3. visibility filter        ── never cached (per user, date, environment)
+        └─ 4. active-state marking     ── never cached (per page)
+                │
+                ▼
+          MenuBuilderTree  →  your template / the macros
+```
+
+The cache boundary between steps 2 and 3 is the plugin's central invariant: **nothing that varies by
+visitor, date or page may enter the cached payload.** Everything in
+[Caching](#caching), [Visibility](#visibility) and [Active state](#active-state) follows from it.
+
+**A control-panel write** goes `Controller → Service → Model ⇄ Record → DB`, with the permission
+gate in `BaseMenuBuilderController::beforeAction()` and cache invalidation after the transaction
+commits.
+
+## Contents
+
+| Section | |
+|---|---|
+| [Layers](#layers) · [Domain model](#domain-model) · [Where data lives](#where-data-lives) | Structure and storage |
+| [Rendering pipeline](#rendering-pipeline) · [Link resolution](#link-resolution) · [Link health](#link-health) | Producing a tree |
+| [Visibility](#visibility) · [Active state](#active-state) · [Breadcrumbs](#breadcrumbs) | Per-request passes |
+| [Tree / hierarchy](#tree--hierarchy) · [Mega menus](#mega-menus) · [Mobile navigation](#mobile-navigation) · [Dynamic navigation](#dynamic-navigation) | Structure and presentation |
+| [Caching](#caching) · [Performance](#performance) | The cache boundary and its costs |
+| [Persistence](#persistence) · [Permissions & security](#permissions--security) · [Editions and the menu limit](#editions-and-the-menu-limit) | Storage, access and licensing |
+| [Control panel front end](#control-panel-front-end) · [Preview](#preview) · [Accessibility](#accessibility) | What the editor and the visitor see |
+| [Public Twig API](#public-twig-api) · [The Navigation field](#the-navigation-field) · [GraphQL](#graphql) · [REST API](#rest-api) · [Extension points](#extension-points) | Public surfaces |
+| [Single path per behaviour](#single-path-per-behaviour) · [Testing](#testing) · [Release process](#release-process) · [Known limitations](#known-limitations) | Maintaining it |
 
 ---
 
@@ -247,13 +298,8 @@ evaluation unit-testable without a booted Craft app) and dispatches each config 
 
 Built-ins: `always`, `loggedIn`, `loggedOut`, `userGroup`, `site`, `dateRange`, `environment`.
 
-**Fail closed is the rule, not a detail.** An unrecognised or misconfigured rule type hides the
-item. `DateRangeRule` treats an unparseable bound, an impossible calendar date (`2026-02-30`, which
-PHP's `DateTime` would silently normalise to March 2), or a start after its end as "hide", and
-parses naive `datetime-local` strings against the application timezone carried on the context — not
-PHP's ambient default — so a CP-entered value means the same instant on any server.
-
-Everything that is not an unambiguous pass hides the item:
+**Fail closed is the rule, not a detail.** Everything that is not an unambiguous pass hides the
+item:
 
 - A `visibility` entry that isn't an array of config, or whose `type` is missing / not a string /
   not registered.
@@ -756,8 +802,11 @@ columns rather than normalised tables. That's what lets new rule types, mega-men
 dynamic-source config ship without a migration — and why every one of those bags has explicit
 server-side shape validation on its model instead of a schema to lean on.
 
-There is no settings model and no `config/` directory: `hasCpSettings` is `false` and every
-editor-managed value lives in these two tables.
+There is no plugin settings model and no control-panel settings screen (`hasCpSettings` is `false`):
+every editor-managed value lives in these two tables. The plugin ships no config file of its own and
+requires none; the one file it will *read* if the project provides it is `config/menu-builder.php`,
+which configures the REST API and nothing else (see [REST API](#rest-api)). It is a file, not project
+config, and it is read per request through `MenuBuilder::apiConfig()`.
 
 ---
 
@@ -771,7 +820,7 @@ Five permissions, registered in `MenuBuilder::attachEventHandlers()`:
 | `menuBuilder:create` | `ItemsController::actionSave` when creating a **new** item; `actionDuplicate` |
 | `menuBuilder:edit` | `actionSave` on an existing item; `actionToggle`, `actionReorder`, bulk enable/disable |
 | `menuBuilder:delete` | Item/group deletion, bulk delete |
-| `menuBuilder:manageSettings` | Every group **mutation**: save, duplicate, toggle (`GroupsController`'s `default` arm) |
+| `menuBuilder:manageSettings` | Every group **mutation**: save, duplicate, toggle, reorder (`GroupsController`'s `default` arm) |
 
 Groups are structural/settings-level entities (name, handle, `maxDepth`, `cssClass`,
 `htmlAttributes`), not content — hence `manageSettings` rather than `create`/`edit`, which are
@@ -864,7 +913,39 @@ Other guarantees:
 
 ---
 
-## Group persistence — database only
+## Where data lives
+
+Every value this plugin is responsible for, and which store owns it:
+
+| Value | Stored in | Source of truth | Moves between environments by |
+|---|---|---|---|
+| Menus (`MenuBuilderGroup`) | `menubuilder_groups` | Database | Deploying the database |
+| Menu items (`MenuBuilderItem`) | `menubuilder_items` | Database | Deploying the database |
+| A menu's site restriction, `sortOrder`, `maxDepth`, attributes | `menubuilder_groups` (`siteIds` inside the `settings` JSON bag) | Database | Deploying the database |
+| A menu's item **field layout** | Craft's `fieldlayouts`, referenced by `menubuilder_groups.fieldLayoutId` | Database | Deploying the database |
+| Custom field **values** on an item | A `MenuBuilderItemContent` element (Craft's `elements` tables), referenced by `menubuilder_items.contentId` | Database | Deploying the database |
+| Navigation **field** settings (`allowedGroupUids`, `includeDisabledMenus`) | Project config, as part of the field — Craft writes it, not this plugin | Project config | `project-config/apply` |
+| The active edition (`free` / `pro`) | Project config (`plugins.menu-builder.edition`), written by Craft's Plugin Store | Project config | `project-config/apply` |
+| REST API configuration | The project's `config/menu-builder.php` file | That file | Deploying the file |
+
+**What a project-config sync does and doesn't do.** Applying project config can install or reconfigure
+a Navigation *field*, and can switch the plugin's edition. It can **never** create, change, reorder or
+delete a menu or a menu item, because none of them are project-config entities. A Navigation field
+arriving from another environment carries menu **UIDs**, which resolve only in a database that already
+holds those menus; where it doesn't, the picker offers one fewer option and a stored selection reads as
+"doesn't resolve" rather than as a wrong menu. This is checked by
+`MenuBuilderProjectConfigTest::testNoMenuStateEverReachesProjectConfig()` and
+`MenuBuilderGroupCrudTest::testNoMenuLifecycleOperationWritesToProjectConfig()`, which snapshot the
+whole project config across a full menu lifecycle and assert it is byte-identical.
+
+**What install and uninstall do.** Installing runs one migration (`src/migrations/Install.php`)
+creating the two tables. Uninstalling runs `safeDown()`, which hands Craft's own rows back first —
+content elements, then field layouts — and then drops both tables, so nothing is stranded in
+`elements`/`fieldlayouts` and nothing is left in `project.yaml` for a reinstall to replay
+(`MenuBuilderInstallTest`). Switching editions writes one project-config value and touches no menu
+data in either direction (`MenuBuilderEditionSwitchTest`).
+
+### Why menus are database-only
 
 **MenuBuilder Group configuration is database-backed and the database is the single source of
 truth. Groups are not persisted in Craft Project Config.**
@@ -1003,6 +1084,7 @@ No JS framework, no build step. Four plain-JS bundles registered by `CpAsset`:
 | File | Responsibility |
 |---|---|
 | `tree.js` | `MenuBuilderTree` — the drag-and-drop tree on `Garnish.DragSort`, row actions (`edit`, `duplicate`, `toggle`, `delete`), reorder persistence, row state updates |
+| `groups/_index.twig`'s inline JS | The menus **list**: row actions, and its own reordering on `Craft.DataTableSorter` (see below). Inline rather than bundled because it is one screen's behaviour and nothing else loads it |
 | `slideout.js` | A self-contained slide-out panel built on Craft's own `.slideout` CSS but with its own JS, talking to MenuBuilder's `items/edit`/`items/save` actions over a JSON shape this plugin controls end to end (Craft's `CpScreenSlideout` expects a private CP-screen response contract) |
 | `item-fields.js` | Type-dependent field show/hide inside the editor form |
 | `menu-builder.js` | Bootstrapping |
@@ -1364,7 +1446,7 @@ countable over its top-level nodes, with `.group`, `.items`, and `.flatten()` (d
 templates never recurse to find the active node). `getGroup()`/`getItem()` are thin read-only
 service passthroughs with no logic of their own.
 
-`MenuBuilderVariable` is six methods and nothing else: `get()`, `breadcrumbs()`, `getGroup()`,
+`MenuBuilderVariable` is five methods and nothing else: `get()`, `breadcrumbs()`, `getGroup()`,
 `getItem()` and `iconAsset()`. There is no HTML-rendering entry point — the macros
 are templates, not API — so the variable's whole contract is "hand back resolved data".
 
@@ -1518,22 +1600,9 @@ query at all, so a menu with no custom fields pays nothing.
 `MenuBuilderNode::custom()` short-circuits on a null `contentId` rather than delegating, which is
 what keeps a plain node readable without a booted plugin.
 
-#### What changed, and what didn't
+#### Reading them, and what the schema owes
 
-The plugin's own custom field system — `MenuBuilderCustomField`, `CustomFieldHelper`, definitions in
-`settings['customFields']`, values in `metadata['custom']`, seven closed types — is **gone**. There
-was no shipped release to owe an upgrade path to, and a bespoke definition has no Craft field to
-become without inventing global fields on the install's behalf.
-
-There is deliberately **no upgrade migration** for it either. The plugin is pre-release, so
-`src/migrations/Install.php` stays the single source of the schema (see "Install and uninstall"):
-the two new columns are declared there, and an existing dev install is uninstalled and reinstalled
-rather than migrated. `safeDown()` hands Craft's rows back before dropping the tables that name
-them — content elements first (their nested Matrix entries are then swept by Craft's own GC), then
-the field layouts — and is guarded on the columns existing, so it also runs cleanly against an
-install whose tables predate them.
-
-The Twig entry point is unchanged, but the values it returns are now whatever the field returns:
+The Twig entry point is `custom()`, and the value it returns is whatever the field itself returns:
 
 ```twig
 {{ node.custom('subtitle') }}
@@ -1545,9 +1614,16 @@ The Twig entry point is unchanged, but the values it returns are now whatever th
 {% for block in node.custom('promoBlocks').all() %}{{ block.heading }}{% endfor %}
 ```
 
-`craft.menuBuilder.customAsset()` is gone with it: an Assets field is read the way an Assets field is
-read anywhere else in Craft, and a lookup helper here would only be a second, worse element cache in
-front of Craft's own. `iconAsset()` stays, because an icon really is a bare ID on the node.
+There is deliberately no asset-lookup helper beside it: an Assets field is read the way an Assets
+field is read anywhere else in Craft, and a helper here would only be a second, worse element cache
+in front of Craft's own. `MenuBuilderVariable::iconAsset()` is the one exception, because an icon
+really is a bare ID on the node rather than a field value.
+
+Because this is a pre-1.0.0 plugin, `src/migrations/Install.php` stays the single source of the
+schema: `fieldLayoutId` and `contentId` are declared there rather than added by an upgrade
+migration. `safeDown()` hands Craft's rows back before dropping the tables that name them — content
+elements first (their nested Matrix entries are then swept by Craft's own GC), then the field
+layouts — and is guarded on the columns existing.
 
 Over the wire, both surfaces speak each field's **serialized** form
 (`MenuBuilderItemContentService::serializedValuesFor()`) — a relation field is a list of element IDs
@@ -1995,17 +2071,36 @@ correct for a server-side consumer.
 
 ### Rate limiting
 
-A fixed one-minute window in Craft's cache, keyed by `hash(tokenUid|ip)` so neither an access token
-nor an address is stored in the clear, and TTL'd to the window's own remaining life so a key can't
-leak one caller's budget into the next window. The token is part of the key so one noisy anonymous
-network can't spend an authenticated integration's budget. `rateLimit => 0` turns it off.
+**Two** fixed one-minute windows in Craft's cache, both switched by the one `rateLimit` setting
+(`0` turns both off — two switches for one intent is configuration people get half-right). Both TTL
+their key to the window's own remaining life, so a key can't leak one caller's budget into the next
+window, and both hash their key material so neither an access token nor an address is stored in the
+clear.
 
-It runs **after** authentication (see "Order of the gates"), which has a consequence worth stating:
-a request rejected with 401 is never counted, so the limiter does not slow down guessing at bearer
-tokens. That is the same placement `craft\controllers\GraphqlController` uses, and a Craft GraphQL
-token is a long random string, so this is a hardening gap rather than a reachable one — but
-counting failed authentications against a second, IP-keyed window is the fix if it is ever wanted.
-See "Known limitations".
+| | Counts | Key | Budget | Runs |
+|---|---|---|---|---|
+| `enforceRateLimit()` | Authenticated requests | `hash(tokenUid\|ip)` | `rateLimit` | **After** authentication |
+| `enforceAuthFailureLimit()` | Failed authentications | `hash(ip)` | `MenuBuilderApiHelper::AUTH_FAILURE_LIMIT` (10) | **Before** authentication |
+
+The request limiter includes the token in its key so one noisy anonymous network can't spend an
+authenticated integration's budget. That is exactly why it cannot do the second job: a caller who
+has produced no usable token has no token to key by, and the gate runs after the 401 has already
+been sent. `craft\controllers\GraphqlController` places its own gates the same way.
+
+So the second counter is keyed by **address alone** — deliberately not by the presented credential,
+since a key that varied with the guess would hand every guess a fresh budget — and is fed by
+`unauthorized()` rather than by each of `authenticate()`'s refusal paths, so the set of 401s this
+controller can send and the set it counts cannot drift apart. Its gate runs before authentication,
+so an address that has spent its budget is refused without the token even being looked up.
+
+Its refusal carries `Retry-After` but deliberately **no `X-RateLimit-*`**: those headers describe
+the request budget, and quoting a remaining-request count on a refusal about credentials would tell
+the caller something untrue about a different limit. A correct token is never charged to it, so a
+busy legitimate integration cannot lock itself out.
+
+The budget is fixed at 10 rather than configurable, and is deliberately far below any sensible
+`rateLimit`: a legitimate consumer authenticates correctly or it doesn't, and ten wrong tokens a
+minute from one address is already a misconfigured client rather than a busy one.
 
 ### No write surface
 
@@ -2128,6 +2223,17 @@ to keep in sync and no second place for a hierarchy bug to hide.
   fallback, not a second editor.
 - **Reflecting an item's enabled state** — `MenuBuilderTree.setRowEnabled(id, enabled)`, called by
   both the row menu and the bulk toolbar (via `window.MenuBuilder.tree`).
+- **Reorder the menus list** — one `persist()` in `groups/_index.twig`, called by the drop
+  (`Craft.DataTableSorter`'s `onSortChange`) and by the handle's arrow keys alike. Both read the
+  order back off the DOM and post the same `groups/reorder` request, so a keyboard move and a drag
+  cannot come to mean different things — the same rule `tree.js` follows one level down. The handle
+  is focusable and arrow-operable for the same reason the item tree's is: a `role="button"` that
+  answers only to a mouse is an inaccessible control.
+
+  The server is the order of record. A refused reorder reloads the page rather than leaving the
+  table showing an order the database doesn't hold, and `MenuBuilderGroupService::reorder()`
+  reconciles whatever was posted against the menus that actually exist — the posted list is one
+  editor's screen, exactly as a drag's `siblingIds` are.
 
 One deliberate **exception**: per-row toggle/delete (`items/toggle`, `items/delete`) and the bulk
 toolbar (`items/bulk`) both exist on purpose. They differ in cardinality, not behaviour — per-row is
@@ -2139,12 +2245,23 @@ same moment. Don't collapse them.
 
 ## Testing
 
-Two suites, with different bootstraps and different jobs.
+Four commands, and it is worth knowing what each one is for:
 
-**`composer test`** — 1,147 unit tests in 24 files (`tests/Unit`), no booted Craft app. Fast, and covers the
+| Command | What it runs | Needs a database |
+|---|---|---|
+| `composer test` | The **unit** suite (`tests/Unit`, `phpunit.xml.dist`) — pure logic, no booted Craft app | No |
+| `composer test-integration` | The **integration** suite (`tests/Integration`, `phpunit-integration.xml.dist`) — a real booted Craft 5 app | Yes |
+| `composer phpstan` | **Static analysis** — PHPStan level 5 with Craft's extension, over `src` and `tests` | No |
+| `composer check-cs` | **Code style** — ECS with Craft's own rule set (`composer fix-cs` applies it) | No |
+
+Counts move with every added test, so this document doesn't pin them; run the suites for the current
+figures. As of the last documentation audit the unit suite was ~1,150 tests across 24 files and the
+integration suite ~490 tests across 16 files.
+
+**`composer test`** — `tests/Unit`, no booted Craft app. Fast, and covers the
 pure logic every layer is factored into.
 
-**`composer test-integration`** — 489 integration tests in 16 files (`tests/Integration`) against a **real booted
+**`composer test-integration`** — `tests/Integration`, against a **real booted
 Craft 5 application and a real database**. `tests/integration-bootstrap.php` stands up a throwaway
 install: its own database (`MENUBUILDER_TEST_DB_DATABASE`, default `menubuilder_test`), its own
 `config`/`storage` under `tests/_craft`, and the plugin's own `vendor/` — which registers MenuBuilder
@@ -2204,6 +2321,68 @@ Writing these tests caught bugs inspection hadn't: the three `metadata`/`visibil
 validators were silently skipped on an empty array, because Yii's inline-validator `skipOnEmpty`
 defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explicitly.
 
+### What is verified manually
+
+Automated coverage stops at three places, all of them deliberate rather than pending. They are on the
+pre-release checklist below.
+
+1. **Control-panel template shape** — which controls are *offered* to a user (see "Known
+   limitations" #3). The permission *gate* is covered by `ControllerAuthorizationTest`.
+2. **The accessibility of rendered markup in a real browser and screen reader** — the DOM-level
+   guarantees are asserted by `MenuBuilderAccessibilityTest`, but focus behaviour, announcements and
+   zoom are not. The checklist is under [Accessibility](#manual-release-checklist).
+3. **Element listeners actually firing** — `MenuBuilderElementService`'s Craft event hookups and the
+   invalidation queue's Yii transaction hookup (see "Known limitations" #2).
+
+---
+
+## Release process
+
+The repository is at **1.0.0, unreleased**: `CHANGELOG.md` carries it as `Unreleased` and no Git tag
+exists. Tagging is what turns one into the other — the package version comes from the tag, and
+`composer.json` deliberately declares no `version` field for it to drift from.
+
+1. **Run everything, from inside the web container** so the integration suite can reach the database:
+
+   ```sh
+   composer test
+   ddev exec composer test-integration
+   composer phpstan
+   composer check-cs
+   ```
+
+2. **Review the changelog.** Move the `Unreleased` heading to `## 1.0.0 - YYYY-MM-DD`, and confirm the
+   **Known limitations** list still matches the code — a limitation that has since been implemented is
+   worse than no list.
+3. **Verify the documentation** — [README.md](README.md) (release status line, version references),
+   this document, and every code example against the current API.
+4. **Verify `composer.json`** — `require` constraints (`craftcms/cms ^5.0`, `php >=8.2.0`),
+   `license: proprietary`, and the `extra` block's handle, name, edition-aware metadata and URLs.
+5. **Commit the release**, tag it `1.0.0`, and push the tag.
+6. **Create the GitHub release** from the tag, with the changelog entry as its body.
+7. **Submit or update the Plugin Store listing**, including the Free and Pro editions and their
+   prices, which are set at the store and appear nowhere in this repository.
+
+### Pre-release checklist
+
+Nothing here is claimed as done by this document — tick it at release time.
+
+```
+[ ] composer test                  (unit suite green)
+[ ] composer test-integration      (integration suite green)
+[ ] composer phpstan               (no errors)
+[ ] composer check-cs              (no errors)
+[ ] README reviewed                (release status, versions, examples)
+[ ] ARCHITECTURE reviewed          (limitations still true)
+[ ] CHANGELOG reviewed             (dated, limitations accurate)
+[ ] composer.json verified         (constraints, license, extra; no `version` field)
+[ ] Fresh Craft 5 install tested   (install → create menu → render)
+[ ] Upgrade tested                 (existing install, `php craft up`)
+[ ] Uninstall/reinstall tested     (no stranded elements, field layouts or project-config keys)
+[ ] Free/Pro edition switch tested (downgrade keeps every menu)
+[ ] Accessibility checklist walked (see "Manual release checklist")
+```
+
 ---
 
 ## Known limitations
@@ -2236,6 +2415,9 @@ defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explic
    refuse — the UX regression most worth watching for. On the manual list.
 4. **Orphaned items are surfaced, not repaired.** The dashboard badges an item whose linked element
    was hard-deleted; nothing reassigns or cleans it up.
+
+   **There is no import/export.** No console command, no interchange format, no CP screen. Menus
+   travel with the database; `duplicate()` copies one within an install.
 5. **Two element changes fire no event at all.** (a) A **time-based entry status change** — a
    pending entry reaching its `postDate`, a live entry passing its `expiryDate`. Bounded by the
    `cacheDuration` ceiling above, not eliminated. (b) **Garbage collection hard-deleting a
@@ -2269,15 +2451,7 @@ defaults to `true` — every rule on `MenuBuilderItem` sets it to `false` explic
    This is **pinned by a regression test** (`MenuBuilderFieldMultiSiteTest::testATreeResolvesForTheRequestsSiteNotTheElementsSite`)
    rather than left implicit, so changing the behaviour has to be a deliberate decision that
    updates the test, not an accident nobody notices.
-9. **The REST rate limiter doesn't count rejected authentications.** It runs after the
-   authentication gate, so a 401 costs a caller nothing and the one-minute window is no obstacle to
-   guessing at bearer tokens. Craft's own GraphQL controller places its gates the same way and a
-   Craft GraphQL access token is a long random string, so this is defence-in-depth that is missing
-   rather than an opening — and the endpoint is off by default. Closing it means a second,
-   IP-keyed window counting failed authentications *before* the token is resolved; it is not a
-   reordering of the existing gates, because the existing key is partly the token.
-
-10. **`MenuBuilderGroup::$settings` is still open-ended.** One key lives in it — `siteIds`
+9. **`MenuBuilderGroup::$settings` is still open-ended.** One key lives in it — `siteIds`
    (`MenuBuilderGroupService::SITE_IDS_KEY`), lifted back out on read so `$settings` stays a plain
    bag. (`customFields` used to be the second, until custom fields became a real Craft field
    layout with a column of its own.) Whoever adds the next per-menu frontend setting should decide

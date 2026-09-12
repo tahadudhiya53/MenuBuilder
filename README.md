@@ -3,42 +3,40 @@
 Advanced navigation management for Craft CMS 5 — multiple menus, drag-and-drop hierarchy, eight link
 types, mega menus, dynamic navigation, per-item visibility rules, and a small, stable Twig API.
 
-- **Requires:** Craft CMS ^5.0, PHP >= 8.2 · **License:** [The Craft License](LICENSE.md) ·
-  **Handle:** `menu-builder`
-- **Editions:** Free (1 menu) · Pro (unlimited menus) — [what's the difference?](#free-vs-pro)
-- Internals and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)** · Release history:
-  **[CHANGELOG.md](CHANGELOG.md)**
+Editors build navigation in the control panel — menus, items dragged into a hierarchy, links to
+entries, categories, assets or plain URLs — and templates read the result back as plain data with
+`craft.menuBuilder.get('main')`. Nothing about a link is frozen at save time: element URLs and titles
+resolve per request and per site, so renaming or moving an entry never leaves a stale link behind.
+Rendering stays yours — bundled macros give you accessible markup out of the box, and GraphQL and a
+REST API serve headless front ends the same tree.
 
-**In one paragraph.** Editors build navigation in the control panel — menus, items dragged into a
-hierarchy, links to entries, categories, assets or plain URLs — and templates read the result back
-as plain data with `craft.menuBuilder.get('main')`. Nothing about a link is frozen at save time:
-element URLs and titles resolve per request and per site, so renaming or moving an entry never
-leaves a stale link behind. Rendering stays yours — bundled macros give you accessible markup out of
-the box, and GraphQL and a REST API serve headless front ends the same tree.
+**Release status: 1.0.0 release candidate — not yet tagged or published.** See
+[CHANGELOG.md](CHANGELOG.md).
 
-**New here?** [Install](#install) → [Quick start](#quick-start) → [Menus](#menus). **Building
-templates?** Start at [Resolving a menu](#resolving-a-menu). **Headless?**
-[GraphQL](#graphql) / [REST API](#rest-api).
+## Documentation
 
-## Contents
+| Where | What's in it |
+|---|---|
+| This file | Installation, the editor's guide, the developer/API reference, troubleshooting |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Internals: the resolve pipeline, caching, security model, testing and the release process |
+| [CHANGELOG.md](CHANGELOG.md) | Release history and known limitations |
+| [LICENSE.md](LICENSE.md) | The Craft License |
 
-**Using it** — [Install](#install) · [Free vs Pro](#free-vs-pro) · [Quick start](#quick-start) ·
-[Features](#features) ·
-[Menus](#menus) · [Menu items](#menu-items) · [Visibility rules](#visibility-rules) ·
-[Mega menus](#mega-menus) · [Mobile](#mobile) · [Dynamic navigation](#dynamic-navigation) ·
-[Link health](#link-health) · [Preview](#preview) · [Permissions](#permissions)
+Jump to: [Install](#install) · [Quick start](#quick-start) · [Editor's guide](#editors-guide) ·
+[Templating](#templating) · [Headless and developer](#headless-and-developer) ·
+[Where your data lives](#where-your-data-lives) · [Troubleshooting](#troubleshooting)
 
-**Templating** — [Resolving a menu](#resolving-a-menu) · [Node properties](#node-properties) ·
-[Macros](#rendering-with-the-macros) · [Active state](#active-state) · [Breadcrumbs](#breadcrumbs) ·
-[Icons](#icons) · [Badges](#badges) · [Custom fields](#custom-fields) ·
-[Mobile rendering](#mobile-rendering) · [Accessibility](#accessibility)
+## Requirements
 
-**Headless & developer** — [Navigation field](#the-navigation-field) · [GraphQL](#graphql) ·
-[REST API](#rest-api) · [Extending](#extending) · [Caching](#caching) ·
-[Storage & upgrading](#storage-and-upgrading) · [Troubleshooting](#troubleshooting) ·
-[Development](#development) · [Support](#support) · [License](#license)
+| | |
+|---|---|
+| Craft CMS | `^5.0` |
+| PHP | `>= 8.2` |
+| Database | Whatever your Craft install uses (MySQL or PostgreSQL) |
+| Plugin handle | `menu-builder` |
+| License | [The Craft License](LICENSE.md) — a commercial plugin |
 
----
+No other dependencies. GraphQL and the REST API use Craft's own GraphQL schemas and tokens.
 
 ## Install
 
@@ -47,65 +45,8 @@ composer require tahadudhiya/craft-menu-builder
 php craft plugin/install menu-builder
 ```
 
-Or install **MenuBuilder** from the Plugin Store. Installing creates `menubuilder_groups` and
-`menubuilder_items`; uninstalling drops them. It installs on the **Free** edition — see below.
-
-## Free vs Pro
-
-MenuBuilder has two editions. They are the same plugin: there is no Pro-only feature, no Pro-only
-code path, and nothing is disabled, degraded or watermarked in Free. The **only** difference is how
-many menus an install may have.
-
-### Free
-
-The full menu-building experience, in **one menu**.
-
-- Unlimited menu items in that menu
-- Unlimited nesting
-- Drag & drop hierarchy, keyboard reordering
-- All eight link types — entry, category, asset, custom URL, anchor, heading, separator, dynamic
-- Mega menus, mobile navigation, icons, badges, custom fields on a real Craft field layout
-- Visibility rules, including date scheduling
-- Active state, breadcrumbs, preview, link health
-- Twig API, macros, GraphQL, the REST API and the Navigation field
-- Multi-site, permissions and caching
-
-### Pro
-
-Everything in Free, plus:
-
-- **Unlimited menus**
-- Commercial support
-- New releases for as long as the updates renewal is current
-
-**$19** to buy, then **$5/year** to keep receiving updates and support — Craft's standard commercial
-plugin model. The renewal buys *updates*, not the right to keep using Pro: let it lapse and the Pro
-you have keeps running unchanged, you just stop getting new releases until you renew. See
-[License](#license).
-
-Prices are set and charged by the Craft Plugin Store. They appear nowhere in this plugin's code,
-which only ever asks Craft which edition is active.
-
-Upgrade from **MenuBuilder → Menus**, from the sidebar of any menu screen, or from
-**Settings → Plugins**; each takes you to Craft's Plugin Store checkout for this plugin.
-
-> **All MenuBuilder features are available in Free. Upgrade to Pro when you need more than one
-> menu.**
-
-### What the limit does and doesn't do
-
-- The limit counts **menus per install**, not per site. A menu is one global row that can be
-  restricted to a set of sites (see [Menus](#menus)), so an install has one menu list, whatever its
-  site count.
-- It applies to **creating** a menu — including duplicating one, and including a direct POST to the
-  controller. It is enforced in `MenuBuilderGroupService`, not in the UI.
-- It never applies to items. Fill the Free menu with as many items, nested as deeply, as you like.
-- It never touches your data. If an install goes back to Free with several menus in it, every one of
-  them stays in the database, stays editable, and keeps rendering on the front end — you simply
-  can't add another until you are back under the limit. Restore Pro and menu creation comes straight
-  back. (A lapsed *renewal* doesn't do this at all: it stops new releases, not Pro itself.)
-- It is never applied to the front end. `craft.menuBuilder.get()`, the macros, GraphQL and the REST
-  API don't ask which edition is active; the check lives on the create path and nowhere else.
+Or install **MenuBuilder** from the Plugin Store. Installing creates the `menubuilder_groups` and
+`menubuilder_items` tables; uninstalling drops them. It installs on the **Free** edition.
 
 ## Quick start
 
@@ -126,29 +67,51 @@ The resolved tree is plain data — see [Resolving a menu](#resolving-a-menu).
 
 ## Features
 
-| | |
-|---|---|
-| Menus | One on [Free](#free-vs-pro), any number on Pro — each with a handle, enable/disable, optional 1–10 max depth, site restriction, CSS class and HTML attributes. Duplicate copies settings and items |
-| Link types | 8: entry, category, asset, custom URL, anchor, non-clickable heading, separator, dynamic |
-| Element links | Resolved live per request and per site — never a stored URL. Per-item fallback when the target is gone |
-| Visibility | 7 rule types, combined with AND, failing closed |
-| Mega menus | Any item, 1–6 columns, rendered as a native `<details>` disclosure |
-| Mobile | Per-item viewport, order, collapsible children and mega-menu behaviour — one menu reshaped, never a second menu |
-| Dynamic navigation | Children from entries by section, categories by group or assets by volume; limit capped at 50, whitelisted order |
-| Item extras | Icons (class or asset), badges in 5 styles, description, image, featured flag, ARIA label, validated attributes, and a full Craft field layout per menu |
-| Control panel | Drag-and-drop and keyboard tree, slide-out editor, quick add, search, bulk actions, link-health badges, visual preview |
-| Multi-site | Per-menu site restriction, per-item `site` rule, per-site resolution, per-site cache |
-| Developer API | `craft.menuBuilder.get()` / `.breadcrumbs()` / `.getGroup()` / `.getItem()`, optional macros, a Navigation field, 2 extension events |
-| Headless | GraphQL (2 queries) and a REST API (2 endpoints) — both read-only, both off until you turn them on |
-| Caching | Per menu, per site, per config version, with targeted invalidation. Visibility and active state always run fresh |
-| Permissions | 5 CP permissions, enforced server-side, every mutation behind POST + CSRF |
-| Accessibility | Named landmarks, real lists, `aria-current="page"`, native disclosures, new-tab hints |
+- **Eight link types** — entry, category, asset, custom URL, anchor, non-clickable heading,
+  separator, dynamic. Element links resolve live per request and per site, with a per-item fallback
+  when the target is gone.
+- **Drag-and-drop hierarchy** with full keyboard equivalents, an optional 1–10 depth cap, and
+  server-side validation of every move.
+- **Mega menus** (1–6 columns) and **mobile presentation** — one menu reshaped per viewport, never a
+  second menu.
+- **Dynamic navigation** — children generated from a section, category group or volume.
+- **Per-item visibility rules** — seven types, combined with AND, evaluated fresh per request.
+- **Custom fields per menu**, on a real Craft field layout, plus built-in icons, badges,
+  descriptions, images and validated HTML attributes.
+- **Control panel tooling** — slide-out editor, quick add, search, bulk actions, link-health badges,
+  and a visual preview for a chosen site, audience and device.
+- **Developer surface** — a five-method Twig API, optional accessible macros, a Navigation field,
+  GraphQL, a read-only REST API, and two extension events.
+- **Multi-site, cached and permissioned** throughout — per-site resolution and cache entries,
+  targeted invalidation, five CP permissions enforced server-side.
 
-Not included: import/export (menus move with the database), and menu reordering from the CP.
+Deliberately not included in 1.0.0: import/export. See
+[Known limitations](CHANGELOG.md#known-limitations).
+
+## Editions
+
+MenuBuilder has two editions. They are the same plugin: there is no Pro-only feature, no Pro-only
+code path, and nothing is disabled, degraded or watermarked in Free. The **only** difference is how
+many menus an install may have.
+
+| | Menus | Everything else |
+|---|---|---|
+| **Free** | 1 | All of it — every link type, mega menus, mobile, custom fields, visibility, preview, Twig, GraphQL, REST, the Navigation field, multi-site, permissions, caching |
+| **Pro** | Unlimited | All of it, plus commercial support and new releases while the updates renewal is current |
+
+**$19** to buy, then **$5/year** to keep receiving updates and support — Craft's standard commercial
+plugin model, priced and charged by the Craft Plugin Store. The renewal buys *updates*, not the right
+to keep using Pro: let it lapse and the Pro you have keeps running unchanged. Upgrade from
+**MenuBuilder → Menus**, from the sidebar of any menu screen, or from **Settings → Plugins**.
+
+The limit counts **menus per install**, not per site, and applies only to *creating* one (duplicating
+included). It never applies to items, never touches existing data — an install that drops back to
+Free keeps every menu it has, editable and still rendering — and is never consulted by the front end.
+It is enforced in `MenuBuilderGroupService`, so a direct POST is refused too.
 
 ---
 
-# Using it
+# Editor's guide
 
 ## Menus
 
@@ -166,25 +129,28 @@ Not included: import/export (menus move with the database), and menu reordering 
 
 **Duplicate** clones a menu's settings *and* all its items in one transaction, with a unique handle.
 
+**Reordering the list.** With more than one menu, each row gets a drag handle: drag it, or focus it
+and use the up/down arrow keys. The order saves as you go and decides how menus are listed in the
+control panel, in `menuBuilderNavigations` over GraphQL, and in the REST list endpoint. It changes
+nothing about how any individual menu renders. Needs `menuBuilder:manageSettings`.
+
 The menus list states the active edition and the menu count against its ceiling — `Menus 1 / 1` on
-[Free](#free-vs-pro), `Unlimited` on Pro. On Free, once the one menu exists, **New menu** and
-**Duplicate** explain the limit and offer the upgrade instead of creating a second menu, and the
-sidebar's button on a menu screen becomes **Upgrade to Pro**. Every refusal comes from the server,
-not from a hidden button.
+Free, `Unlimited` on Pro. On Free, once the one menu exists, **New menu** and **Duplicate** explain
+the limit and offer the upgrade. Every refusal comes from the server, not from a hidden button.
 
 ## Menu items
 
 Add items with **Add menu item**, then drag them into shape — or focus a row's handle and use the
 arrow keys to move it up, down, in or out one level.
 
-| Type | Links to |
-|---|---|
-| Entry / Category / Asset | A Craft element. URL and title are re-resolved per request, per site |
-| Custom URL | Any absolute URL, root-relative path, `mailto:` or `tel:` |
-| Anchor | A `#fragment` on the current page |
-| Heading | A non-clickable label |
-| Separator | A divider (`<hr>`) |
-| Dynamic | Children generated from a source — see [Dynamic navigation](#dynamic-navigation) |
+| Type | Links to | When to use it |
+|---|---|---|
+| Entry / Category / Asset | A Craft element | Anything inside Craft. URL and title re-resolve per request, per site, so moving or renaming the element can't break the link |
+| Custom URL | Any absolute URL, root-relative path, `mailto:` or `tel:` | External sites, and pages Craft doesn't own |
+| Anchor | A `#fragment` on the current page | Jump links within a long page |
+| Heading | A non-clickable label | Grouping a dropdown or mega-menu column |
+| Separator | A divider (`<hr>`) | Visually splitting a list |
+| Dynamic | Children generated from a source | Lists that should keep themselves up to date — see [Dynamic navigation](#dynamic-navigation) |
 
 Leave the title blank on an element-backed item to inherit the element's own title.
 
@@ -198,12 +164,24 @@ Leave the title blank on an element-backed item to inherit the element's own tit
 | Mega menu | Enable, 1–6 columns; children pick a column |
 | Custom fields | Whatever the menu's field layout defines |
 
-**Fallback behaviour** decides what happens when a linked element is missing, disabled or has no
-URL: hide the item, keep it without a link, or fall back to a URL you give.
+**Fallback behaviour** decides what happens when a linked element is missing, disabled or has no URL:
+hide the item, keep it without a link, or fall back to a URL you give.
 
 Disabling or duplicating an item applies to its **whole subtree** — children are never promoted.
 
-## Visibility rules
+## Nested navigation
+
+There is one hierarchy: each item optionally has a parent, and siblings have an order. Drag an item
+onto a deeper indent to make it a child; drag it back out to promote it. A menu's **Max depth**
+setting caps how deep that can go, and the server re-checks every move against the *deepest row of
+the subtree being moved* — so lifting a three-level branch into a two-level menu is refused even
+though the dragged row itself would fit.
+
+Levels are just nesting: a top-level item is level 1, its children level 2, their children level 3.
+Nothing about a level changes what an item can be — a level-3 item can still be an entry link, a
+heading or a mega-menu parent.
+
+## Visibility
 
 Per item, combined with **AND**. A malformed or unknown rule **fails closed** — the item is hidden.
 
@@ -217,15 +195,18 @@ Per item, combined with **AND**. A malformed or unknown rule **fails closed** �
 | `environment` | The named `CRAFT_ENVIRONMENT` values |
 | `always` | Everyone (explicit no-op) |
 
-**"No restriction" means no rule, not an empty one.** An empty group/site/environment list, or a
-date range with neither bound, hides the item and is rejected at save. "Any signed-in user" is
-`loggedIn` — not a `userGroup` rule with nothing ticked.
+**"No restriction" means no rule, not an empty one.** An empty group/site/environment list, or a date
+range with neither bound, hides the item and is rejected at save. "Any signed-in user" is `loggedIn`
+— not a `userGroup` rule with nothing ticked.
 
 ## Mega menus
 
 Mark any item as a mega-menu parent (1–6 columns) and assign each child a column. No second tree —
 it is presentation on the hierarchy you already built. A child with no column, or one whose column
 doesn't exist, falls back to the first column; a parent with no visible children renders nothing.
+
+Use one when a dropdown has grown past a single readable column — typically a top-level section with
+headings grouping its children.
 
 ## Mobile
 
@@ -249,6 +230,21 @@ A `dynamic` item synthesises its children at render time:
 - **Limit:** up to 50 (capped server-side)
 - **Order:** newest, oldest, title A–Z, title Z–A
 - Scoped to the current site and to normally-visible elements, cached and invalidated like the rest
+
+Use it for a "Latest news" branch that should never need re-editing. Use ordinary item rows when the
+order or the wording matters.
+
+## Custom fields
+
+Each menu has its own **Craft field layout**, built in Craft's own field layout designer under the
+menu's **Item Fields** tab. Any installed field type works — Plain Text, Dropdown, Matrix, Entries,
+Assets, Money, third-party fields — arranged into as many tabs as you want, with Craft's field
+conditions and instructions. Whatever you put there appears on every item in that menu, on its own
+tab in the item editor.
+
+Custom fields are for data your templates need and MenuBuilder doesn't have an opinion about — a
+subtitle, a promo image, a badge colour of your own. The bundled macros render none of them; see
+[Custom fields in templates](#custom-fields-in-templates) for how a developer reads them.
 
 ## Link health
 
@@ -274,11 +270,23 @@ loaded. It shows saved data (there is no draft state), changes nothing, and can'
 content. Time and environment are real, not simulated. A "Rendered markup" panel shows the same
 output as copyable text.
 
+## Multi-site
+
+A menu is one global row that may be restricted to a set of sites, not a per-site entity — so an
+install has one menu list however many sites it has. What varies per site is the *result*:
+
+- A menu restricted away from the current site returns nothing at all.
+- A per-item `site` rule hides individual items on the sites you don't pick.
+- Element links resolve against the current site, so titles and URLs come back in that site's
+  language and URL structure, and an element not enabled for the site falls back per the item's
+  fallback behaviour.
+- Each site gets its own cache entry.
+
 ## Permissions
 
 | Permission | Grants |
 |---|---|
-| `menuBuilder:view` | See the MenuBuilder section and menu trees |
+| `menuBuilder:view` | See the MenuBuilder section, menu trees and the preview screen |
 | `menuBuilder:create` | Create and duplicate menu items |
 | `menuBuilder:edit` | Edit, reorder, enable/disable items |
 | `menuBuilder:delete` | Delete menus and items |
@@ -290,6 +298,20 @@ are independent, so grant `view` alongside whichever others a role needs. Admins
 Every action is permission-checked server-side and every mutation requires POST with Craft's CSRF
 token, including the AJAX ones. Hidden controls are a courtesy; the check on the request is the
 boundary.
+
+## Common tasks
+
+| Task | How |
+|---|---|
+| Basic navigation | New menu → add entry items → render with `renderNav()` |
+| A dropdown | Add child items under a top-level item by dragging them one level in |
+| A mega menu | On the parent item's **Mega menu** tab, enable it and pick 1–6 columns; on each child, pick its column |
+| An external link | Item type **Custom URL**, paste the absolute URL, tick **Open in new tab** |
+| A dynamic list | Item type **Dynamic**, pick a source type and source, set a limit and order |
+| Hide an item from anonymous visitors | Add a `loggedIn` visibility rule — not an empty `userGroup` rule |
+| Schedule an item | Add a `dateRange` rule with a start, an end, or both |
+| Add custom data to items | Menu → **Item Fields** → build a Craft field layout; read it with `node.custom('handle')` |
+| Move a menu to another environment | Deploy the database — menus are not in project config. See [Where your data lives](#where-your-data-lives) |
 
 ---
 
@@ -305,8 +327,8 @@ bundled — use them, copy them, or ignore them.
 ```
 
 `get(handle, currentUri = null)` returns a `MenuBuilderTree`, or `null` when the menu doesn't exist,
-is disabled, or isn't available on this site. Pass `currentUri` to match active state against
-another page.
+is disabled, or isn't available on this site. Pass `currentUri` to match active state against another
+page.
 
 | Member | Description |
 |---|---|
@@ -315,18 +337,19 @@ another page.
 | `menu.group` | Name, handle, cssClass, htmlAttributes, maxDepth, settings |
 | `menu.flatten()` | Depth-first flat list of every node |
 | `menu.forViewport('mobile')` | The tree reshaped for one viewport |
-| `menu|length` | Top-level node count |
+| `menu\|length` | Top-level node count |
 
-The other accessors — that's the whole variable:
+The whole `craft.menuBuilder` variable is five methods:
 
 ```twig
-{% set group = craft.menuBuilder.getGroup('main') %}          {# settings only, no tree #}
-{% set item  = craft.menuBuilder.getItem(42) %}               {# raw item — admin/debug #}
-{% set icon  = craft.menuBuilder.iconAsset(node) %}           {# Asset behind an `asset:` icon #}
-{% set trail = craft.menuBuilder.breadcrumbs('main') %}
+{% set menu  = craft.menuBuilder.get('main') %}                {# the resolved tree #}
+{% set trail = craft.menuBuilder.breadcrumbs('main') %}        {# a tree or a handle #}
+{% set group = craft.menuBuilder.getGroup('main') %}           {# settings only, no tree #}
+{% set item  = craft.menuBuilder.getItem(42) %}                {# raw item — admin/debug #}
+{% set icon  = craft.menuBuilder.iconAsset(node) %}            {# Asset behind an `asset:` icon #}
 ```
 
-## Node properties
+## Node reference
 
 `MenuBuilderNode` is the only object templates should treat as public and stable.
 
@@ -346,8 +369,8 @@ The other accessors — that's the whole variable:
 | `isActive`, `isActiveAncestor`, `isActiveOrAncestor()` | Per-request, never cached |
 | `megaMenu`, `megaMenuColumns()`, `megaMenuColumn` | `megaMenuColumns()` returns `{column: nodes}` |
 | `isDynamic` | True for synthesised nodes |
-| `custom(handle, default)`, `hasCustom(handle)`, `customHandles()` | See [Custom fields](#custom-fields) |
-| `mobileVisibility()`, `mobileOrder()`, … | See [Mobile rendering](#mobile-rendering) |
+| `custom(handle, default)`, `hasCustom(handle)`, `customHandles()` | See [Custom fields in templates](#custom-fields-in-templates) |
+| `mobileVisibility()`, `mobileOrder()`, `isMobileCollapsible()`, `mobileMegaMenuBehavior()`, `showsOnDesktop()`, `showsOnMobile()`, `isVisibleOn(viewport)`, `viewportAttribute()` | See [Mobile rendering](#mobile-rendering) |
 
 ## Rendering with the macros
 
@@ -373,7 +396,7 @@ The other accessors — that's the whole variable:
 `viewport` is `'both'`, `'desktop'` or `'mobile'`. `idPrefix` keeps HTML ids unique when one menu
 renders twice on a page.
 
-Hand-rolled works just as well:
+Hand-rolled works just as well — the tree is plain data:
 
 ```twig
 <nav aria-label="{{ menu.group.name }}">
@@ -388,23 +411,19 @@ Hand-rolled works just as well:
         {% else %}
           <span>{{ node.title }}</span>
         {% endif %}
-        {% if node.hasChildren() %}{# recurse #}{% endif %}
+
+        {# A mega-menu parent groups its children into columns; otherwise just recurse. #}
+        {% if node.megaMenu %}
+          {% for column, nodes in node.megaMenuColumns() %}
+            <ul>{% for child in nodes %}<li><a href="{{ child.url }}">{{ child.title }}</a></li>{% endfor %}</ul>
+          {% endfor %}
+        {% elseif node.hasChildren() %}
+          {# recurse #}
+        {% endif %}
       </li>
     {% endfor %}
   </ul>
 </nav>
-```
-
-Mega menus, if you render them yourself:
-
-```twig
-{% if node.megaMenu %}
-  <div class="mega" style="--columns: {{ node.megaMenu.columns }}">
-    {% for column, nodes in node.megaMenuColumns() %}
-      <ul>{% for child in nodes %}<li><a href="{{ child.url }}">{{ child.title }}</a></li>{% endfor %}</ul>
-    {% endfor %}
-  </div>
-{% endif %}
 ```
 
 ## Active state
@@ -433,7 +452,7 @@ anchor-only item. Recomputed every request, never cached.
 | `{% for crumb in trail %}` | Root first, current page last |
 | `trail.crumbs`, `trail.group` | The list; the menu it came from |
 | `trail.current()`, `trail.root()`, `trail.ancestors()` | The active node, its top-level ancestor, everything but the last |
-| `trail.isEmpty()`, `trail|length` | Whether there is a trail, and how long |
+| `trail.isEmpty()`, `trail\|length` | Whether there is a trail, and how long |
 
 Each crumb **is** a `MenuBuilderNode`, so `title`, `url`, `isClickable`, `custom()` and the rest
 apply.
@@ -467,8 +486,8 @@ spaces and `- _ . : /`, and `iconClass()` returns `null` for anything that would
 ```
 
 Icons are decorative (`aria-hidden` / `alt=""`); if one is an item's only label, give the item an
-`ariaLabel`. Always resolve assets through `iconAsset()` (memoized per request — the cache stores
-the reference, not the URL), and never inline an SVG asset's contents.
+`ariaLabel`. Always resolve assets through `iconAsset()` (memoized per request), and never inline an
+SVG asset's contents.
 
 ## Badges
 
@@ -478,20 +497,14 @@ the reference, not the URL), and never inline an SVG asset's contents.
 {% endif %}
 ```
 
-Badge text is free text, escaped by Twig like any string — never print it with `|raw`. The style is
-a closed enum (`default`, `info`, `success`, `warning`, `critical`); `badgeClass()` returns
-`menu-builder-badge` plus an allowlisted modifier, and an unknown style reads as no style. Render
-the badge **inside** the link so it joins the accessible name. No front-end CSS ships for these
-classes.
+Badge text is free text, escaped by Twig like any string — never print it with `|raw`. The style is a
+closed enum (`default`, `info`, `success`, `warning`, `critical`); `badgeClass()` returns
+`menu-builder-badge` plus an allowlisted modifier, and an unknown style reads as no style. Render the
+badge **inside** the link so it joins the accessible name. No front-end CSS ships for these classes.
 
-## Custom fields
+## Custom fields in templates
 
-Each menu has its own **Craft field layout**, built in Craft's own field layout designer under the
-menu's **Item Fields** tab. Any installed field type works — Plain Text, Dropdown, Matrix, Entries,
-Assets, Money, third-party fields — arranged into as many tabs as you want, with Craft's field
-conditions and instructions. Whatever you put there appears on every item in that menu.
-
-Read the values on a node by handle:
+Read a menu's [custom field](#custom-fields) values on a node by handle:
 
 ```twig
 {{ node.custom('subtitle') }}
@@ -533,8 +546,8 @@ none of them.
 
 Use `display: none` and nothing else — it removes the item from the accessibility tree and the Tab
 order together. `visibility`, `opacity: 0` and off-screen positioning leave keyboard and
-screen-reader users walking links that aren't on screen. Mobile *order* does nothing here: one DOM
-is in one order.
+screen-reader users walking links that aren't on screen. Mobile *order* does nothing here: one DOM is
+in one order.
 
 **Two navigations, one resolve** — for a drawer with its own markup. `forViewport()` reshapes the
 tree you already resolved: no extra query, no second cache read.
@@ -549,7 +562,7 @@ Exactly one of the two must be `display: none` at any width, and give them diffe
 values. Mobile order is applied by re-sorting the tree, so DOM order and visual order stay the same
 thing — never hand it to CSS `order`.
 
-Accessors, all failing closed toward *keeping* the link:
+All the mobile accessors fail closed toward *keeping* the link:
 
 ```twig
 {{ node.mobileVisibility() }}       {# 'both' | 'desktopOnly' | 'mobileOnly' #}
@@ -562,24 +575,18 @@ Accessors, all failing closed toward *keeping* the link:
 
 ## Accessibility
 
-The bundled macros are built to ship as they are. One rule underneath all of it: **an attribute must
-describe something that is true**, and where two things would have to be kept in step, there is only
-one of them.
+The bundled macros are built to ship as they are. What they guarantee:
 
-| | |
-|---|---|
-| Landmark | One `<nav>` per menu, named with `aria-label`. An empty menu renders nothing |
-| Lists | Real `<ul>`/`<li>` nesting, so item counts are announced correctly |
-| Links | Ordinary `<a href>`; no `tabindex` anywhere |
-| Headings | A non-clickable item is a `<span>` — not a focusable element that does nothing |
-| Separators | An `<hr>` inside the `<li>`; the role isn't repeated on the list item |
-| Active state | `aria-current="page"` on the active link only; ancestors get the `is-active` class |
-| New tab | A hidden "(opens in a new tab)" inside a `_blank` link's accessible name (WCAG 3.2.5) |
-| Mega menus | A native `<details>`: `<summary>` as the control, `role="group"` panel inside. No `aria-expanded`, `aria-controls` or `aria-haspopup` — `open` *is* the state |
-| Mobile branches | The same native `<details>`, one level down. No fake buttons, no script |
-| Icons / badges | Icons are `aria-hidden` / `alt=""`; badges render inside the link |
-| Breadcrumbs | `<nav aria-label="Breadcrumb">` around an `<ol>`, `aria-current` on the last crumb, no separator characters |
-| Custom attributes | Filtered at render as well as on save: no event handlers, no `javascript:`/`vbscript:`, none of the macro-owned or ARIA attributes |
+- One named `<nav>` landmark per menu, real `<ul>`/`<li>` nesting, ordinary `<a href>` links and no
+  `tabindex` anywhere. A non-clickable item is a `<span>`, a separator is an `<hr>` inside its `<li>`.
+- `aria-current="page"` on the active link only; ancestors get the `is-active` class instead.
+- A hidden "(opens in a new tab)" inside a `_blank` link's accessible name (WCAG 3.2.5).
+- Mega menus and collapsed mobile branches are native `<details>` disclosures — no `aria-expanded`,
+  `aria-controls` or `aria-haspopup`, because `open` *is* the state, and no script is required.
+- Icons are `aria-hidden` / `alt=""`; badges render inside the link so they join its accessible name.
+- Breadcrumbs are `<nav aria-label="Breadcrumb">` around an `<ol>`, with no separator characters.
+- Custom HTML attributes are filtered at render as well as on save: no event handlers, no
+  `javascript:`/`vbscript:`, none of the macro-owned or ARIA attributes.
 
 **The one rule for your CSS: never make a panel visible while its `<details>` is closed.** Style
 `details[open] > .menu-builder-megamenu-panel`, not `li:hover > details > .panel`, and don't set
@@ -637,10 +644,10 @@ The field stores the menu's **UID**, so renaming a handle repoints nothing. A de
 publishing report *"The selected navigation no longer exists."* while drafts still save; a disabled
 menu keeps the selection but renders nothing. Picking a menu needs no MenuBuilder permission.
 
-The field's settings ride in `project.yaml` like any field's and are safe to deploy, but **menus
-themselves are not in project config** — applying the config doesn't create them. Over GraphQL the
-field exposes the selection, not the menu (`navigation { uid handle name exists enabled }`): take
-the handle and query the menu itself.
+The field's own settings ride in `project.yaml` like any field's and are safe to deploy, but **menus
+themselves are not in project config** — applying the config doesn't create them. See
+[Where your data lives](#where-your-data-lives). Over GraphQL the field exposes the selection, not
+the menu (`navigation { uid handle name exists enabled }`): take the handle and query the menu itself.
 
 ## GraphQL
 
@@ -681,8 +688,10 @@ nothing about the caller: items restricted to logged-in visitors or a user group
 logged-out-only items always do; date, environment and site rules apply normally. **Active state is
 an argument** — pass `currentUri` or both flags are `false`.
 
-`MenuBuilderNavigation`: `handle`, `name`, `uid`, `description`, `cssClass`, `maxDepth`,
-`htmlAttributes`, `itemCount`, `items`. `MenuBuilderNavigationItem`:
+`MenuBuilderNavigation` fields: `handle`, `name`, `uid`, `description`, `cssClass`, `maxDepth`,
+`htmlAttributes`, `itemCount`, `items`.
+
+`MenuBuilderNavigationItem` fields:
 
 | Group | Fields |
 |---|---|
@@ -696,9 +705,10 @@ an argument** — pass `currentUri` or both flags are `false`.
 | Custom fields | `customFields { handle value booleanValue numberValue intValue jsonValue }` |
 | Hierarchy | `hasChildren`, `children` |
 
-These read through the same fail-closed accessors as the Twig node. **Asset references are IDs, not
-URLs** — feed them into Craft's `asset(id:)` query. **Row IDs are not exposed**; `handle` is an
-item's stable public name.
+`htmlAttributes` is a list of `{ name, value }` pairs (GraphQL has no map type). These read through
+the same fail-closed accessors as the Twig node. **Asset references are IDs, not URLs** — feed them
+into Craft's `asset(id:)` query. **Row IDs are not exposed**; `handle` is an item's stable public
+name. A custom field whose value isn't a scalar populates `jsonValue` only.
 
 ## REST API
 
@@ -716,23 +726,24 @@ return [
         'enabled' => true,                // literal `true` — not 1, not 'true'
         'basePath' => 'api/menu-builder', // endpoints live under {basePath}/v1/
         'allowPublicSchema' => true,      // may an unauthenticated request use the public schema?
-        'rateLimit' => 60,                // requests per minute per caller; 0 disables
+        'rateLimit' => 60,                // requests/min per caller; also switches the failed-auth limiter; 0 disables both
         'cacheDuration' => 0,             // Cache-Control max-age; 0 sends no-store
         'allowedOrigins' => [],           // exact CORS origins, or ['*']; empty sends no CORS headers
     ],
 ];
 ```
 
-Second, each menu, through a GraphQL schema's scope (`menuBuilderGroups.{uid}:read`) — one list of
-readable menus, not two.
+Anything malformed falls back to that key's default rather than to something permissive. Second, each
+menu, through a GraphQL schema's scope (`menuBuilderGroups.{uid}:read`) — one list of readable menus,
+not two.
 
 ```
 GET {basePath}/v1/navigations            → every menu this caller may read
 GET {basePath}/v1/navigations/{handle}   → one menu
 ```
 
-`GET` and `HEAD` only; `OPTIONS` answers a CORS preflight; everything else is `405`. There is no
-write surface. Query parameters: `site` / `siteId`, `currentUri`, `viewport` — unrecognized ones are
+`GET` and `HEAD` only; `OPTIONS` answers a CORS preflight; everything else is `405`. There is no write
+surface. Query parameters: `site` / `siteId`, `currentUri`, `viewport` — unrecognized ones are
 ignored, a recognized but malformed one is a `400` that names it.
 
 ```sh
@@ -771,12 +782,12 @@ With no header the request falls back to Craft's public schema unless `allowPubl
 }
 ```
 
-`icon`, `badge` and `megaMenu` are `null` when absent; `htmlAttributes` and `customFields` are
-always objects (`{}`, never `[]`). Custom fields carry each field's **serialized** value, so a
-relation field is a list of element IDs you feed back into Craft's own queries rather than resolved
-elements — the same reason `imageId` is an ID. Over GraphQL, a field whose value isn't a scalar
-populates `jsonValue` only. Row IDs, and anything a visitor never sees, are not exposed. Menus resolve for the
-**anonymous** audience whoever is asking, including a browser carrying an admin's session cookie.
+`icon`, `badge` and `megaMenu` are `null` when absent; `htmlAttributes` and `customFields` are always
+objects (`{}`, never `[]`). Custom fields carry each field's **serialized** value, so a relation field
+is a list of element IDs you feed back into Craft's own queries rather than resolved elements — the
+same reason `imageId` is an ID. Row IDs, and anything a visitor never sees, are not exposed. Menus
+resolve for the **anonymous** audience whoever is asking, including a browser carrying an admin's
+session cookie.
 
 | Status | `error.code` | When |
 |---|---|---|
@@ -785,7 +796,7 @@ populates `jsonValue` only. Row IDs, and anything a visitor never sees, are not 
 | `403` | `forbidden` | Your token's schema doesn't cover the site whose URL you called |
 | `404` | `not_found` | The menu isn't servable to you — unknown, disabled, out of scope, or not on this site. Also what a disabled API answers |
 | `405` | `method_not_allowed` | Anything but `GET`, `HEAD`, `OPTIONS` |
-| `429` | `rate_limited` | Over the limit; carries `Retry-After` |
+| `429` | `rate_limited` | Over either rate limit — requests, or failed authentications. Carries `Retry-After` |
 
 ```json
 { "error": { "status": 404, "code": "not_found", "message": "No such navigation." } }
@@ -794,18 +805,29 @@ populates `jsonValue` only. Row IDs, and anything a visitor never sees, are not 
 `404` never says why — an API that distinguished the reasons would enumerate your install's
 structure. The list endpoint omits menus you can't read.
 
-Every response carries an `ETag` and `Vary: Authorization, Origin`; send `If-None-Match` for a
-`304`. `Cache-Control` is `no-store` until you set `cacheDuration`, then `public, max-age=N` for a
-public-schema response and `private, max-age=N` for a token-authenticated one. CORS matching is
-exact — no suffix or subdomain matching — with no credentials ever sent; the single entry `'*'`
-is honoured and echoed as `*`. Rate limiting is a fixed one-minute window per caller (counted
-after authentication, so a rejected token isn't charged to anyone's budget) with `X-RateLimit-*`
-headers. The URL carries the major version (`/v1/`); additive changes stay on it, so
-write your consumer to ignore unknown fields.
+Every response carries an `ETag` and `Vary: Authorization, Origin`; send `If-None-Match` for a `304`.
+`Cache-Control` is `no-store` until you set `cacheDuration`, then `public, max-age=N` for a
+public-schema response and `private, max-age=N` for a token-authenticated one. CORS matching is exact
+— no suffix or subdomain matching — with no credentials ever sent; the single entry `'*'` is honoured
+and echoed as `*`. The URL carries the major version (`/v1/`); additive changes stay on it, so write
+your consumer to ignore unknown fields.
+
+**Rate limiting** is two fixed one-minute windows, both switched by `rateLimit` (set it to `0` and
+neither runs):
+
+| | Counts | Keyed by | Budget |
+|---|---|---|---|
+| Requests | Successfully authenticated requests | Token + address | `rateLimit` (default 60/min), reported in `X-RateLimit-*` |
+| Failed authentications | `401`s — a bad, expired or missing token | Address only | 10/min, fixed |
+
+The second exists because the first runs *after* authentication and is keyed partly by the token, so
+it can't see a caller who never presented a usable one. Exceed it and further attempts are refused
+with `429` and a `Retry-After` before the token is looked up. A correct token is never charged to it,
+and one address's failures never affect another's.
 
 ## Extending
 
-Two events, and they are the only extension points today.
+Two events, and they are the only extension points.
 
 ```php
 use Tahadudhiya\MenuBuilder\services\MenuBuilderLinkResolver;
@@ -822,7 +844,7 @@ Event::on(
 
 A resolver implements `LinkTypeResolverInterface::resolve(MenuBuilderItem $item): ResolvedLink`;
 implement `PreloadingLinkTypeResolverInterface` to batch-load its elements. A custom type must
-invalidate menu caches itself.
+invalidate menu caches itself — `MenuBuilder::getInstance()->cache->invalidateGroups(['main'])`.
 
 ```php
 use Tahadudhiya\MenuBuilder\services\MenuBuilderVisibilityService;
@@ -839,6 +861,10 @@ Event::on(
 
 A rule implements `VisibilityRuleInterface::passes(array $config, VisibilityContext $context): bool`.
 Unknown rules — and rules that throw — fail closed. Return `false` for config you don't recognise.
+
+There are **no** save/delete events on menus or items. Services are reachable as
+`MenuBuilder::getInstance()->groups`, `->items`, `->resolver`, `->cache` and so on; see
+[ARCHITECTURE.md](ARCHITECTURE.md#layers) for the full list and what each owns.
 
 ## Caching
 
@@ -857,24 +883,42 @@ Invalidation is targeted, never a blanket flush:
 - A site save or delete invalidates everything — which covers `project-config/apply` on deploy.
 
 The config version means an edited menu or a plugin upgrade reads a *different* key. Craft's
-`cacheDuration` is the upper bound, catching the one change no event announces: an entry going live
-at its `postDate` or expiring. No manual cache clearing is needed in normal use.
+`cacheDuration` is the upper bound, catching the one change no event announces: an entry going live at
+its `postDate` or expiring. No manual cache clearing is needed in normal use. The key construction and
+invalidation matrix are in [ARCHITECTURE.md](ARCHITECTURE.md#caching).
 
-## Storage and upgrading
+## Where your data lives
 
-Menus and items live only in the database (`menubuilder_groups`, `menubuilder_items`) — nothing is
-written to `project.yaml`. Deploy them like content: with your database. The Navigation *field*
-deploys through project config like any Craft field, carrying menu UIDs that only resolve where
-those menus already exist.
+| | Stored in | Source of truth |
+|---|---|---|
+| Menus and menu items | The database (`menubuilder_groups`, `menubuilder_items`) | The database |
+| A menu's item field layout | The database (`fieldlayoutId` → Craft's `fieldlayouts`) | The database |
+| Custom field *values* on items | A `MenuBuilderItemContent` element per item (Craft's `elements` tables) | The database |
+| Navigation **field** settings (allow-list, "allow disabled") | Project config, as part of the field, like any Craft field | Project config |
+| The active plugin edition (`free` / `pro`) | Project config (`plugins.menu-builder.edition`), where Craft's Plugin Store puts it | Project config |
+| REST API settings | The PHP file `config/menu-builder.php`, read per request | That file |
 
-**Import/export is not implemented** — no command, no interchange format, no CP screen. Within one
+**Menus are not project-config entities.** MenuBuilder writes nothing to `project.yaml` for a menu or
+an item, registers no project-config handlers for them, and takes no part in a project-config rebuild.
+That means:
+
+- **Deploy menus with your database**, like content. `project-config/apply` neither creates, changes
+  nor deletes a menu.
+- A Navigation field's stored value is a menu **UID**. Applying that field's config to another
+  environment doesn't create the menu it names — the menu must already exist in that environment's
+  database, or the selection reads as "doesn't resolve".
+- **Installing** runs one migration (`src/migrations/Install.php`) creating the two tables.
+  **Uninstalling** hands Craft's rows back (content elements, then field layouts) and drops both
+  tables, leaving nothing in `project.yaml` for a reinstall to replay.
+- **Back up the database before upgrading** — menus live only there, and rollback is a database
+  restore.
+
+Import/export is **not implemented**: no command, no interchange format, no CP screen. Within one
 install, **Duplicate menu** clones a menu's settings and every item in one transaction.
 
-Plugin version `1.0.0`, `schemaVersion` `1.0.0`, one migration (`src/migrations/Install.php`). Craft
-runs it the usual way (the CP prompt, or `php craft up`); `safeUp()` creates the two tables guarded
-by `tableExists()`, `safeDown()` drops them. **Back up the database before upgrading** — menus live
-only there, and rollback is a database restore. `schemaVersion`, plus a digest of the cached
-classes' shape, is hashed into every cache key, so an upgrade reads fresh keys.
+The plugin's version is the Git tag it was released from; `composer.json` declares none.
+`schemaVersion` is `1.0.0`, and it — plus a digest of the cached classes' shape — is hashed into
+every cache key, so an upgrade reads fresh keys.
 
 ## Troubleshooting
 
@@ -894,29 +938,19 @@ classes' shape, is hashed into every cache key, so an upgrade reads fresh keys.
 | REST returns `404` for everything | The API is off, so no route is registered | `config/menu-builder.php` must return `api.enabled => true` — a literal `true` |
 | REST returns `403` / `401` / `429` | The token's schema doesn't cover the site; no usable token and no public schema; over the rate limit | Call the right site's URL; send a valid token or allow the public schema; back off or raise `rateLimit` |
 | A browser call is blocked by CORS | No origins are allowlisted, which is the default | List the exact origin in `allowedOrigins` |
-| A referenced menu is missing after `project-config/apply` | Menus aren't in project config; only the field's settings are | Deploy the database — see [Storage and upgrading](#storage-and-upgrading) |
+| A referenced menu is missing after `project-config/apply` | Menus aren't in project config; only the field's settings are | Deploy the database — see [Where your data lives](#where-your-data-lives) |
 
 ## Development
 
 ```sh
-composer test              # PHPUnit — 1,147 unit tests, no booted Craft
-composer test-integration  # PHPUnit — 489 integration tests, real Craft + real database
+composer test              # PHPUnit, unit suite — pure logic, no booted Craft
+composer test-integration  # PHPUnit, integration suite — real Craft + real database
 composer check-cs          # ECS
 composer phpstan           # PHPStan (level 5)
 ```
 
-The unit suite covers pure logic: link resolvers, visibility rules, mega-menu grouping, validation,
-permission mapping, cache keys, link attributes.
-
-The **integration** suite — 489 tests — boots a real Craft 5 app against a real database for what
-only a real install can answer: the Navigation field end to end, controller authorization, GraphQL
-against a real schema, and the REST API through the real controller. It builds a throwaway install
-(`tests/integration-bootstrap.php`) under `tests/_craft`, dropped and recreated each run, and
-refuses to start against a database whose name doesn't contain `test`.
-
-Because it needs a database it is run on its own. The connection defaults (`db:3306`, user and
-password `db`) are DDEV's *from inside the web container*, so run it there — the same command on
-the host can't resolve the `db` hostname:
+The integration suite needs a database whose name contains `test`, and its connection defaults
+(`db:3306`, user and password `db`) are DDEV's *from inside the web container*:
 
 ```sh
 ddev exec composer test-integration
@@ -924,7 +958,8 @@ ddev exec composer test-integration
 MENUBUILDER_TEST_DB_SERVER=127.0.0.1 MENUBUILDER_TEST_DB_PORT=55012 composer test-integration
 ```
 
-Internals, invariants and design decisions: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+What each suite covers, the environment they need, and the release process are in
+[ARCHITECTURE.md](ARCHITECTURE.md#testing).
 
 ## Support
 
@@ -940,13 +975,11 @@ MenuBuilder is a **commercial plugin**, licensed under [The Craft License](LICEN
 `composer.json` declares `proprietary`. One licensed copy runs in one production environment at a
 time; development, staging and local installs don't need their own license.
 
-Licensing, payment and license validation are Craft's, not this plugin's: the Free and Pro editions
-are Craft [plugin editions](#free-vs-pro), the active edition lives in project config where Craft's
-Plugin Store puts it, and MenuBuilder only ever asks Craft which edition is active. There is no
-license server, no phone-home and no license key stored by this plugin.
+Licensing, payment and license validation are Craft's, not this plugin's: Free and Pro are Craft
+[plugin editions](#editions), the active edition lives in project config where Craft's Plugin Store
+puts it, and MenuBuilder only ever asks Craft which edition is active. There is no license server, no
+phone-home and no license key stored by this plugin.
 
-**Renewal.** The $5/year renewal is Craft's standard commercial-plugin model: it buys continued
-updates and support, not continued *use*. If a renewal lapses, the Pro edition you already have
-keeps running — you simply stop receiving new releases until you renew. Letting a license lapse
-never deletes, hides or disables a menu; see [What the limit does and doesn't
-do](#what-the-limit-does-and-doesnt-do).
+**Renewal.** The $5/year renewal buys continued updates and support, not continued *use*. If it
+lapses, the Pro edition you already have keeps running — you simply stop receiving new releases until
+you renew. Letting a license lapse never deletes, hides or disables a menu.

@@ -84,6 +84,13 @@ class ApiController extends Controller
             return false;
         }
 
+        // Before authentication, because its whole job is to bound callers who never pass it —
+        // the request limiter below runs after, and is keyed partly by token, so neither can see
+        // a stream of rejected credentials.
+        if (!$this->enforceAuthFailureLimit()) {
+            return false;
+        }
+
         if (!$this->authenticate()) {
             return false;
         }
@@ -255,6 +262,59 @@ class ApiController extends Controller
     }
 
     /**
+     * A second fixed-window counter, keyed by address alone, over *failed* authentications.
+     *
+     * Switched by the same `rateLimit` setting: an install that turned the limiter off asked for
+     * no limiting, and two switches for one intent is a configuration people get half-right.
+    */
+    private function enforceAuthFailureLimit(): bool
+    {
+        if ($this->apiConfig->rateLimit <= 0) {
+            return true;
+        }
+
+        $now = time();
+        $key = MenuBuilderApiHelper::authFailureKey(
+            $this->request->getUserIP(),
+            MenuBuilderApiHelper::rateLimitWindow($now)
+        );
+
+        if ((int)Craft::$app->getCache()->get($key) < MenuBuilderApiHelper::AUTH_FAILURE_LIMIT) {
+            return true;
+        }
+
+        $resetsIn = MenuBuilderApiHelper::rateLimitResetsIn($now);
+        $this->response->getHeaders()->set('Retry-After', (string)$resetsIn);
+
+        // Deliberately not carrying `X-RateLimit-*`: those describe the request budget, and a
+        // caller reading their remaining requests off a refusal about their credentials would be
+        // told something untrue about a different limit.
+        return $this->fail(429, MenuBuilderApiHelper::ERROR_RATE_LIMITED, 'Too many failed authentication attempts.');
+    }
+
+    /**
+     * Counts one failed authentication against the window above.
+     *
+     * Called from {@see unauthorized()} rather than from each of `authenticate()`'s refusal paths,
+     * so a 401 this controller can send and a 401 it counts cannot become two different sets.
+    */
+    private function recordAuthFailure(): void
+    {
+        if ($this->apiConfig->rateLimit <= 0) {
+            return;
+        }
+
+        $now = time();
+        $window = MenuBuilderApiHelper::rateLimitWindow($now);
+        $key = MenuBuilderApiHelper::authFailureKey($this->request->getUserIP(), $window);
+        $cache = Craft::$app->getCache();
+
+        // The window's own remaining life as the TTL, for the same reason the request limiter uses
+        // it: a key that outlived its window would leak one caller's budget into the next.
+        $cache->set($key, (int)$cache->get($key) + 1, MenuBuilderApiHelper::rateLimitResetsIn($now));
+    }
+
+    /**
      * A fixed-window counter per caller, in Craft's cache.
     */
     private function enforceRateLimit(): bool
@@ -373,6 +433,8 @@ class ApiController extends Controller
 
     private function unauthorized(): bool
     {
+        $this->recordAuthFailure();
+
         // RFC 9110 requires a challenge on a 401.
         $this->response->getHeaders()->set('WWW-Authenticate', 'Bearer realm="MenuBuilder API"');
 

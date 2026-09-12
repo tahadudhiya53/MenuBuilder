@@ -9,6 +9,7 @@ use craft\models\GqlToken;
 use craft\web\Request;
 use craft\web\Response;
 use Tahadudhiya\MenuBuilder\controllers\ApiController;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderApiHelper;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderGqlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderApiConfig;
@@ -552,6 +553,89 @@ class MenuBuilderApiTest extends CraftIntegrationTestCase
         $this->assertSame(429, $blocked->getStatusCode());
         $this->assertSame('rate_limited', $this->body($blocked)['error']['code']);
         $this->assertNotEmpty($blocked->getHeaders()->get('Retry-After'));
+    }
+
+    /**
+     * The request limiter runs after authentication and is keyed partly by token, so it can never
+     * charge a caller who hasn't produced one. The second, address-keyed window is what stops an
+     * address working through bearer tokens: the 401s are counted, and the next attempt is refused
+     * before the token is even looked up.
+    */
+    public function testRepeatedFailedAuthenticationsAreEventuallyRefused(): void
+    {
+        $config = self::config(['rateLimit' => 60]);
+        $ip = '198.51.100.' . random_int(2, 254);
+
+        for ($i = 0; $i < MenuBuilderApiHelper::AUTH_FAILURE_LIMIT; $i++) {
+            $response = $this->request('view', ['handle' => 'apinav'], config: $config, token: 'guess-' . $i, ip: $ip);
+
+            $this->assertSame(401, $response->getStatusCode(), "Attempt $i should still be a 401.");
+        }
+
+        $blocked = $this->request('view', ['handle' => 'apinav'], config: $config, token: 'guess-final', ip: $ip);
+
+        $this->assertSame(429, $blocked->getStatusCode());
+        $this->assertSame('rate_limited', $this->body($blocked)['error']['code']);
+        $this->assertNotEmpty($blocked->getHeaders()->get('Retry-After'));
+
+        // The refusal is about credentials, not about the request budget: quoting an
+        // `X-RateLimit-Remaining` here would describe a different limit.
+        $this->assertNull($blocked->getHeaders()->get('X-RateLimit-Limit'));
+    }
+
+    /**
+     * The budget is per address. One caller burning theirs must not lock out everyone else — which
+     * is what a single global counter would do.
+    */
+    public function testOneAddressesFailuresDoNotBlockAnother(): void
+    {
+        $config = self::config(['rateLimit' => 60]);
+        $noisy = '198.51.100.' . random_int(2, 128);
+        $quiet = '198.51.100.' . random_int(129, 254);
+
+        for ($i = 0; $i <= MenuBuilderApiHelper::AUTH_FAILURE_LIMIT; $i++) {
+            $this->request('view', ['handle' => 'apinav'], config: $config, token: 'guess-' . $i, ip: $noisy);
+        }
+
+        $this->assertSame(
+            429,
+            $this->request('view', ['handle' => 'apinav'], config: $config, token: 'x', ip: $noisy)->getStatusCode(),
+        );
+
+        $other = $this->request('view', ['handle' => 'apinav'], config: $config, ip: $quiet);
+
+        $this->assertSame(200, $other->getStatusCode(), 'A different address must be unaffected.');
+    }
+
+    /**
+     * A valid token is never charged to the failure budget, so a busy legitimate integration can't
+     * lock itself out of an endpoint it is authenticating against correctly.
+    */
+    public function testSuccessfulRequestsAreNotCountedAsFailures(): void
+    {
+        $config = self::config(['rateLimit' => 60]);
+        $ip = '198.51.100.' . random_int(2, 254);
+
+        for ($i = 0; $i <= MenuBuilderApiHelper::AUTH_FAILURE_LIMIT + 2; $i++) {
+            $response = $this->request('view', ['handle' => 'apinav'], config: $config, ip: $ip);
+
+            $this->assertSame(200, $response->getStatusCode());
+        }
+    }
+
+    /**
+     * One switch governs both limiters: an install that turned rate limiting off asked for none.
+    */
+    public function testFailedAuthenticationsAreNotCountedWhenLimitingIsOff(): void
+    {
+        $config = self::config(['rateLimit' => 0]);
+        $ip = '198.51.100.' . random_int(2, 254);
+
+        for ($i = 0; $i <= MenuBuilderApiHelper::AUTH_FAILURE_LIMIT + 2; $i++) {
+            $response = $this->request('view', ['handle' => 'apinav'], config: $config, token: 'guess-' . $i, ip: $ip);
+
+            $this->assertSame(401, $response->getStatusCode(), 'With limiting off, a 401 stays a 401.');
+        }
     }
 
     public function testARateLimitOfZeroIsNoLimit(): void

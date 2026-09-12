@@ -69,10 +69,6 @@ class MenuBuilderVariable
     }
 
     /**
-     * `customAsset()` is gone.
-    */
-
-    /**
      * A single raw (unresolved, unfiltered) item by ID — mainly useful for admin/debug templates.
     */
     public function getItem(int $id): ?MenuBuilderItem

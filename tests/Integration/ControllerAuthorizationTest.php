@@ -180,6 +180,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
             'groups: save menu settings' => [GroupsController::class, 'groups', 'save', 'menuBuilder:manageSettings', []],
             'groups: duplicate a menu' => [GroupsController::class, 'groups', 'duplicate', 'menuBuilder:manageSettings', []],
             'groups: enable/disable a menu' => [GroupsController::class, 'groups', 'toggle', 'menuBuilder:manageSettings', []],
+            'groups: reorder the menus list' => [GroupsController::class, 'groups', 'reorder', 'menuBuilder:manageSettings', []],
             'groups: delete a menu' => [GroupsController::class, 'groups', 'delete', 'menuBuilder:delete', []],
 
             'items: open the item editor' => [ItemsController::class, 'items', 'edit', 'menuBuilder:view', []],
@@ -195,6 +196,85 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
             'items: bulk delete' => [ItemsController::class, 'items', 'bulk', 'menuBuilder:delete', ['op' => 'delete']],
             'items: bulk with no op posted' => [ItemsController::class, 'items', 'bulk', 'menuBuilder:edit', []],
         ];
+    }
+
+    /**
+     * Every controller this suite gates.
+     *
+     * @return class-string<BaseMenuBuilderController>[]
+    */
+    private static function gatedControllers(): array
+    {
+        return [
+            DashboardController::class,
+            PreviewController::class,
+            GroupsController::class,
+            ItemsController::class,
+        ];
+    }
+
+    /**
+     * The action ids a controller exposes, by reflection.
+     *
+     * @param class-string $controllerClass
+     * @return string[]
+    */
+    private static function actionIdsOf(string $controllerClass): array
+    {
+        $ids = [];
+
+        foreach ((new \ReflectionClass($controllerClass))->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
+            if (preg_match('/^action[A-Z]/', $method->getName())) {
+                $ids[] = lcfirst(substr($method->getName(), 6));
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * The two providers above are hand-written lists, so an action added later is gated for real
+     * but tested by nothing — which is exactly what happened to `groups/reorder`, whose service
+     * method existed and was covered while no route reached it. This is the guard: reflection over
+     * each controller, checked against both lists.
+    */
+    public function testEveryControllerActionAppearsInBothMatrices(): void
+    {
+        $gated = [];
+
+        foreach (self::actionProvider() as [$controllerClass, , $actionId]) {
+            $gated[$controllerClass][$actionId] = true;
+        }
+
+        $mutating = [];
+
+        foreach (self::mutatingActionProvider() as [$controllerClass, , $actionId]) {
+            $mutating[$controllerClass][$actionId] = true;
+        }
+
+        // The two screens that only render; everything else writes and must also be in the CSRF /
+        // GET-refusal matrix.
+        $readOnly = ['index', 'edit'];
+
+        foreach (self::gatedControllers() as $controllerClass) {
+            foreach (self::actionIdsOf($controllerClass) as $actionId) {
+                $this->assertArrayHasKey(
+                    $actionId,
+                    $gated[$controllerClass] ?? [],
+                    "$controllerClass::action" . ucfirst($actionId) . '() is not in actionProvider().'
+                );
+
+                if (in_array($actionId, $readOnly, true)) {
+                    continue;
+                }
+
+                $this->assertArrayHasKey(
+                    $actionId,
+                    $mutating[$controllerClass] ?? [],
+                    "$controllerClass::action" . ucfirst($actionId) . '() writes but is not in mutatingActionProvider().'
+                );
+            }
+        }
     }
 
     /**
@@ -421,6 +501,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
             'groups: save' => [GroupsController::class, 'groups', 'save'],
             'groups: duplicate' => [GroupsController::class, 'groups', 'duplicate'],
             'groups: toggle' => [GroupsController::class, 'groups', 'toggle'],
+            'groups: reorder' => [GroupsController::class, 'groups', 'reorder'],
             'groups: delete' => [GroupsController::class, 'groups', 'delete'],
             'items: save' => [ItemsController::class, 'items', 'save'],
             'items: duplicate' => [ItemsController::class, 'items', 'duplicate'],

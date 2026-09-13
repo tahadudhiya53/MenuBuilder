@@ -409,7 +409,8 @@ class MenuBuilderGroupTest extends TestCase
     */
     public function testSaveRejectsAHandleAlreadyInUseBeforeWriting(): void
     {
-        $source = $this->methodSource(MenuBuilderGroupService::class, 'save');
+        $this->assertStringContainsString('$this->saveGroup($group, $runValidation)', $this->methodSource(MenuBuilderGroupService::class, 'save'));
+        $source = $this->methodSource(MenuBuilderGroupService::class, 'saveGroup');
 
         $this->assertStringContainsString("['handle' => \$group->handle]", $source);
         $this->assertStringContainsString("addError('handle'", $source);
@@ -429,7 +430,8 @@ class MenuBuilderGroupTest extends TestCase
 
         $this->assertSame('runValidation', $runValidation->getName());
         $this->assertTrue($runValidation->getDefaultValue());
-        $this->assertStringContainsString('$group->validate()', $this->methodSource(MenuBuilderGroupService::class, 'save'));
+        $this->assertStringContainsString('$this->saveGroup($group, $runValidation)', $this->methodSource(MenuBuilderGroupService::class, 'save'));
+        $this->assertStringContainsString('$group->validate()', $this->methodSource(MenuBuilderGroupService::class, 'saveGroup'));
     }
 
     /**

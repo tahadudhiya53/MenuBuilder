@@ -31,8 +31,15 @@ class MenuBuilderGroupService extends Component
     */
     private const MAX_STRING_LENGTH = 255;
 
+    private const CREATION_LOCK = 'menu-builder:create-menu';
+
     /** @var MenuBuilderGroup[]|null */
     private ?array $allCache = null;
+
+    public function getCount(): int
+    {
+        return (int)MenuBuilderGroupRecord::find()->count();
+    }
 
     /** @return MenuBuilderGroup[] */
     public function getAll(bool $includeDisabled = true): array
@@ -101,11 +108,32 @@ class MenuBuilderGroupService extends Component
     */
     public function save(MenuBuilderGroup $group, bool $runValidation = true): bool
     {
+        if ($group->id) {
+            return $this->saveGroup($group, $runValidation);
+        }
+
+        $mutex = Craft::$app->getMutex();
+
+        if (!$mutex->acquire(self::CREATION_LOCK, 15)) {
+            $group->addError('name', Craft::t('menu-builder', 'Another menu is being created. Please try again.'));
+
+            return false;
+        }
+
+        try {
+            return $this->saveGroup($group, $runValidation);
+        } finally {
+            $mutex->release(self::CREATION_LOCK);
+        }
+    }
+
+    private function saveGroup(MenuBuilderGroup $group, bool $runValidation): bool
+    {
         if ($runValidation && !$group->validate()) {
             return false;
         }
 
-        if ($group->id === null && !MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
+        if (!$group->id && !MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
             $group->addError('name', MenuBuilderMenuLimitService::limitMessage());
 
             return false;
@@ -171,6 +199,21 @@ class MenuBuilderGroupService extends Component
      * it, preserving hierarchy.
     */
     public function duplicate(int $id): ?MenuBuilderGroup
+    {
+        $mutex = Craft::$app->getMutex();
+
+        if (!$mutex->acquire(self::CREATION_LOCK, 15)) {
+            return null;
+        }
+
+        try {
+            return $this->duplicateGroup($id);
+        } finally {
+            $mutex->release(self::CREATION_LOCK);
+        }
+    }
+
+    private function duplicateGroup(int $id): ?MenuBuilderGroup
     {
         $original = MenuBuilderGroupRecord::findOne($id);
 

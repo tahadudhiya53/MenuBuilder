@@ -42,7 +42,7 @@ class MenuBuilderMenuLimitService extends Component
     */
     public function getMenuCount(): int
     {
-        return count(MenuBuilder::getInstance()->groups->getAll());
+        return MenuBuilder::getInstance()->groups->getCount();
     }
 
     public function canCreateMenu(): bool

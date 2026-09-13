@@ -3,6 +3,8 @@
 namespace Tahadudhiya\MenuBuilder\Tests\Integration;
 
 use Craft;
+use craft\enums\LicenseKeyStatus;
+use craft\services\Plugins;
 use craft\services\ProjectConfig as ProjectConfigService;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
@@ -46,9 +48,53 @@ class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
         $this->assertTrue(MenuBuilder::getInstance()->license->isPro());
     }
 
+    public function testNativeEditionComparisonsAndUnknownEditionGuard(): void
+    {
+        $plugin = MenuBuilder::getInstance();
+
+        foreach (MenuBuilder::editions() as $edition) {
+            Craft::$app->getPlugins()->switchEdition(self::HANDLE, $edition);
+            $this->assertTrue($plugin->is($edition));
+            $this->assertSame($edition, $plugin->license->getEdition());
+            $this->assertSame($edition === MenuBuilder::EDITION_PRO, $plugin->license->isPro());
+        }
+
+        try {
+            $plugin->edition = 'unknown';
+            $this->assertFalse($plugin->license->isPro());
+            $this->assertSame(1, $plugin->menuLimit->getMaxMenus());
+        } finally {
+            $plugin->edition = MenuBuilder::EDITION_PRO;
+        }
+    }
+
+    public function testLicenseStatusDoesNotChangeTheNativeEditionOrAllowance(): void
+    {
+        $original = Craft::$app->getPlugins();
+        $plugin = MenuBuilder::getInstance();
+
+        try {
+            foreach (LicenseKeyStatus::cases() as $status) {
+                $plugins = $this->getMockBuilder(Plugins::class)
+                    ->disableOriginalConstructor()
+                    ->onlyMethods(['getPluginLicenseKeyStatus'])
+                    ->getMock();
+                $plugins->method('getPluginLicenseKeyStatus')->with(self::HANDLE)->willReturn($status);
+                Craft::$app->set('plugins', $plugins);
+
+                $this->assertSame($status->value, $plugin->license->getLicenseKeyStatus());
+                $this->assertSame(in_array($status, [LicenseKeyStatus::Valid, LicenseKeyStatus::Trial], true), $plugin->license->isLicenseActive());
+                $this->assertTrue($plugin->license->isPro());
+                $this->assertNull($plugin->menuLimit->getMaxMenus());
+            }
+        } finally {
+            Craft::$app->set('plugins', $original);
+        }
+    }
+
     /**
-     * The whole downgrade, end to end, through Craft: five Pro menus with items in them, a licence
-     * that lapses, and a database that is exactly as full afterwards as it was before.
+     * An explicit downgrade through Craft: five Pro menus with items in them, and a database
+     * that is exactly as full afterwards as it was before. Renewal expiry is not a downgrade.
     */
     public function testDowngradingThroughCraftKeepsEveryMenuAndItsItems(): void
     {

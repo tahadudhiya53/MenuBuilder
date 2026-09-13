@@ -106,13 +106,23 @@ if (!$installed) {
 
 $app->setIsInstalled(true);
 
-// Installed as **Pro**, because the shared fixture this suite is built on (see
-// CraftIntegrationTestCase) needs five menus, and the Free edition allows one.
+// Exercise a fresh native install of either edition, then use Pro for the shared
+// multi-menu fixture. An empty value tests Craft's default edition selection.
+$installEdition = $env('MENUBUILDER_TEST_INSTALL_EDITION', MenuBuilder::EDITION_PRO);
 ob_start();
-$pluginInstalled = $app->getPlugins()->installPlugin('menu-builder', MenuBuilder::EDITION_PRO);
+$pluginInstalled = $app->getPlugins()->installPlugin('menu-builder', $installEdition ?: null);
 $pluginOutput = (string)ob_get_clean();
 
 if (!$pluginInstalled) {
     fwrite(STDERR, $pluginOutput . "\nMenuBuilder plugin install failed.\n");
     exit(1);
 }
+
+$expectedEdition = $installEdition ?: MenuBuilder::EDITION_FREE;
+
+if (!MenuBuilder::getInstance()->is($expectedEdition) ||
+    $app->getProjectConfig()->get('plugins.menu-builder.edition') !== $expectedEdition) {
+    throw new RuntimeException('Craft did not install the requested MenuBuilder edition.');
+}
+
+$app->getPlugins()->switchEdition('menu-builder', MenuBuilder::EDITION_PRO);

@@ -4,6 +4,7 @@ namespace Tahadudhiya\MenuBuilder\Tests\Integration;
 
 use Craft;
 use craft\elements\User;
+use craft\helpers\App;
 use craft\web\Request;
 use craft\web\Response;
 use Tahadudhiya\MenuBuilder\controllers\GroupsController;
@@ -56,6 +57,76 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
     }
 
     // Free
+
+    public function testZeroIdCannotBypassTheFreeLimit(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+            $groups = MenuBuilder::getInstance()->groups;
+            $this->assertTrue($groups->save($this->newMenu('first', 'First')));
+
+            $second = $this->newMenu('second', 'Second');
+            $second->id = 0;
+            $this->assertFalse($groups->save($second, false));
+            $this->assertTrue($second->hasErrors('name'));
+            $this->assertSame(1, $this->menuRowCount());
+        });
+    }
+
+    public function testAStaleMenuListCannotBypassTheFreeLimit(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+            $groups = MenuBuilder::getInstance()->groups;
+            $this->assertSame([], $groups->getAll());
+
+            $otherService = new MenuBuilderGroupService();
+            $first = $this->newMenu('first', 'First');
+            $this->assertTrue($otherService->save($first));
+
+            $this->assertFalse($groups->save($this->newMenu('second', 'Second')));
+            $this->assertNull($groups->duplicate((int)$first->id));
+            $this->assertSame(1, $this->menuRowCount());
+        });
+    }
+
+    public function testFailedCreationReleasesTheLock(): void
+    {
+        $this->withNoMenus(function() {
+            $this->setEdition(MenuBuilder::EDITION_FREE);
+            $groups = MenuBuilder::getInstance()->groups;
+            $this->assertFalse($groups->save($this->newMenu('', '')));
+            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menu-builder:create-menu'));
+
+            $first = $this->newMenu('first', 'First');
+            $this->assertTrue($groups->save($first));
+            $this->assertNull($groups->duplicate((int)$first->id));
+            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menu-builder:create-menu'));
+        });
+    }
+
+    public function testCreationLockBlocksAnotherConnectionUntilTheTransactionEnds(): void
+    {
+        $db = Craft::createObject(App::dbConfig());
+        $config = App::dbMutexConfig();
+        $config['db'] = $db;
+        /** @var \yii\mutex\Mutex $otherMutex */
+        $otherMutex = Craft::createObject($config);
+        $name = 'menu-builder:create-menu';
+
+        try {
+            $this->withNoMenus(function() use ($otherMutex, $name) {
+                $this->setEdition(MenuBuilder::EDITION_FREE);
+                $this->assertTrue(MenuBuilder::getInstance()->groups->save($this->newMenu('first', 'First')));
+                $this->assertFalse($otherMutex->acquire($name), 'An uncommitted creation must retain its database lock.');
+            });
+
+            $this->assertTrue($otherMutex->acquire($name), 'The lock must be released after rollback.');
+        } finally {
+            $otherMutex->release($name);
+            $db->close();
+        }
+    }
 
     public function testFreeCanCreateItsFirstMenu(): void
     {
@@ -245,14 +316,14 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         });
     }
 
-    // License transitions — the non-destructive requirement
+    // Edition transitions — the non-destructive requirement
 
     /**
      * The case the whole design exists to protect: a Pro install with five menus whose edition goes
      * back to Free keeps all five, keeps their items, keeps rendering them, and can still manage
      * them.
     */
-    public function testALapsedProEditionKeepsEveryMenuAndItsItems(): void
+    public function testDowngradedProEditionKeepsEveryMenuAndItsItems(): void
     {
         $this->withNoMenus(function() {
             $this->setEdition(MenuBuilder::EDITION_PRO);

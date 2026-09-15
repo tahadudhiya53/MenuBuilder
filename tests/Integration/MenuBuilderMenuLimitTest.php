@@ -96,12 +96,12 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
             $this->setEdition(MenuBuilder::EDITION_FREE);
             $groups = MenuBuilder::getInstance()->groups;
             $this->assertFalse($groups->save($this->newMenu('', '')));
-            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menu-builder:create-menu'));
+            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menubuilder:create-menu'));
 
             $first = $this->newMenu('first', 'First');
             $this->assertTrue($groups->save($first));
             $this->assertNull($groups->duplicate((int)$first->id));
-            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menu-builder:create-menu'));
+            $this->assertFalse(Craft::$app->getMutex()->isAcquired('menubuilder:create-menu'));
         });
     }
 
@@ -112,7 +112,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         $config['db'] = $db;
         /** @var \yii\mutex\Mutex $otherMutex */
         $otherMutex = Craft::createObject($config);
-        $name = 'menu-builder:create-menu';
+        $name = 'menubuilder:create-menu';
 
         try {
             $this->withNoMenus(function() use ($otherMutex, $name) {
@@ -560,7 +560,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
 
             $this->assertStringContainsString('Upgrade to Pro', $html);
             $this->assertStringNotContainsString('New menu', $html);
-            $this->assertStringNotContainsString('menu-builder/groups/new', $html);
+            $this->assertStringNotContainsString('menubuilder/groups/new', $html);
         });
     }
 
@@ -575,7 +575,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
             $free = $this->renderSidebarFooter();
 
             $this->assertStringContainsString('New menu', $free);
-            $this->assertStringContainsString('menu-builder/groups/new', $free);
+            $this->assertStringContainsString('menubuilder/groups/new', $free);
             $this->assertStringNotContainsString('Upgrade to Pro', $free);
 
             $this->setEdition(MenuBuilder::EDITION_PRO);
@@ -613,7 +613,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         $view->setTemplateMode($view::TEMPLATE_MODE_CP);
 
         try {
-            return $view->renderTemplate('menu-builder/dashboard/_sidebar-footer', [
+            return $view->renderTemplate('menubuilder/dashboard/_sidebar-footer', [
                 'canManageSettings' => $canManageSettings,
                 'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
             ]);
@@ -704,7 +704,7 @@ class MenuBuilderMenuLimitTest extends CraftIntegrationTestCase
         $_SERVER['REQUEST_METHOD'] = 'POST';
         $_SERVER['SCRIPT_FILENAME'] = CRAFT_BASE_PATH . '/web/index.php';
         $_SERVER['SCRIPT_NAME'] = '/index.php';
-        $_SERVER['REQUEST_URI'] = '/admin/actions/menu-builder';
+        $_SERVER['REQUEST_URI'] = '/admin/actions/menubuilder';
         $_SERVER['SERVER_NAME'] = 'primary.test';
         $_SERVER['HTTP_HOST'] = 'primary.test';
         $_SERVER['HTTPS'] = 'on';

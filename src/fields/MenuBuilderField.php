@@ -37,7 +37,7 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
 
     public static function displayName(): string
     {
-        return Craft::t('menu-builder', 'Navigation');
+        return Craft::t('menubuilder', 'Navigation');
     }
 
     public static function icon(): string
@@ -84,14 +84,14 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
     public function validateAllowedGroupUids(): void
     {
         if (!is_array($this->allowedGroupUids)) {
-            $this->addError('allowedGroupUids', Craft::t('menu-builder', 'Invalid menus.'));
+            $this->addError('allowedGroupUids', Craft::t('menubuilder', 'Invalid menus.'));
 
             return;
         }
 
         foreach ($this->allowedGroupUids as $uid) {
             if (MenuBuilderFieldHelper::normalizeUid($uid) === null) {
-                $this->addError('allowedGroupUids', Craft::t('menu-builder', 'Invalid menus.'));
+                $this->addError('allowedGroupUids', Craft::t('menubuilder', 'Invalid menus.'));
 
                 return;
             }
@@ -199,10 +199,10 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         }
 
         $element->addError($this->handle, match ($error) {
-            MenuBuilderFieldHelper::ERROR_MISSING => Craft::t('menu-builder', 'The selected navigation no longer exists.'),
-            MenuBuilderFieldHelper::ERROR_NOT_ALLOWED => Craft::t('menu-builder', 'The selected navigation isn’t available to this field.'),
-            MenuBuilderFieldHelper::ERROR_SITE_MISMATCH => Craft::t('menu-builder', 'The selected navigation isn’t available on this site.'),
-            default => Craft::t('menu-builder', 'Invalid navigation.'),
+            MenuBuilderFieldHelper::ERROR_MISSING => Craft::t('menubuilder', 'The selected navigation no longer exists.'),
+            MenuBuilderFieldHelper::ERROR_NOT_ALLOWED => Craft::t('menubuilder', 'The selected navigation isn’t available to this field.'),
+            MenuBuilderFieldHelper::ERROR_SITE_MISMATCH => Craft::t('menubuilder', 'The selected navigation isn’t available on this site.'),
+            default => Craft::t('menubuilder', 'Invalid navigation.'),
         });
     }
 
@@ -213,8 +213,8 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         $groups = MenuBuilder::getInstance()->groups->getAll();
 
         return Cp::checkboxSelectFieldHtml([
-            'label' => Craft::t('menu-builder', 'Selectable navigations'),
-            'instructions' => Craft::t('menu-builder', 'Which navigations authors may choose from. Leave every box unchecked to offer all of them.'),
+            'label' => Craft::t('menubuilder', 'Selectable navigations'),
+            'instructions' => Craft::t('menubuilder', 'Which navigations authors may choose from. Leave every box unchecked to offer all of them.'),
             'id' => 'allowedGroupUids',
             'name' => 'allowedGroupUids',
             'options' => array_map(fn(MenuBuilderGroup $group) => [
@@ -223,8 +223,8 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
             ], $groups),
             'values' => $this->allowedGroupUids,
         ]) . Cp::lightswitchFieldHtml([
-            'label' => Craft::t('menu-builder', 'Allow disabled navigations'),
-            'instructions' => Craft::t('menu-builder', 'Whether disabled navigations may be selected. A disabled navigation renders nothing.'),
+            'label' => Craft::t('menubuilder', 'Allow disabled navigations'),
+            'instructions' => Craft::t('menubuilder', 'Whether disabled navigations may be selected. A disabled navigation renders nothing.'),
             'id' => 'includeDisabledMenus',
             'name' => 'includeDisabledMenus',
             'on' => $this->includeDisabledMenus,
@@ -242,13 +242,13 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
             $currentUid,
         );
 
-        $options = [['label' => Craft::t('menu-builder', 'None'), 'value' => '']];
+        $options = [['label' => Craft::t('menubuilder', 'None'), 'value' => '']];
 
         foreach ($selectable as $group) {
             $options[] = [
                 'label' => $group->enabled
                     ? $group->name
-                    : Craft::t('menu-builder', '{name} (disabled)', ['name' => $group->name]),
+                    : Craft::t('menubuilder', '{name} (disabled)', ['name' => $group->name]),
                 'value' => (string)$group->uid,
             ];
         }
@@ -274,7 +274,7 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         }
 
         if (!$value->exists()) {
-            return Html::tag('p', Html::encode(Craft::t('menu-builder', 'The navigation this was set to no longer exists.')), [
+            return Html::tag('p', Html::encode(Craft::t('menubuilder', 'The navigation this was set to no longer exists.')), [
                 'class' => ['warning', 'with-icon'],
             ]);
         }
@@ -286,8 +286,8 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         }
 
         return Html::tag('p', Html::a(
-            Craft::t('menu-builder', 'Edit this navigation'),
-            UrlHelper::cpUrl('menu-builder/' . $value->getHandle()),
+            Craft::t('menubuilder', 'Edit this navigation'),
+            UrlHelper::cpUrl('menubuilder/' . $value->getHandle()),
         ), ['class' => 'light smalltext']);
     }
 
@@ -314,7 +314,7 @@ class MenuBuilderField extends Field implements InlineEditableFieldInterface, Me
         return [
             'name' => $this->handle,
             'type' => Type::string(),
-            'description' => Craft::t('menu-builder', 'The navigation’s UID.'),
+            'description' => Craft::t('menubuilder', 'The navigation’s UID.'),
         ];
     }
 }

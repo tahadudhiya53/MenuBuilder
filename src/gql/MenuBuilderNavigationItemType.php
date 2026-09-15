@@ -27,7 +27,7 @@ class MenuBuilderNavigationItemType
     {
         return GqlEntityRegistry::getOrCreate(self::NAME, fn() => new ObjectType([
             'name' => self::NAME,
-            'description' => Craft::t('menu-builder', 'A resolved navigation item.'),
+            'description' => Craft::t('menubuilder', 'A resolved navigation item.'),
             // Lazy, because `children` is this very type: webonyx has to be able to hand back the
             // type object before its field list is built, or the recursion never terminates.
             'fields' => fn() => self::fieldDefinitions(),
@@ -41,7 +41,7 @@ class MenuBuilderNavigationItemType
     {
         return GqlEntityRegistry::getOrCreate(self::ATTRIBUTE_NAME, fn() => new ObjectType([
             'name' => self::ATTRIBUTE_NAME,
-            'description' => Craft::t('menu-builder', 'One HTML attribute, as a name/value pair.'),
+            'description' => Craft::t('menubuilder', 'One HTML attribute, as a name/value pair.'),
             'fields' => [
                 'name' => ['name' => 'name', 'type' => Type::nonNull(Type::string())],
                 'value' => ['name' => 'value', 'type' => Type::nonNull(Type::string())],
@@ -56,33 +56,33 @@ class MenuBuilderNavigationItemType
     {
         return GqlEntityRegistry::getOrCreate(self::CUSTOM_FIELD_NAME, fn() => new ObjectType([
             'name' => self::CUSTOM_FIELD_NAME,
-            'description' => Craft::t('menu-builder', 'One editor-defined custom field value on a navigation item.'),
+            'description' => Craft::t('menubuilder', 'One editor-defined custom field value on a navigation item.'),
             'fields' => [
                 'handle' => ['name' => 'handle', 'type' => Type::nonNull(Type::string())],
                 'value' => [
                     'name' => 'value',
                     'type' => Type::string(),
-                    'description' => Craft::t('menu-builder', 'The value as a string. A boolean reads “true” or “false”.'),
+                    'description' => Craft::t('menubuilder', 'The value as a string. A boolean reads “true” or “false”.'),
                 ],
                 'booleanValue' => [
                     'name' => 'booleanValue',
                     'type' => Type::boolean(),
-                    'description' => Craft::t('menu-builder', 'The value, when it is a boolean; null otherwise.'),
+                    'description' => Craft::t('menubuilder', 'The value, when it is a boolean; null otherwise.'),
                 ],
                 'numberValue' => [
                     'name' => 'numberValue',
                     'type' => Type::float(),
-                    'description' => Craft::t('menu-builder', 'The value, when it is a number; null otherwise.'),
+                    'description' => Craft::t('menubuilder', 'The value, when it is a number; null otherwise.'),
                 ],
                 'intValue' => [
                     'name' => 'intValue',
                     'type' => Type::int(),
-                    'description' => Craft::t('menu-builder', 'The value, when it is a whole number; null otherwise.'),
+                    'description' => Craft::t('menubuilder', 'The value, when it is a whole number; null otherwise.'),
                 ],
                 'jsonValue' => [
                     'name' => 'jsonValue',
                     'type' => Type::string(),
-                    'description' => Craft::t('menu-builder', 'The field’s stored value, JSON-encoded. The only accessor populated for a field whose value isn’t a scalar — a relation field’s element IDs, a Matrix field’s blocks, a table field’s rows.'),
+                    'description' => Craft::t('menubuilder', 'The field’s stored value, JSON-encoded. The only accessor populated for a field whose value isn’t a scalar — a relation field’s element IDs, a Matrix field’s blocks, a table field’s rows.'),
                 ],
             ],
         ]));
@@ -95,12 +95,12 @@ class MenuBuilderNavigationItemType
     {
         return GqlEntityRegistry::getOrCreate(self::MEGA_MENU_NAME, fn() => new ObjectType([
             'name' => self::MEGA_MENU_NAME,
-            'description' => Craft::t('menu-builder', 'Mega-menu configuration for an item that opens one.'),
+            'description' => Craft::t('menubuilder', 'Mega-menu configuration for an item that opens one.'),
             'fields' => [
                 'columns' => [
                     'name' => 'columns',
                     'type' => Type::nonNull(Type::int()),
-                    'description' => Craft::t('menu-builder', 'How many columns the panel is laid out in.'),
+                    'description' => Craft::t('menubuilder', 'How many columns the panel is laid out in.'),
                 ],
             ],
         ]));
@@ -191,7 +191,7 @@ class MenuBuilderNavigationItemType
                 'name' => 'children',
                 // Self-referential, so this whole field list is built lazily (see getType()).
                 'type' => Type::nonNull(Type::listOf(Type::nonNull(self::getType()))),
-                'description' => Craft::t('menu-builder', 'This item’s children, already visibility-filtered and in order.'),
+                'description' => Craft::t('menubuilder', 'This item’s children, already visibility-filtered and in order.'),
                 'resolve' => static fn(MenuBuilderNode $node) => $node->children,
             ],
         ];
@@ -206,7 +206,7 @@ class MenuBuilderNavigationItemType
         return [
             'name' => $name,
             'type' => $type,
-            'description' => Craft::t('menu-builder', $description),
+            'description' => Craft::t('menubuilder', $description),
             'resolve' => $resolve,
         ];
     }

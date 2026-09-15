@@ -159,7 +159,7 @@ class MenuBuilderItem extends Model
             // element is gone, and would render as an empty label.
             [
                 ['title'], 'required',
-                'message' => Craft::t('menu-builder', 'A title is required unless the item is hidden when its linked element becomes unavailable.'),
+                'message' => Craft::t('menubuilder', 'A title is required unless the item is hidden when its linked element becomes unavailable.'),
                 'when' => fn($model) => in_array($model->type, self::ELEMENT_TYPES, true) && $model->fallbackBehavior !== self::FALLBACK_HIDE,
             ],
             [['title'], 'string', 'max' => self::MAX_TITLE_LENGTH],
@@ -208,14 +208,14 @@ class MenuBuilderItem extends Model
 
         if ($megaMenu !== null) {
             if (!is_array($megaMenu)) {
-                $this->addError('metadata', Craft::t('menu-builder', 'Mega menu configuration must be an object.'));
+                $this->addError('metadata', Craft::t('menubuilder', 'Mega menu configuration must be an object.'));
             } else {
                 if (isset($megaMenu['enabled']) && !is_bool($megaMenu['enabled'])) {
-                    $this->addError('metadata', Craft::t('menu-builder', 'Mega menu "enabled" must be a boolean.'));
+                    $this->addError('metadata', Craft::t('menubuilder', 'Mega menu "enabled" must be a boolean.'));
                 }
 
                 if (isset($megaMenu['columns']) && !MenuBuilderMegaMenuConfig::isValidColumns($megaMenu['columns'])) {
-                    $this->addError('metadata', Craft::t('menu-builder', 'Mega menu columns must be an integer between 1 and 6.'));
+                    $this->addError('metadata', Craft::t('menubuilder', 'Mega menu columns must be an integer between 1 and 6.'));
                 }
             }
         }
@@ -223,7 +223,7 @@ class MenuBuilderItem extends Model
         $column = $this->metadata['megaMenuColumn'] ?? null;
 
         if ($column !== null && !MenuBuilderMegaMenuConfig::isValidColumns($column)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mega menu column must be an integer between 1 and 6.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mega menu column must be an integer between 1 and 6.'));
         }
     }
 
@@ -244,25 +244,25 @@ class MenuBuilderItem extends Model
         }
 
         if (!is_array($mobile)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mobile configuration must be an object.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mobile configuration must be an object.'));
 
             return;
         }
 
         if (!MobileHelper::isValidVisibility($mobile['visibility'] ?? null)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mobile visibility must be one of: {values}.', ['values' => implode(', ', MobileHelper::VISIBILITIES)]));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mobile visibility must be one of: {values}.', ['values' => implode(', ', MobileHelper::VISIBILITIES)]));
         }
 
         if (!MobileHelper::isValidOrder($mobile['order'] ?? null)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mobile order must be a whole number.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mobile order must be a whole number.'));
         }
 
         if (array_key_exists('collapsible', $mobile) && MobileHelper::collapsible($mobile['collapsible']) === null && $mobile['collapsible'] !== null && $mobile['collapsible'] !== '') {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mobile "collapsible" must be a boolean.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mobile "collapsible" must be a boolean.'));
         }
 
         if (!MobileHelper::isValidMegaMenuBehavior($mobile['megaMenu'] ?? null)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Mobile mega menu behaviour must be one of: {values}.', ['values' => implode(', ', MobileHelper::MEGA_BEHAVIORS)]));
+            $this->addError('metadata', Craft::t('menubuilder', 'Mobile mega menu behaviour must be one of: {values}.', ['values' => implode(', ', MobileHelper::MEGA_BEHAVIORS)]));
         }
     }
 
@@ -305,7 +305,7 @@ class MenuBuilderItem extends Model
         }
 
         if (!is_array($this->metadata) || !is_array($this->metadata['dynamicSource'] ?? null)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'A dynamic navigation source configuration is required for this item type.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'A dynamic navigation source configuration is required for this item type.'));
 
             return;
         }
@@ -313,19 +313,19 @@ class MenuBuilderItem extends Model
         $config = $this->metadata['dynamicSource'];
 
         if (!in_array($config['sourceType'] ?? null, self::DYNAMIC_SOURCE_TYPES, true)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Dynamic source "sourceType" must be one of: {types}.', ['types' => implode(', ', self::DYNAMIC_SOURCE_TYPES)]));
+            $this->addError('metadata', Craft::t('menubuilder', 'Dynamic source "sourceType" must be one of: {types}.', ['types' => implode(', ', self::DYNAMIC_SOURCE_TYPES)]));
         }
 
         if (!self::isValidPositiveId($config['sourceId'] ?? null)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Dynamic source "sourceId" must be a positive integer.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Dynamic source "sourceId" must be a positive integer.'));
         }
 
         if (isset($config['limit']) && (!is_int($config['limit']) || $config['limit'] < 1)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Dynamic source "limit" must be a positive integer.'));
+            $this->addError('metadata', Craft::t('menubuilder', 'Dynamic source "limit" must be a positive integer.'));
         }
 
         if (isset($config['orderBy']) && !in_array($config['orderBy'], self::DYNAMIC_SOURCE_ORDER_BY, true)) {
-            $this->addError('metadata', Craft::t('menu-builder', 'Dynamic source "orderBy" must be one of: {values}.', ['values' => implode(', ', self::DYNAMIC_SOURCE_ORDER_BY)]));
+            $this->addError('metadata', Craft::t('menubuilder', 'Dynamic source "orderBy" must be one of: {values}.', ['values' => implode(', ', self::DYNAMIC_SOURCE_ORDER_BY)]));
         }
     }
 
@@ -379,14 +379,14 @@ class MenuBuilderItem extends Model
     public function validateVisibility(): void
     {
         if (!is_array($this->visibility)) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility configuration must be an array of rules.'));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility configuration must be an array of rules.'));
 
             return;
         }
 
         foreach ($this->visibility as $index => $ruleConfig) {
             if (!is_array($ruleConfig) || !isset($ruleConfig['type']) || !is_string($ruleConfig['type'])) {
-                $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index} is missing a valid "type".', ['index' => $index]));
+                $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index} is missing a valid "type".', ['index' => $index]));
 
                 continue;
             }
@@ -417,7 +417,7 @@ class MenuBuilderItem extends Model
     private function validateIdListRule(array $config, string $key, int|string $index): void
     {
         if (empty(ConfigHelper::strictIdList($config[$key] ?? null))) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of numeric IDs.', ['index' => $index, 'key' => $key]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of numeric IDs.', ['index' => $index, 'key' => $key]));
         }
     }
 
@@ -440,7 +440,7 @@ class MenuBuilderItem extends Model
     private function validateStringListRule(array $config, string $key, int|string $index): void
     {
         if (empty(ConfigHelper::strictStringList($config[$key] ?? null))) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of non-empty strings.', ['index' => $index, 'key' => $key]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index}\'s "{key}" must be a non-empty list of non-empty strings.', ['index' => $index, 'key' => $key]));
         }
     }
 
@@ -453,7 +453,7 @@ class MenuBuilderItem extends Model
         $hasEnd = $end !== null && $end !== '';
 
         if (!$hasStart && !$hasEnd) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index} needs a start date, an end date, or both.', ['index' => $index]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index} needs a start date, an end date, or both.', ['index' => $index]));
 
             return;
         }
@@ -464,15 +464,15 @@ class MenuBuilderItem extends Model
         $endDate = DateValidationHelper::parseOrNull($end);
 
         if ($hasStart && $startDate === null) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s start date is invalid.', ['index' => $index]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index}\'s start date is invalid.', ['index' => $index]));
         }
 
         if ($hasEnd && $endDate === null) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s end date is invalid.', ['index' => $index]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index}\'s end date is invalid.', ['index' => $index]));
         }
 
         if ($startDate !== null && $endDate !== null && $startDate > $endDate) {
-            $this->addError('visibility', Craft::t('menu-builder', 'Visibility rule #{index}\'s start date must be before its end date.', ['index' => $index]));
+            $this->addError('visibility', Craft::t('menubuilder', 'Visibility rule #{index}\'s start date must be before its end date.', ['index' => $index]));
         }
     }
 
@@ -621,14 +621,14 @@ class MenuBuilderItem extends Model
     public function validateHtmlId(): void
     {
         if ($this->htmlId !== null && !LinkAttributeHelper::isValidHtmlId($this->htmlId)) {
-            $this->addError('htmlId', Craft::t('menu-builder', 'Enter a valid HTML id — no spaces, quotes, or angle brackets.'));
+            $this->addError('htmlId', Craft::t('menubuilder', 'Enter a valid HTML id — no spaces, quotes, or angle brackets.'));
         }
     }
 
     public function validateCssClass(): void
     {
         if ($this->cssClass !== null && !LinkAttributeHelper::isValidCssClassList($this->cssClass)) {
-            $this->addError('cssClass', Craft::t('menu-builder', 'Enter a valid CSS class list — no quotes or angle brackets.'));
+            $this->addError('cssClass', Craft::t('menubuilder', 'Enter a valid CSS class list — no quotes or angle brackets.'));
         }
     }
 
@@ -641,7 +641,7 @@ class MenuBuilderItem extends Model
         $this->icon = IconHelper::normalize($this->icon);
 
         if ($this->icon !== null && !IconHelper::isValid($this->icon)) {
-            $this->addError('icon', Craft::t('menu-builder', 'Enter an icon handle or CSS class list (letters, numbers, spaces and - _ . : /), or pick an asset. Markup isn’t accepted — use an SVG asset instead.'));
+            $this->addError('icon', Craft::t('menubuilder', 'Enter an icon handle or CSS class list (letters, numbers, spaces and - _ . : /), or pick an asset. Markup isn’t accepted — use an SVG asset instead.'));
         }
     }
 
@@ -661,7 +661,7 @@ class MenuBuilderItem extends Model
         $style = $this->metadata['badgeStyle'] ?? null;
 
         if (!BadgeHelper::isValidStyle($style)) {
-            $this->addError('badge', Craft::t('menu-builder', 'Badge style must be one of: {styles}.', ['styles' => implode(', ', BadgeHelper::STYLES)]));
+            $this->addError('badge', Craft::t('menubuilder', 'Badge style must be one of: {styles}.', ['styles' => implode(', ', BadgeHelper::STYLES)]));
         }
     }
 

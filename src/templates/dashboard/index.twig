@@ -1,9 +1,9 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
-{% import "menu-builder/_macros/cp" as cp %}
+{% import "menubuilder/_macros/cp" as cp %}
 
 {% set title = group.name %}
-{% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
+{% set crumbs = [{ label: "Menus"|t('menubuilder'), url: url('menubuilder') }] %}
 
 {#
    Every affordance flag comes from BaseMenuBuilderController::cpAffordances(), so a button is
@@ -29,19 +29,19 @@
 
 {% block sidebar %}
     {{ cp.menuSidebar(groups, group, '', true) }}
-    {% include "menu-builder/dashboard/_sidebar-footer" %}
+    {% include "menubuilder/dashboard/_sidebar-footer" %}
 {% endblock %}
 
 {% block content %}
     <header class="menu-builder-header">
         <h1 class="menu-builder-header-title">
             {{ group.name }}
-            {% if not group.enabled %}<span class="badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>{% endif %}
+            {% if not group.enabled %}<span class="badge disabled-badge">{{ "Disabled"|t('menubuilder') }}</span>{% endif %}
         </h1>
         <p class="light">
-            {{ "Handle: {handle}"|t('menu-builder', { handle: group.handle }) }}
+            {{ "Handle: {handle}"|t('menubuilder', { handle: group.handle }) }}
             &middot;
-            {{ "{count} items"|t('menu-builder', { count: itemCount }) }}
+            {{ "{count} items"|t('menubuilder', { count: itemCount }) }}
         </p>
         {% if group.description %}
             <p class="light">{{ group.description }}</p>
@@ -52,9 +52,9 @@
     {% if not group.enabled %}
         <div class="menu-builder-notice warning" role="status">
             <p>
-                {{ "This menu is disabled, so it renders nothing on the front end no matter what its items say."|t('menu-builder') }}
+                {{ "This menu is disabled, so it renders nothing on the front end no matter what its items say."|t('menubuilder') }}
                 {% if canManageSettings %}
-                    <a href="{{ url('menu-builder/groups/' ~ group.id) }}">{{ "Enable it in menu settings"|t('menu-builder') }}</a>
+                    <a href="{{ url('menubuilder/groups/' ~ group.id) }}">{{ "Enable it in menu settings"|t('menubuilder') }}</a>
                 {% endif %}
             </p>
         </div>
@@ -64,8 +64,8 @@
     {% if healthSummary.total %}
         <div class="menu-builder-notice warning" role="status">
             <p>
-                <strong>{{ "{count} menu items link to content that isn’t available."|t('menu-builder', { count: healthSummary.total }) }}</strong>
-                {{ "Each one is flagged in the tree below; open it to relink it, give it a fallback URL, or disable it."|t('menu-builder') }}
+                <strong>{{ "{count} menu items link to content that isn’t available."|t('menubuilder', { count: healthSummary.total }) }}</strong>
+                {{ "Each one is flagged in the tree below; open it to relink it, give it a fallback URL, or disable it."|t('menubuilder') }}
             </p>
         </div>
     {% endif %}
@@ -73,17 +73,17 @@
     <div id="menu-builder-toolbar" class="flex flex-nowrap">
         <div class="flex-grow">
             <form method="get" role="search" class="menu-builder-search">
-                <label class="visually-hidden" for="menu-builder-search-input">{{ "Search menu items"|t('menu-builder') }}</label>
+                <label class="visually-hidden" for="menu-builder-search-input">{{ "Search menu items"|t('menubuilder') }}</label>
                 <input type="text"
                        id="menu-builder-search-input"
                        name="search"
                        value="{{ search }}"
-                       placeholder="{{ 'Search menu items…'|t('menu-builder') }}"
+                       placeholder="{{ 'Search menu items…'|t('menubuilder') }}"
                        class="text fullwidth"
                        autocomplete="off">
-                <button type="submit" class="btn">{{ "Search"|t('menu-builder') }}</button>
+                <button type="submit" class="btn">{{ "Search"|t('menubuilder') }}</button>
                 {% if isFiltered %}
-                    <a href="{{ url('menu-builder/' ~ group.handle) }}" class="btn">{{ "Clear"|t('menu-builder') }}</a>
+                    <a href="{{ url('menubuilder/' ~ group.handle) }}" class="btn">{{ "Clear"|t('menubuilder') }}</a>
                 {% endif %}
             </form>
         </div>
@@ -92,11 +92,11 @@
            required, so it is deliberately not gated on a further affordance flag.
         #}
         <div>
-            <a href="{{ url('menu-builder/' ~ group.handle ~ '/preview') }}" class="btn">{{ "Preview"|t('menu-builder') }}</a>
+            <a href="{{ url('menubuilder/' ~ group.handle ~ '/preview') }}" class="btn">{{ "Preview"|t('menubuilder') }}</a>
         </div>
         {% if canManageSettings %}
             <div>
-                <a href="{{ url('menu-builder/groups/' ~ group.id) }}" class="btn">{{ "Menu settings"|t('menu-builder') }}</a>
+                <a href="{{ url('menubuilder/groups/' ~ group.id) }}" class="btn">{{ "Menu settings"|t('menubuilder') }}</a>
             </div>
         {% endif %}
     </div>
@@ -108,13 +108,13 @@
     {% if isFiltered %}
         <div class="menu-builder-notice" role="status">
             <p>
-                {{ "{visible} of {total} items match “{search}”."|t('menu-builder', {
+                {{ "{visible} of {total} items match “{search}”."|t('menubuilder', {
                     visible: visibleItemCount,
                     total: itemCount,
                     search: search,
                 }) }}
                 {% if canEdit and visibleItemCount %}
-                    {{ "Clear the search to reorder items."|t('menu-builder') }}
+                    {{ "Clear the search to reorder items."|t('menubuilder') }}
                 {% endif %}
             </p>
         </div>
@@ -124,13 +124,13 @@
         <div id="menu-builder-bulk-toolbar" hidden>
             <span class="light" id="menu-builder-bulk-count" role="status" aria-live="polite"></span>
             {% if canEdit %}
-                <button type="button" class="btn small" data-mb-bulk-op="enable">{{ "Enable"|t('menu-builder') }}</button>
-                <button type="button" class="btn small" data-mb-bulk-op="disable">{{ "Disable"|t('menu-builder') }}</button>
+                <button type="button" class="btn small" data-mb-bulk-op="enable">{{ "Enable"|t('menubuilder') }}</button>
+                <button type="button" class="btn small" data-mb-bulk-op="disable">{{ "Disable"|t('menubuilder') }}</button>
             {% endif %}
             {% if canDelete %}
                 <button type="button" class="btn small error" data-mb-bulk-op="delete">{{ "Delete"|t('app') }}</button>
             {% endif %}
-            <button type="button" class="btn small" id="menu-builder-bulk-clear">{{ "Clear selection"|t('menu-builder') }}</button>
+            <button type="button" class="btn small" id="menu-builder-bulk-clear">{{ "Clear selection"|t('menubuilder') }}</button>
             <div class="spinner hidden" id="menu-builder-bulk-spinner"></div>
         </div>
     {% endif %}
@@ -139,7 +139,7 @@
         <div class="menu-builder-select-all">
             <label>
                 <input type="checkbox" id="menu-builder-select-all">
-                {{ "Select all {count} items shown"|t('menu-builder', { count: visibleItemCount }) }}
+                {{ "Select all {count} items shown"|t('menubuilder', { count: visibleItemCount }) }}
             </label>
         </div>
     {% endif %}
@@ -152,7 +152,7 @@
          data-can-edit="{{ canEdit ? '1' : '0' }}"
          data-can-create="{{ canCreate ? '1' : '0' }}"
          data-can-delete="{{ canDelete ? '1' : '0' }}">
-        {% include "menu-builder/dashboard/_branch" with treeContext|merge({
+        {% include "menubuilder/dashboard/_branch" with treeContext|merge({
             items: items,
             level: 1,
             parentId: null,
@@ -162,15 +162,15 @@
     {% if items is empty %}
         <div class="zilch">
             {% if isFiltered %}
-                <p>{{ "No menu items match “{search}”."|t('menu-builder', { search: search }) }}</p>
-                <p><a href="{{ url('menu-builder/' ~ group.handle) }}" class="btn">{{ "Clear search"|t('menu-builder') }}</a></p>
+                <p>{{ "No menu items match “{search}”."|t('menubuilder', { search: search }) }}</p>
+                <p><a href="{{ url('menubuilder/' ~ group.handle) }}" class="btn">{{ "Clear search"|t('menubuilder') }}</a></p>
             {% else %}
-                <p>{{ "This menu has no items yet."|t('menu-builder') }}</p>
+                <p>{{ "This menu has no items yet."|t('menubuilder') }}</p>
                 {% if canCreate %}
-                    <p class="light">{{ "Add your first item using the panel on the right."|t('menu-builder') }}</p>
-                    <p><a href="#" class="btn submit add icon" data-mb-action="focus-quick-add">{{ "Add menu item"|t('menu-builder') }}</a></p>
+                    <p class="light">{{ "Add your first item using the panel on the right."|t('menubuilder') }}</p>
+                    <p><a href="#" class="btn submit add icon" data-mb-action="focus-quick-add">{{ "Add menu item"|t('menubuilder') }}</a></p>
                 {% else %}
-                    <p class="light">{{ "You don’t have permission to add menu items."|t('menu-builder') }}</p>
+                    <p class="light">{{ "You don’t have permission to add menu items."|t('menubuilder') }}</p>
                 {% endif %}
             {% endif %}
         </div>
@@ -180,49 +180,49 @@
 {% block details %}
     {% if group and canCreate %}
         <div id="menu-builder-quick-add">
-            <h2>{{ "Add menu item"|t('menu-builder') }}</h2>
+            <h2>{{ "Add menu item"|t('menubuilder') }}</h2>
             <form method="post" action="" id="menu-builder-quick-add-form">
                 {{ csrfInput() }}
-                <input type="hidden" name="action" value="menu-builder/items/save">
+                <input type="hidden" name="action" value="menubuilder/items/save">
                 <input type="hidden" name="groupId" value="{{ group.id }}">
                 <input type="hidden" name="clickable" id="quick-add-clickable" value="1">
-                {{ redirectInput('menu-builder/' ~ group.handle) }}
+                {{ redirectInput('menubuilder/' ~ group.handle) }}
 
                 <div class="menu-builder-quick-add-fields">
                     {{ forms.selectField({
-                        label: "Nest under"|t('menu-builder'),
-                        instructions: "Where this item lands in the tree. Drag it elsewhere later if you change your mind."|t('menu-builder'),
+                        label: "Nest under"|t('menubuilder'),
+                        instructions: "Where this item lands in the tree. Drag it elsewhere later if you change your mind."|t('menubuilder'),
                         id: 'quick-add-parent',
                         name: 'parentId',
                         value: '',
                         options: parentOptions,
                     }) }}
 
-                    {{ cp.linkTypeField("Type"|t('menu-builder'), 'quick-add-type', 'url') }}
+                    {{ cp.linkTypeField("Type"|t('menubuilder'), 'quick-add-type', 'url') }}
 
                     {{ forms.textField({
-                        label: "Title"|t('menu-builder'),
+                        label: "Title"|t('menubuilder'),
                         id: 'quick-add-title',
                         name: 'title',
                     }) }}
-                    <p class="light" data-quick-add-title-hint hidden>{{ "Leave blank to use the linked element's own title."|t('menu-builder') }}</p>
+                    <p class="light" data-quick-add-title-hint hidden>{{ "Leave blank to use the linked element's own title."|t('menubuilder') }}</p>
 
                     <div data-quick-add-section="entry" class="menu-builder-link-section hidden">
-                        {{ cp.elementPickerField("Entry"|t('menu-builder'), 'quick-add-entry', 'craft\\elements\\Entry') }}
+                        {{ cp.elementPickerField("Entry"|t('menubuilder'), 'quick-add-entry', 'craft\\elements\\Entry') }}
                     </div>
 
                     <div data-quick-add-section="category" class="menu-builder-link-section hidden">
-                        {{ cp.elementPickerField("Category"|t('menu-builder'), 'quick-add-category', 'craft\\elements\\Category') }}
+                        {{ cp.elementPickerField("Category"|t('menubuilder'), 'quick-add-category', 'craft\\elements\\Category') }}
                     </div>
 
                     <div data-quick-add-section="asset" class="menu-builder-link-section hidden">
-                        {{ cp.elementPickerField("Asset"|t('menu-builder'), 'quick-add-asset', 'craft\\elements\\Asset') }}
+                        {{ cp.elementPickerField("Asset"|t('menubuilder'), 'quick-add-asset', 'craft\\elements\\Asset') }}
                     </div>
 
                     <div data-quick-add-section="url" class="menu-builder-link-section">
                         {{ forms.textField({
-                            label: "URL"|t('menu-builder'),
-                            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menu-builder'),
+                            label: "URL"|t('menubuilder'),
+                            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menubuilder'),
                             id: 'quick-add-url',
                             name: 'customUrl',
                         }) }}
@@ -230,8 +230,8 @@
 
                     <div data-quick-add-section="anchor" class="menu-builder-link-section hidden">
                         {{ forms.textField({
-                            label: "Anchor handle"|t('menu-builder'),
-                            instructions: "Rendered as a link to #handle on the current page."|t('menu-builder'),
+                            label: "Anchor handle"|t('menubuilder'),
+                            instructions: "Rendered as a link to #handle on the current page."|t('menubuilder'),
                             id: 'quick-add-anchor',
                             name: 'customUrl',
                         }) }}
@@ -264,12 +264,12 @@
                             assets: 'quick-add-dynamic-source-assets',
                         }, '', 'entries') }}
 
-                        <p class="light">{{ "How many children to pull in, and in what order, are set in the full editor once this item exists."|t('menu-builder') }}</p>
+                        <p class="light">{{ "How many children to pull in, and in what order, are set in the full editor once this item exists."|t('menubuilder') }}</p>
                     </div>
                 </div>
 
                 <div class="btngroup menu-builder-quick-add-actions">
-                    <button type="submit" class="btn submit fullwidth" id="menu-builder-quick-add-submit">{{ "Add menu item"|t('menu-builder') }}</button>
+                    <button type="submit" class="btn submit fullwidth" id="menu-builder-quick-add-submit">{{ "Add menu item"|t('menubuilder') }}</button>
                     <div class="spinner hidden" id="menu-builder-quick-add-spinner"></div>
                 </div>
             </form>
@@ -311,7 +311,7 @@
             var all = checkboxes();
 
             toolbar.hidden = ids.length === 0;
-            countLabel.textContent = Craft.t('menu-builder', '{count} selected', { count: ids.length });
+            countLabel.textContent = Craft.t('menubuilder', '{count} selected', { count: ids.length });
 
             if (selectAll) {
                 selectAll.checked = all.length > 0 && ids.length === all.length;
@@ -360,13 +360,13 @@
                     return;
                 }
 
-                if (op === 'delete' && !confirm(Craft.t('menu-builder', 'Delete {count} menu item(s)? Their children are deleted too. This cannot be undone.', { count: ids.length }))) {
+                if (op === 'delete' && !confirm(Craft.t('menubuilder', 'Delete {count} menu item(s)? Their children are deleted too. This cannot be undone.', { count: ids.length }))) {
                     return;
                 }
 
                 setBusy(true);
 
-                Craft.sendActionRequest('POST', 'menu-builder/items/bulk', { data: { op: op, ids: ids } })
+                Craft.sendActionRequest('POST', 'menubuilder/items/bulk', { data: { op: op, ids: ids } })
                     .then(function() {
                         // Enable/disable is a per-row visual change, so apply it in place through
                         // the tree controller's own setRowEnabled() — the single implementation
@@ -383,8 +383,8 @@
                             setBusy(false);
                             updateToolbar();
                             Craft.cp.displayNotice(op === 'enable'
-                                ? Craft.t('menu-builder', '{count} menu item(s) enabled.', { count: ids.length })
-                                : Craft.t('menu-builder', '{count} menu item(s) disabled.', { count: ids.length }));
+                                ? Craft.t('menubuilder', '{count} menu item(s) enabled.', { count: ids.length })
+                                : Craft.t('menubuilder', '{count} menu item(s) disabled.', { count: ids.length }));
 
                             return;
                         }
@@ -393,7 +393,7 @@
                     })
                     .catch(function(error) {
                         setBusy(false);
-                        window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'That bulk action couldn’t be completed.'));
+                        window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'That bulk action couldn’t be completed.'));
                     });
             });
         });
@@ -483,7 +483,7 @@
             window.MenuBuilder.clearFieldErrors(form);
             setBusy(true);
 
-            Craft.sendActionRequest('POST', 'menu-builder/items/save', { data: new FormData(form) })
+            Craft.sendActionRequest('POST', 'menubuilder/items/save', { data: new FormData(form) })
                 .then(function(response) {
                     // A toast raised here would be wiped by the reload.
                     window.MenuBuilder.tree.reloadWith('added', response.data && response.data.id);
@@ -495,7 +495,7 @@
                     // Only raise the banner when nothing landed on a field — otherwise it just
                     // repeats what is now visible in place.
                     if (!shown) {
-                        window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t add that menu item.'));
+                        window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t add that menu item.'));
                     }
                 });
         });

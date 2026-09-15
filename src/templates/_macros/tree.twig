@@ -44,7 +44,7 @@
     {% else %}
         <details class="menu-builder-megamenu" data-mb-disclosure>
             <summary class="menu-builder-megamenu-trigger"
-                     aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
+                     aria-label="{{ "{title} submenu"|t('menubuilder', { title: node.ariaLabel ?: node.title }) }}">
                 <span class="menu-builder-megamenu-caret" aria-hidden="true">&#9662;</span>
             </summary>
             {{ self.megaMenuPanel(node, disclosure, idPrefix, viewport) }}
@@ -56,7 +56,7 @@
 {% macro mobileSubmenu(node, children) %}
     <details class="menu-builder-submenu" data-mb-submenu>
         <summary class="menu-builder-submenu-trigger"
-                 aria-label="{{ "{title} submenu"|t('menu-builder', { title: node.ariaLabel ?: node.title }) }}">
+                 aria-label="{{ "{title} submenu"|t('menubuilder', { title: node.ariaLabel ?: node.title }) }}">
             <span class="menu-builder-submenu-caret" aria-hidden="true">&#9662;</span>
         </summary>
         {{ children }}
@@ -97,7 +97,7 @@
 
 {# "Opens in a new tab", for the accessible name of a link that does. #}
 {% macro newTabHint(node) %}
-    {%- if node.opensInNewTab() %} <span class="menu-builder-visually-hidden" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0">{{ "(opens in a new tab)"|t('menu-builder') }}</span>{% endif -%}
+    {%- if node.opensInNewTab() %} <span class="menu-builder-visually-hidden" style="position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0">{{ "(opens in a new tab)"|t('menubuilder') }}</span>{% endif -%}
 {% endmacro %}
 
 {% macro render(nodes, disclosure = 'details', idPrefix = '', viewport = 'both') %}

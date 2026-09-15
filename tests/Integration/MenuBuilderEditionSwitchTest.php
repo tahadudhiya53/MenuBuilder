@@ -18,7 +18,7 @@ use Tahadudhiya\MenuBuilder\services\MenuBuilderGroupService;
 */
 class MenuBuilderEditionSwitchTest extends CraftIntegrationTestCase
 {
-    private const HANDLE = 'menu-builder';
+    private const HANDLE = 'menubuilder';
 
     private const EDITION_PATH = ProjectConfigService::PATH_PLUGINS . '.' . self::HANDLE . '.edition';
 

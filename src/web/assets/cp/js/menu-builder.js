@@ -25,7 +25,7 @@
     */
     window.MenuBuilder.errorMessage = function(error, fallback) {
         var data = error && error.response && error.response.data;
-        return (data && data.message) || fallback || Craft.t('menu-builder', 'A server error occurred. Your changes were not saved. Please try again.');
+        return (data && data.message) || fallback || Craft.t('menubuilder', 'A server error occurred. Your changes were not saved. Please try again.');
     };
 
     window.MenuBuilder.displayError = function(error, fallback) {

@@ -2,17 +2,17 @@
 {% import "_includes/forms" as forms %}
 
 {# The *production* renderer, imported unchanged. #}
-{% import "menu-builder/_macros/tree" as menuMacros %}
-{% import "menu-builder/_macros/cp" as cp %}
+{% import "menubuilder/_macros/tree" as menuMacros %}
+{% import "menubuilder/_macros/cp" as cp %}
 
-{% set title = "Preview: {name}"|t('menu-builder', { name: group.name }) %}
+{% set title = "Preview: {name}"|t('menubuilder', { name: group.name }) %}
 {% set crumbs = [
-    { label: "Menus"|t('menu-builder'), url: url('menu-builder') },
-    { label: group.name, url: url('menu-builder/' ~ group.handle) },
+    { label: "Menus"|t('menubuilder'), url: url('menubuilder') },
+    { label: group.name, url: url('menubuilder/' ~ group.handle) },
 ] %}
 
 {% set nodes = tree ? tree.items : [] %}
-{% set previewUrl = url('menu-builder/' ~ group.handle ~ '/preview') %}
+{% set previewUrl = url('menubuilder/' ~ group.handle ~ '/preview') %}
 
 {% block sidebar %}
     {{ cp.menuSidebar(groups, group, '/preview') }}
@@ -20,21 +20,21 @@
 
 {% block content %}
     <header class="menu-builder-header">
-        <h1 class="menu-builder-header-title">{{ "Preview"|t('menu-builder') }}</h1>
+        <h1 class="menu-builder-header-title">{{ "Preview"|t('menubuilder') }}</h1>
         <p class="light">
-            {{ "{name} — as a visitor would receive it right now."|t('menu-builder', { name: group.name }) }}
-            <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ "Back to the menu"|t('menu-builder') }}</a>
+            {{ "{name} — as a visitor would receive it right now."|t('menubuilder', { name: group.name }) }}
+            <a href="{{ url('menubuilder/' ~ group.handle) }}">{{ "Back to the menu"|t('menubuilder') }}</a>
         </p>
     </header>
 
     {# 1. #}
     <form method="get" action="{{ previewUrl }}" class="menu-builder-preview-controls">
-        <h2 class="visually-hidden">{{ "Preview options"|t('menu-builder') }}</h2>
+        <h2 class="visually-hidden">{{ "Preview options"|t('menubuilder') }}</h2>
 
         <div class="menu-builder-preview-controls-fields">
             {% if siteOptions|length > 1 %}
                 {{ forms.selectField({
-                    label: "Site"|t('menu-builder'),
+                    label: "Site"|t('menubuilder'),
                     id: 'preview-site',
                     name: 'siteId',
                     value: options.siteId,
@@ -43,22 +43,22 @@
             {% endif %}
 
             {{ forms.selectField({
-                label: "Audience"|t('menu-builder'),
-                instructions: "Which visitor the visibility rules are evaluated for."|t('menu-builder'),
+                label: "Audience"|t('menubuilder'),
+                instructions: "Which visitor the visibility rules are evaluated for."|t('menubuilder'),
                 id: 'preview-audience',
                 name: 'audience',
                 value: options.audience,
                 options: [
-                    { label: "Logged out"|t('menu-builder'), value: 'loggedOut' },
-                    { label: "Logged in"|t('menu-builder'), value: 'loggedIn' },
-                    { label: "In a user group"|t('menu-builder'), value: 'userGroup' },
+                    { label: "Logged out"|t('menubuilder'), value: 'loggedOut' },
+                    { label: "Logged in"|t('menubuilder'), value: 'loggedIn' },
+                    { label: "In a user group"|t('menubuilder'), value: 'userGroup' },
                 ],
             }) }}
 
             {% if userGroupOptions %}
                 {{ forms.checkboxSelectField({
-                    label: "User groups"|t('menu-builder'),
-                    instructions: "Used only by the “In a user group” audience."|t('menu-builder'),
+                    label: "User groups"|t('menubuilder'),
+                    instructions: "Used only by the “In a user group” audience."|t('menubuilder'),
                     id: 'preview-user-groups',
                     name: 'userGroupIds',
                     values: options.userGroupIds,
@@ -67,34 +67,34 @@
             {% endif %}
 
             {{ forms.selectField({
-                label: "Shown in"|t('menu-builder'),
-                instructions: "Where your templates render this menu. Presentation only — nothing is saved."|t('menu-builder'),
+                label: "Shown in"|t('menubuilder'),
+                instructions: "Where your templates render this menu. Presentation only — nothing is saved."|t('menubuilder'),
                 id: 'preview-placement',
                 name: 'placement',
                 value: options.placement,
                 options: [
-                    { label: "Header and footer"|t('menu-builder'), value: 'both' },
-                    { label: "Header"|t('menu-builder'), value: 'header' },
-                    { label: "Footer"|t('menu-builder'), value: 'footer' },
+                    { label: "Header and footer"|t('menubuilder'), value: 'both' },
+                    { label: "Header"|t('menubuilder'), value: 'header' },
+                    { label: "Footer"|t('menubuilder'), value: 'footer' },
                 ],
             }) }}
 
             {{ forms.selectField({
-                label: "Device"|t('menu-builder'),
+                label: "Device"|t('menubuilder'),
                 id: 'preview-device',
                 name: 'device',
                 value: options.device,
                 options: [
-                    { label: "Desktop"|t('menu-builder'), value: 'desktop' },
-                    { label: "Mobile"|t('menu-builder'), value: 'mobile' },
+                    { label: "Desktop"|t('menubuilder'), value: 'desktop' },
+                    { label: "Mobile"|t('menubuilder'), value: 'mobile' },
                 ],
             }) }}
 
         </div>
 
         <div class="menu-builder-preview-controls-actions">
-            <button type="submit" class="btn submit">{{ "Update preview"|t('menu-builder') }}</button>
-            <a href="{{ previewUrl }}" class="btn">{{ "Reset"|t('menu-builder') }}</a>
+            <button type="submit" class="btn submit">{{ "Update preview"|t('menubuilder') }}</button>
+            <a href="{{ previewUrl }}" class="btn">{{ "Reset"|t('menubuilder') }}</a>
         </div>
     </form>
 
@@ -106,46 +106,46 @@
     #}
     {% set selectedGroupValues = options.userGroupIds|map(id => id ~ '') %}
     {% set audienceLabel = options.audience == 'loggedOut'
-        ? "Logged out"|t('menu-builder')
+        ? "Logged out"|t('menubuilder')
         : (options.audience == 'loggedIn'
-            ? "Logged in"|t('menu-builder')
+            ? "Logged in"|t('menubuilder')
             : userGroupOptions|filter(o => o.value in selectedGroupValues)|map(o => o.label)|join(', ')) %}
 
     <div class="menu-builder-preview-status" role="status">
         <span class="menu-builder-preview-chip">
-            <span class="menu-builder-preview-chip-key">{{ "Site"|t('menu-builder') }}</span>{{ siteName }}
+            <span class="menu-builder-preview-chip-key">{{ "Site"|t('menubuilder') }}</span>{{ siteName }}
         </span>
         <span class="menu-builder-preview-chip">
-            <span class="menu-builder-preview-chip-key">{{ "Audience"|t('menu-builder') }}</span>{{ audienceLabel }}
+            <span class="menu-builder-preview-chip-key">{{ "Audience"|t('menubuilder') }}</span>{{ audienceLabel }}
         </span>
         <span class="menu-builder-preview-chip">
-            <span class="menu-builder-preview-chip-key">{{ "Shown in"|t('menu-builder') }}</span>
+            <span class="menu-builder-preview-chip-key">{{ "Shown in"|t('menubuilder') }}</span>
             {{ options.isBoth()
-                ? "Header and footer"|t('menu-builder')
-                : (options.isFooter() ? "Footer"|t('menu-builder') : "Header"|t('menu-builder')) }}
+                ? "Header and footer"|t('menubuilder')
+                : (options.isFooter() ? "Footer"|t('menubuilder') : "Header"|t('menubuilder')) }}
         </span>
         <span class="menu-builder-preview-chip">
-            <span class="menu-builder-preview-chip-key">{{ "Device"|t('menu-builder') }}</span>
-            {{ options.isMobile() ? "Mobile · 390px"|t('menu-builder') : "Desktop · full width"|t('menu-builder') }}
+            <span class="menu-builder-preview-chip-key">{{ "Device"|t('menubuilder') }}</span>
+            {{ options.isMobile() ? "Mobile · 390px"|t('menubuilder') : "Desktop · full width"|t('menubuilder') }}
         </span>
         <span class="menu-builder-preview-chip menu-builder-preview-chip--count">
-            {{ "{shown} of {enabled} enabled items"|t('menu-builder', { shown: previewedItemCount, enabled: enabledCount }) }}
-            {%- if dynamicNodeCount %} {{ "+{count} dynamic"|t('menu-builder', { count: dynamicNodeCount }) }}{% endif %}
-            {%- if disabledCount %} · {{ "{count} disabled hidden"|t('menu-builder', { count: disabledCount }) }}{% endif %}
+            {{ "{shown} of {enabled} enabled items"|t('menubuilder', { shown: previewedItemCount, enabled: enabledCount }) }}
+            {%- if dynamicNodeCount %} {{ "+{count} dynamic"|t('menubuilder', { count: dynamicNodeCount }) }}{% endif %}
+            {%- if disabledCount %} · {{ "{count} disabled hidden"|t('menubuilder', { count: disabledCount }) }}{% endif %}
         </span>
     </div>
 
     {% if not group.enabled %}
         <div class="menu-builder-notice warning" role="status">
-            <p>{{ "This menu is disabled, so it renders nothing on the front end no matter what its items say."|t('menu-builder') }}</p>
+            <p>{{ "This menu is disabled, so it renders nothing on the front end no matter what its items say."|t('menubuilder') }}</p>
         </div>
     {% elseif tree is null %}
         <div class="menu-builder-notice warning" role="status">
-            <p>{{ "This menu isn’t available on the selected site, so it renders nothing there."|t('menu-builder') }}</p>
+            <p>{{ "This menu isn’t available on the selected site, so it renders nothing there."|t('menubuilder') }}</p>
         </div>
     {% elseif nodes is empty %}
         <div class="menu-builder-notice" role="status">
-            <p>{{ "Nothing renders for this audience. Every item is either disabled, hidden by a visibility rule, or linked to content that isn’t available here."|t('menu-builder') }}</p>
+            <p>{{ "Nothing renders for this audience. Every item is either disabled, hidden by a visibility rule, or linked to content that isn’t available here."|t('menubuilder') }}</p>
         </div>
     {% endif %}
 
@@ -157,33 +157,33 @@
         {% set footerPreviewMarkup %}{{ menuMacros.render(nodes, 'none', 'preview-footer') }}{% endset %}
 
         {# 2. #}
-        {% include "menu-builder/preview/_stage" with {
+        {% include "menubuilder/preview/_stage" with {
             previewMarkup: previewMarkup,
             headerPreviewMarkup: headerPreviewMarkup,
             footerPreviewMarkup: footerPreviewMarkup,
             isMobile: options.isMobile(),
             placement: options.placement,
             siteName: siteName,
-            navLabel: "Preview of {name}"|t('menu-builder', { name: group.name }),
+            navLabel: "Preview of {name}"|t('menubuilder', { name: group.name }),
         } only %}
     {% endif %}
 
     {# 3. #}
     <details class="menu-builder-preview-explainer">
-        <summary>{{ "What this preview represents"|t('menu-builder') }}</summary>
+        <summary>{{ "What this preview represents"|t('menubuilder') }}</summary>
         <div class="menu-builder-preview-explainer-body">
-            <p>{{ "This is the saved menu, resolved through the same content pipeline a front-end request uses: the same link resolution, cached tree, visibility rules, and Twig macros this plugin ships. Current-page matching is intentionally omitted because this presentation preview does not simulate a page."|t('menu-builder') }}</p>
+            <p>{{ "This is the saved menu, resolved through the same content pipeline a front-end request uses: the same link resolution, cached tree, visibility rules, and Twig macros this plugin ships. Current-page matching is intentionally omitted because this presentation preview does not simulate a page."|t('menubuilder') }}</p>
             <ul>
-                <li>{{ "The menu is shown in both the header and footer by default, or in either region on its own when you choose that view. MenuBuilder doesn’t record where your templates render a menu, so placement is a preview control rather than a saved setting."|t('menu-builder') }}</li>
-                <li>{{ "The navigation markup is real; the polished company page around it is representative. MenuBuilder cannot know your front-end theme, so the preview deliberately demonstrates professional layout, hierarchy, responsive behaviour and interaction without claiming to reproduce the client website’s exact typography, content or colours."|t('menu-builder') }}</li>
-                <li>{{ "Saved data only. MenuBuilder has no draft state — every change in the control panel (drag, reorder, enable, save) is written immediately — so there are no unsaved changes to preview, and this screen never invents any."|t('menu-builder') }}</li>
-                <li>{{ "Nothing is changed. Previewing writes nothing: not the menu, not its items, not your session. Choosing another audience or site changes only what this page renders."|t('menu-builder') }}</li>
-                <li>{{ "Links stay inside the preview. They carry their real href, target and rel — clicking one reports where it points instead of navigating away."|t('menu-builder') }}</li>
-                <li>{{ "Disabled items and disabled menus are absent, because they render nowhere on the front end. The menu itself still lists them."|t('menu-builder') }}</li>
-                <li>{{ "Links resolve for the simulated site, and only to content that is publicly available there — a draft, disabled or expired element falls back or disappears here exactly as it would for a visitor. Preview cannot surface unpublished content."|t('menu-builder') }}</li>
-                <li>{{ "Date-range and environment rules are evaluated against the real clock and the real environment, never a simulated one, so a scheduled item appears here when it would appear for a visitor — not before."|t('menu-builder') }}</li>
-                <li>{{ "No current page is simulated. The preview focuses on presentation and interaction, so it does not guess which item should carry the active-page state."|t('menu-builder') }}</li>
-                <li>{{ "The whole parent item opens its children — hover it on desktop, tap it on mobile, or reach it with the keyboard — rather than a small caret. Because of that, clicking a parent that is also a link opens its submenu here instead of following the link; a real site decides its own disclosure behaviour. A mega menu opens by its own native details element, so what you see open here is exactly what a browser and a screen reader both consider open."|t('menu-builder') }}</li>
+                <li>{{ "The menu is shown in both the header and footer by default, or in either region on its own when you choose that view. MenuBuilder doesn’t record where your templates render a menu, so placement is a preview control rather than a saved setting."|t('menubuilder') }}</li>
+                <li>{{ "The navigation markup is real; the polished company page around it is representative. MenuBuilder cannot know your front-end theme, so the preview deliberately demonstrates professional layout, hierarchy, responsive behaviour and interaction without claiming to reproduce the client website’s exact typography, content or colours."|t('menubuilder') }}</li>
+                <li>{{ "Saved data only. MenuBuilder has no draft state — every change in the control panel (drag, reorder, enable, save) is written immediately — so there are no unsaved changes to preview, and this screen never invents any."|t('menubuilder') }}</li>
+                <li>{{ "Nothing is changed. Previewing writes nothing: not the menu, not its items, not your session. Choosing another audience or site changes only what this page renders."|t('menubuilder') }}</li>
+                <li>{{ "Links stay inside the preview. They carry their real href, target and rel — clicking one reports where it points instead of navigating away."|t('menubuilder') }}</li>
+                <li>{{ "Disabled items and disabled menus are absent, because they render nowhere on the front end. The menu itself still lists them."|t('menubuilder') }}</li>
+                <li>{{ "Links resolve for the simulated site, and only to content that is publicly available there — a draft, disabled or expired element falls back or disappears here exactly as it would for a visitor. Preview cannot surface unpublished content."|t('menubuilder') }}</li>
+                <li>{{ "Date-range and environment rules are evaluated against the real clock and the real environment, never a simulated one, so a scheduled item appears here when it would appear for a visitor — not before."|t('menubuilder') }}</li>
+                <li>{{ "No current page is simulated. The preview focuses on presentation and interaction, so it does not guess which item should carry the active-page state."|t('menubuilder') }}</li>
+                <li>{{ "The whole parent item opens its children — hover it on desktop, tap it on mobile, or reach it with the keyboard — rather than a small caret. Because of that, clicking a parent that is also a link opens its submenu here instead of following the link; a real site decides its own disclosure behaviour. A mega menu opens by its own native details element, so what you see open here is exactly what a browser and a screen reader both consider open."|t('menubuilder') }}</li>
             </ul>
         </div>
     </details>
@@ -191,15 +191,15 @@
     {# 4. #}
     {% if nodes is not empty %}
         <details class="menu-builder-preview-source">
-            <summary>{{ "Rendered markup"|t('menu-builder') }}</summary>
-            <p class="light">{{ "The exact output of this plugin’s Twig macros — the place to check accessibility semantics (aria-label and the mega menu’s native details/summary disclosure) and link attributes (rel, target) without leaving the control panel. Re-indented for reading; nothing is added, removed or reordered."|t('menu-builder') }}</p>
+            <summary>{{ "Rendered markup"|t('menubuilder') }}</summary>
+            <p class="light">{{ "The exact output of this plugin’s Twig macros — the place to check accessibility semantics (aria-label and the mega menu’s native details/summary disclosure) and link attributes (rel, target) without leaving the control panel. Re-indented for reading; nothing is added, removed or reordered."|t('menubuilder') }}</p>
 
             {#
                Formatted for the panel only — the stage above renders the unformatted capture, so
                this can't affect what is previewed.
             #}
             <div class="menu-builder-preview-code-wrap">
-                <button type="button" class="btn small menu-builder-preview-copy" data-mb-preview-copy>{{ "Copy"|t('menu-builder') }}</button>
+                <button type="button" class="btn small menu-builder-preview-copy" data-mb-preview-copy>{{ "Copy"|t('menubuilder') }}</button>
                 <pre class="menu-builder-preview-code"><code data-mb-preview-code>{% for line in previewService.formatMarkup(previewMarkup|trim)|split("\n") %}<span class="menu-builder-preview-code-line">{{ line }}</span>
 {% endfor %}</code></pre>
             </div>

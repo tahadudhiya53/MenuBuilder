@@ -346,7 +346,7 @@ class MenuBuilderApiHelper
     */
     public static function rateLimitKey(?string $tokenUid, ?string $ip, int $window): string
     {
-        return 'menu-builder:api:rate:' . hash('xxh128', ($tokenUid ?? 'public') . '|' . ($ip ?? 'unknown')) . ':' . $window;
+        return 'menubuilder:api:rate:' . hash('xxh128', ($tokenUid ?? 'public') . '|' . ($ip ?? 'unknown')) . ':' . $window;
     }
 
     /**
@@ -358,7 +358,7 @@ class MenuBuilderApiHelper
     */
     public static function authFailureKey(?string $ip, int $window): string
     {
-        return 'menu-builder:api:auth-fail:' . hash('xxh128', $ip ?? 'unknown') . ':' . $window;
+        return 'menubuilder:api:auth-fail:' . hash('xxh128', $ip ?? 'unknown') . ':' . $window;
     }
 
     /**

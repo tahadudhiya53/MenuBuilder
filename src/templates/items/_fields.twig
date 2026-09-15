@@ -1,13 +1,13 @@
 {% import "_includes/forms" as forms %}
-{% import "menu-builder/_macros/cp" as cp %}
+{% import "menubuilder/_macros/cp" as cp %}
 
 {% set megaMenuConfig = item.metadata.megaMenu ?? [] %}
 {% set badgeStyleOptions = [
-    { label: "Default"|t('menu-builder'), value: 'default' },
-    { label: "Info"|t('menu-builder'), value: 'info' },
-    { label: "Success"|t('menu-builder'), value: 'success' },
-    { label: "Warning"|t('menu-builder'), value: 'warning' },
-    { label: "Critical"|t('menu-builder'), value: 'critical' },
+    { label: "Default"|t('menubuilder'), value: 'default' },
+    { label: "Info"|t('menubuilder'), value: 'info' },
+    { label: "Success"|t('menubuilder'), value: 'success' },
+    { label: "Warning"|t('menubuilder'), value: 'warning' },
+    { label: "Critical"|t('menubuilder'), value: 'critical' },
 ] %}
 {% set dynamicSource = item.metadata.dynamicSource ?? [] %}
 {% set mobileConfig = item.mobileConfig() %}
@@ -27,11 +27,11 @@
 {% set iconAssetElement = item.iconAssetId() ? craft.assets.id(item.iconAssetId()).one() : null %}
 
 <div class="menu-builder-item-fields" data-menu-builder-item-fields>
-<input type="hidden" name="action" value="menu-builder/items/save">
+<input type="hidden" name="action" value="menubuilder/items/save">
 <input type="hidden" name="itemId" value="{{ item.id }}">
 <input type="hidden" name="groupId" value="{{ group.id }}">
 <input type="hidden" name="parentId" value="{{ item.parentId }}">
-{{ redirectInput('menu-builder/' ~ group.handle) }}
+{{ redirectInput('menubuilder/' ~ group.handle) }}
 {{ csrfInput() }}
 
 {# `items/edit` needs only `view`, so this partial can be rendered for someone who may not save. #}
@@ -48,23 +48,23 @@
                MenuBuilder never discards a menu item because the thing it pointed at went away.
             #}
             <ul class="menu-builder-health-actions">
-                <li>{{ "Pick different content below to relink this item."|t('menu-builder') }}</li>
-                <li>{{ "Or set the fallback behaviour to a fallback URL, so it keeps working."|t('menu-builder') }}</li>
-                <li>{{ "Or disable this item, so it stops rendering without being lost."|t('menu-builder') }}</li>
-                <li>{{ "Or delete it from the menu — that one can’t be undone."|t('menu-builder') }}</li>
+                <li>{{ "Pick different content below to relink this item."|t('menubuilder') }}</li>
+                <li>{{ "Or set the fallback behaviour to a fallback URL, so it keeps working."|t('menubuilder') }}</li>
+                <li>{{ "Or disable this item, so it stops rendering without being lost."|t('menubuilder') }}</li>
+                <li>{{ "Or delete it from the menu — that one can’t be undone."|t('menubuilder') }}</li>
             </ul>
         {% endif %}
     </div>
 {% endif %}
 
-<div data-mb-section="basic" data-mb-description="{{ "Choose what this item links to and the label shown in the menu."|t('menu-builder') }}">
-    <h2>{{ "Basic"|t('menu-builder') }}</h2>
+<div data-mb-section="basic" data-mb-description="{{ "Choose what this item links to and the label shown in the menu."|t('menubuilder') }}">
+    <h2>{{ "Basic"|t('menubuilder') }}</h2>
 
-    {{ cp.linkTypeField("Link type"|t('menu-builder'), 'type', item.type) }}
+    {{ cp.linkTypeField("Link type"|t('menubuilder'), 'type', item.type) }}
 
     {{ forms.textField({
-        label: "Title"|t('menu-builder'),
-        instructions: item.type in ['entry', 'category', 'asset'] ? "Leave blank to use the linked element's own title — required if the item stays visible when that element becomes unavailable."|t('menu-builder') : null,
+        label: "Title"|t('menubuilder'),
+        instructions: item.type in ['entry', 'category', 'asset'] ? "Leave blank to use the linked element's own title — required if the item stays visible when that element becomes unavailable."|t('menubuilder') : null,
         id: 'title',
         name: 'title',
         value: item.title,
@@ -72,21 +72,21 @@
     }) }}
 
     <div data-link-section="entry" class="menu-builder-link-section">
-        {{ cp.elementPickerField("Entry"|t('menu-builder'), 'entryElementId', 'craft\\elements\\Entry', entryElement ? [entryElement] : [], item.getErrors('elementId')) }}
+        {{ cp.elementPickerField("Entry"|t('menubuilder'), 'entryElementId', 'craft\\elements\\Entry', entryElement ? [entryElement] : [], item.getErrors('elementId')) }}
     </div>
 
     <div data-link-section="category" class="menu-builder-link-section">
-        {{ cp.elementPickerField("Category"|t('menu-builder'), 'categoryElementId', 'craft\\elements\\Category', categoryElement ? [categoryElement] : []) }}
+        {{ cp.elementPickerField("Category"|t('menubuilder'), 'categoryElementId', 'craft\\elements\\Category', categoryElement ? [categoryElement] : []) }}
     </div>
 
     <div data-link-section="asset" class="menu-builder-link-section">
-        {{ cp.elementPickerField("Asset"|t('menu-builder'), 'assetElementId', 'craft\\elements\\Asset', assetElement ? [assetElement] : []) }}
+        {{ cp.elementPickerField("Asset"|t('menubuilder'), 'assetElementId', 'craft\\elements\\Asset', assetElement ? [assetElement] : []) }}
     </div>
 
     <div data-link-section="url" class="menu-builder-link-section">
         {{ forms.textField({
-            label: "URL"|t('menu-builder'),
-            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menu-builder'),
+            label: "URL"|t('menubuilder'),
+            instructions: "Absolute URLs, root-relative paths, #fragments, mailto:, and tel: links are all accepted."|t('menubuilder'),
             id: 'customUrl',
             name: 'customUrl',
             value: item.customUrl,
@@ -96,8 +96,8 @@
 
     <div data-link-section="anchor" class="menu-builder-link-section">
         {{ forms.textField({
-            label: "Anchor handle"|t('menu-builder'),
-            instructions: "Rendered as a link to #handle. Leave blank to reuse the Handle field in Advanced."|t('menu-builder'),
+            label: "Anchor handle"|t('menubuilder'),
+            instructions: "Rendered as a link to #handle. Leave blank to reuse the Handle field in Advanced."|t('menubuilder'),
             id: 'anchorUrl',
             name: 'customUrl',
             value: item.customUrl,
@@ -127,8 +127,8 @@
            The cap comes from MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT rather
            than being written out again. #}
         {{ forms.textField({
-            label: "Limit"|t('menu-builder'),
-            instructions: "How many children to pull in. Leave blank for the maximum ({max}), which is enforced server-side regardless of what's entered here."|t('menu-builder', { max: dynamicSourceMaxLimit }),
+            label: "Limit"|t('menubuilder'),
+            instructions: "How many children to pull in. Leave blank for the maximum ({max}), which is enforced server-side regardless of what's entered here."|t('menubuilder', { max: dynamicSourceMaxLimit }),
             id: 'dynamicSourceLimit',
             name: 'dynamicSourceLimit',
             type: 'number',
@@ -137,15 +137,15 @@
             value: dynamicSource.limit ?? '',
         }) }}
         {{ forms.selectField({
-            label: "Order by"|t('menu-builder'),
+            label: "Order by"|t('menubuilder'),
             id: 'dynamicSourceOrderBy',
             name: 'dynamicSourceOrderBy',
             value: dynamicSource.orderBy ?? 'dateCreated desc',
             options: [
-                { label: "Newest first"|t('menu-builder'), value: 'dateCreated desc' },
-                { label: "Oldest first"|t('menu-builder'), value: 'dateCreated asc' },
-                { label: "Title (A-Z)"|t('menu-builder'), value: 'title asc' },
-                { label: "Title (Z-A)"|t('menu-builder'), value: 'title desc' },
+                { label: "Newest first"|t('menubuilder'), value: 'dateCreated desc' },
+                { label: "Oldest first"|t('menubuilder'), value: 'dateCreated asc' },
+                { label: "Title (A-Z)"|t('menubuilder'), value: 'title asc' },
+                { label: "Title (Z-A)"|t('menubuilder'), value: 'title desc' },
             ],
         }) }}
     </div>
@@ -157,16 +157,16 @@
     <input type="hidden" name="clickable" id="clickableField" value="{{ item.type not in ['nonclickable', 'separator'] ? '1' : '' }}">
 
     {% if isNew %}
-        <p class="light">{{ "Behavior, appearance, accessibility, visibility, mobile, and advanced settings become available once this menu item is saved."|t('menu-builder') }}</p>
+        <p class="light">{{ "Behavior, appearance, accessibility, visibility, mobile, and advanced settings become available once this menu item is saved."|t('menubuilder') }}</p>
     {% endif %}
 </div>
 
 {% if not isNew %}
-<div data-mb-section="behavior" data-mb-description="{{ "Control availability, link destination, and broken-link fallback."|t('menu-builder') }}">
-    <h2>{{ "Behavior"|t('menu-builder') }}</h2>
+<div data-mb-section="behavior" data-mb-description="{{ "Control availability, link destination, and broken-link fallback."|t('menubuilder') }}">
+    <h2>{{ "Behavior"|t('menubuilder') }}</h2>
 
     {{ forms.lightswitchField({
-        label: "Enabled"|t('menu-builder'),
+        label: "Enabled"|t('menubuilder'),
         id: 'enabled',
         name: 'enabled',
         on: item.enabled,
@@ -178,45 +178,45 @@
     #}
     <div data-link-section="entry,category,asset,url,anchor" class="menu-builder-link-section">
         {{ forms.selectField({
-            label: "Open in"|t('menu-builder'),
+            label: "Open in"|t('menubuilder'),
             id: 'target',
             name: 'target',
             value: item.target,
             options: [
-                { label: "Same window"|t('menu-builder'), value: '_self' },
-                { label: "New tab"|t('menu-builder'), value: '_blank' },
+                { label: "Same window"|t('menubuilder'), value: '_self' },
+                { label: "New tab"|t('menubuilder'), value: '_blank' },
             ],
         }) }}
 
         {{ forms.checkboxField({
-            label: "Add rel=\"nofollow\""|t('menu-builder'),
+            label: "Add rel=\"nofollow\""|t('menubuilder'),
             id: 'nofollow',
             name: 'nofollow',
             checked: item.rel and 'nofollow' in item.rel|split(' '),
         }) }}
 
         {{ forms.checkboxField({
-            label: "Add rel=\"sponsored\""|t('menu-builder'),
+            label: "Add rel=\"sponsored\""|t('menubuilder'),
             id: 'sponsored',
             name: 'sponsored',
             checked: item.rel and 'sponsored' in item.rel|split(' '),
         }) }}
 
-        <h3>{{ "If the linked element becomes unavailable"|t('menu-builder') }}</h3>
+        <h3>{{ "If the linked element becomes unavailable"|t('menubuilder') }}</h3>
         {{ forms.selectField({
-            label: "Fallback behavior"|t('menu-builder'),
+            label: "Fallback behavior"|t('menubuilder'),
             id: 'fallbackBehavior',
             name: 'fallbackBehavior',
             value: item.fallbackBehavior,
             options: [
-                { label: "Hide the menu item"|t('menu-builder'), value: 'hide' },
-                { label: "Keep it, but disable the link"|t('menu-builder'), value: 'disableLink' },
-                { label: "Use a fallback URL"|t('menu-builder'), value: 'fallbackUrl' },
+                { label: "Hide the menu item"|t('menubuilder'), value: 'hide' },
+                { label: "Keep it, but disable the link"|t('menubuilder'), value: 'disableLink' },
+                { label: "Use a fallback URL"|t('menubuilder'), value: 'fallbackUrl' },
             ],
         }) }}
         <div data-fallback-url>
             {{ forms.textField({
-                label: "Fallback URL"|t('menu-builder'),
+                label: "Fallback URL"|t('menubuilder'),
                 id: 'fallbackUrl',
                 name: 'fallbackUrl',
                 value: item.fallbackUrl,
@@ -226,24 +226,24 @@
     </div>
 </div>
 
-<div data-mb-section="appearance" data-mb-description="{{ "Add icons, badges, imagery, and styling hooks."|t('menu-builder') }}">
-    <h2>{{ "Appearance"|t('menu-builder') }}</h2>
+<div data-mb-section="appearance" data-mb-description="{{ "Add icons, badges, imagery, and styling hooks."|t('menubuilder') }}">
+    <h2>{{ "Appearance"|t('menubuilder') }}</h2>
     {{ forms.selectField({
-        label: "Icon"|t('menu-builder'),
-        instructions: "How this item's icon is stored. Raw SVG markup isn't accepted — upload the SVG and pick it as an asset."|t('menu-builder'),
+        label: "Icon"|t('menubuilder'),
+        instructions: "How this item's icon is stored. Raw SVG markup isn't accepted — upload the SVG and pick it as an asset."|t('menubuilder'),
         id: 'iconSource',
         name: 'iconSource',
         value: iconType,
         options: [
-            { label: "None"|t('menu-builder'), value: '' },
-            { label: "Icon handle / CSS class"|t('menu-builder'), value: 'class' },
-            { label: "Asset"|t('menu-builder'), value: 'asset' },
+            { label: "None"|t('menubuilder'), value: '' },
+            { label: "Icon handle / CSS class"|t('menubuilder'), value: 'class' },
+            { label: "Asset"|t('menubuilder'), value: 'asset' },
         ],
     }) }}
     <div data-icon-class>
         {{ forms.textField({
-            label: "Icon handle or CSS class"|t('menu-builder'),
-            instructions: "Any identifier your templates know how to render — `icon-cart`, `fa fa-cart`, `heroicons/outline/home`."|t('menu-builder'),
+            label: "Icon handle or CSS class"|t('menubuilder'),
+            instructions: "Any identifier your templates know how to render — `icon-cart`, `fa fa-cart`, `heroicons/outline/home`."|t('menubuilder'),
             id: 'icon',
             name: 'icon',
             value: iconType == 'asset' ? '' : item.iconClass(),
@@ -252,8 +252,8 @@
     </div>
     <div data-icon-asset>
         {{ forms.elementSelectField({
-            label: "Icon asset"|t('menu-builder'),
-            instructions: "Rendered as an image, never inlined — an SVG uploaded here can't run script in the page."|t('menu-builder'),
+            label: "Icon asset"|t('menubuilder'),
+            instructions: "Rendered as an image, never inlined — an SVG uploaded here can't run script in the page."|t('menubuilder'),
             id: 'iconAsset',
             name: 'iconAsset',
             elementType: 'craft\\elements\\Asset',
@@ -268,8 +268,8 @@
        the style beside it is a closed enum because that half reaches a class attribute.
     #}
     {{ forms.textField({
-        label: "Badge"|t('menu-builder'),
-        instructions: "A short flag shown beside the label — NEW, SALE, BETA. Leave blank for no badge."|t('menu-builder'),
+        label: "Badge"|t('menubuilder'),
+        instructions: "A short flag shown beside the label — NEW, SALE, BETA. Leave blank for no badge."|t('menubuilder'),
         id: 'badge',
         name: 'badge',
         value: item.badge,
@@ -277,16 +277,16 @@
         errors: item.getErrors('badge'),
     }) }}
     {{ forms.selectField({
-        label: "Badge style"|t('menu-builder'),
-        instructions: "Adds a `menu-builder-badge--<style>` class for your own CSS. Ignored when the badge is blank."|t('menu-builder'),
+        label: "Badge style"|t('menubuilder'),
+        instructions: "Adds a `menu-builder-badge--<style>` class for your own CSS. Ignored when the badge is blank."|t('menubuilder'),
         id: 'badgeStyle',
         name: 'badgeStyle',
         options: badgeStyleOptions,
         value: item.badgeStyle() ?? 'default',
     }) }}
-    {{ forms.textareaField({ label: "Description"|t('menu-builder'), id: 'description', name: 'description', value: item.description, rows: 2 }) }}
+    {{ forms.textareaField({ label: "Description"|t('menubuilder'), id: 'description', name: 'description', value: item.description, rows: 2 }) }}
     {{ forms.elementSelectField({
-        label: "Image"|t('menu-builder'),
+        label: "Image"|t('menubuilder'),
         id: 'image',
         name: 'image',
         elementType: 'craft\\elements\\Asset',
@@ -296,25 +296,25 @@
         limit: 1,
         elements: imageElement ? [imageElement] : [],
     }) }}
-    {{ forms.lightswitchField({ label: "Featured"|t('menu-builder'), id: 'featured', name: 'featured', on: item.featured }) }}
-    {{ forms.textField({ label: "CSS class"|t('menu-builder'), id: 'cssClass', name: 'cssClass', value: item.cssClass }) }}
+    {{ forms.lightswitchField({ label: "Featured"|t('menubuilder'), id: 'featured', name: 'featured', on: item.featured }) }}
+    {{ forms.textField({ label: "CSS class"|t('menubuilder'), id: 'cssClass', name: 'cssClass', value: item.cssClass }) }}
 </div>
 
-<div data-mb-section="accessibility" data-mb-description="{{ "Provide clearer labels and helpful browser text."|t('menu-builder') }}">
-    <h2>{{ "Accessibility"|t('menu-builder') }}</h2>
-    {{ forms.textField({ label: "ARIA label"|t('menu-builder'), id: 'ariaLabel', name: 'ariaLabel', value: item.ariaLabel }) }}
-    {{ forms.textField({ label: "Title attribute"|t('menu-builder'), id: 'titleAttribute', name: 'titleAttribute', value: item.titleAttribute }) }}
+<div data-mb-section="accessibility" data-mb-description="{{ "Provide clearer labels and helpful browser text."|t('menubuilder') }}">
+    <h2>{{ "Accessibility"|t('menubuilder') }}</h2>
+    {{ forms.textField({ label: "ARIA label"|t('menubuilder'), id: 'ariaLabel', name: 'ariaLabel', value: item.ariaLabel }) }}
+    {{ forms.textField({ label: "Title attribute"|t('menubuilder'), id: 'titleAttribute', name: 'titleAttribute', value: item.titleAttribute }) }}
 </div>
 
-<div data-mb-section="visibility" data-mb-description="{{ "Choose who can see this item, where, and when."|t('menu-builder') }}">
-    <h2>{{ "Visibility"|t('menu-builder') }}</h2>
-    <p class="light">{{ "This menu item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it. Ticking both logged-in and logged-out can never be satisfied, so the item would be hidden for everyone."|t('menu-builder') }}</p>
+<div data-mb-section="visibility" data-mb-description="{{ "Choose who can see this item, where, and when."|t('menubuilder') }}">
+    <h2>{{ "Visibility"|t('menubuilder') }}</h2>
+    <p class="light">{{ "This menu item is shown when ALL of the checked/filled rules below pass. Leave everything blank to always show it. Ticking both logged-in and logged-out can never be satisfied, so the item would be hidden for everyone."|t('menubuilder') }}</p>
 
-    {{ forms.checkboxField({ label: "Only show to logged-in users"|t('menu-builder'), id: 'visibilityLoggedIn', name: 'visibility[loggedIn]', checked: loggedInRule is not null }) }}
-    {{ forms.checkboxField({ label: "Only show to logged-out (anonymous) visitors"|t('menu-builder'), id: 'visibilityLoggedOut', name: 'visibility[loggedOut]', checked: loggedOutRule is not null }) }}
+    {{ forms.checkboxField({ label: "Only show to logged-in users"|t('menubuilder'), id: 'visibilityLoggedIn', name: 'visibility[loggedIn]', checked: loggedInRule is not null }) }}
+    {{ forms.checkboxField({ label: "Only show to logged-out (anonymous) visitors"|t('menubuilder'), id: 'visibilityLoggedOut', name: 'visibility[loggedOut]', checked: loggedOutRule is not null }) }}
 
     {{ forms.checkboxSelectField({
-        label: "Restrict to user groups"|t('menu-builder'),
+        label: "Restrict to user groups"|t('menubuilder'),
         id: 'visibilityUserGroups',
         name: 'visibility[userGroups]',
         values: userGroupRule.groupIds ?? [],
@@ -323,7 +323,7 @@
 
     {% if craft.app.getIsMultiSite() %}
         {{ forms.checkboxSelectField({
-            label: "Restrict to sites"|t('menu-builder'),
+            label: "Restrict to sites"|t('menubuilder'),
             id: 'visibilitySites',
             name: 'visibility[sites]',
             values: siteRule.siteIds ?? [],
@@ -331,25 +331,25 @@
         }) }}
     {% endif %}
 
-    {{ forms.textField({ label: "Visible from"|t('menu-builder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
-    {{ forms.textField({ label: "Visible until"|t('menu-builder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
+    {{ forms.textField({ label: "Visible from"|t('menubuilder'), id: 'visibilityDateStart', name: 'visibility[dateStart]', type: 'datetime-local', value: dateRule.start ?? '' }) }}
+    {{ forms.textField({ label: "Visible until"|t('menubuilder'), id: 'visibilityDateEnd', name: 'visibility[dateEnd]', type: 'datetime-local', value: dateRule.end ?? '' }) }}
     {# Rules are resolved with `|first ?: null` above: Twig's `first` returns `false`, not `null`, #}
     {# for an empty match, and `false is not null` is true — so without the coalesce this line #}
     {# tried to read `environments` off a bool and blew up the whole edit slideout. #}
-    {{ forms.textField({ label: "Restrict to environments"|t('menu-builder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT). An unrecognized environment hides the item."|t('menu-builder'), id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule is not null ? envRule.environments|join(', ') : '' }) }}
+    {{ forms.textField({ label: "Restrict to environments"|t('menubuilder'), instructions: "Comma-separated (matches CRAFT_ENVIRONMENT). An unrecognized environment hides the item."|t('menubuilder'), id: 'visibilityEnvironments', name: 'visibility[environments]', value: envRule is not null ? envRule.environments|join(', ') : '' }) }}
 </div>
 
-<div data-mb-section="megaMenu" data-mb-description="{{ "Arrange this item's children in a multi-column panel."|t('menu-builder') }}">
-    <h2>{{ "Mega Menu"|t('menu-builder') }}</h2>
-    <p class="light">{{ "Enable to present this item's children as a mega-menu panel grouped into columns. Each child picks its own column below."|t('menu-builder') }}</p>
+<div data-mb-section="megaMenu" data-mb-description="{{ "Arrange this item's children in a multi-column panel."|t('menubuilder') }}">
+    <h2>{{ "Mega Menu"|t('menubuilder') }}</h2>
+    <p class="light">{{ "Enable to present this item's children as a mega-menu panel grouped into columns. Each child picks its own column below."|t('menubuilder') }}</p>
     {{ forms.lightswitchField({
-        label: "Enable mega menu for this item's children"|t('menu-builder'),
+        label: "Enable mega menu for this item's children"|t('menubuilder'),
         id: 'megaMenuEnabled',
         name: 'megaMenuEnabled',
         on: megaMenuConfig.enabled ?? false,
     }) }}
     {{ forms.textField({
-        label: "Columns"|t('menu-builder'),
+        label: "Columns"|t('menubuilder'),
         id: 'megaMenuColumns',
         name: 'megaMenuColumns',
         type: 'number',
@@ -358,8 +358,8 @@
         value: megaMenuConfig.columns ?? 1,
     }) }}
     {{ forms.textField({
-        label: "This item's column (under its parent's mega menu)"|t('menu-builder'),
-        instructions: "Only meaningful when this item's own parent has mega menu enabled. Columns beyond that parent's column count fall back to the first column."|t('menu-builder'),
+        label: "This item's column (under its parent's mega menu)"|t('menubuilder'),
+        instructions: "Only meaningful when this item's own parent has mega menu enabled. Columns beyond that parent's column count fall back to the first column."|t('menubuilder'),
         id: 'megaMenuColumn',
         name: 'megaMenuColumn',
         type: 'number',
@@ -369,24 +369,24 @@
     }) }}
 </div>
 
-<div data-mb-section="mobile" data-mb-description="{{ "Fine-tune how this item appears on smaller screens."|t('menu-builder') }}">
-    <h2>{{ "Mobile"|t('menu-builder') }}</h2>
-    <p class="light">{{ "How this item behaves in a small-screen navigation. MenuBuilder decides which items belong to which navigation, in what order, and which branches collapse — your front-end templates decide the breakpoint. No menu is duplicated: this is the same item, presented differently."|t('menu-builder') }}</p>
+<div data-mb-section="mobile" data-mb-description="{{ "Fine-tune how this item appears on smaller screens."|t('menubuilder') }}">
+    <h2>{{ "Mobile"|t('menubuilder') }}</h2>
+    <p class="light">{{ "How this item behaves in a small-screen navigation. MenuBuilder decides which items belong to which navigation, in what order, and which branches collapse — your front-end templates decide the breakpoint. No menu is duplicated: this is the same item, presented differently."|t('menubuilder') }}</p>
     {{ forms.selectField({
-        label: "Shown on"|t('menu-builder'),
-        instructions: "Restrict this item to one navigation. “Desktop only” and “Mobile only” hide it from the other — the item, its link and its children all go with it."|t('menu-builder'),
+        label: "Shown on"|t('menubuilder'),
+        instructions: "Restrict this item to one navigation. “Desktop only” and “Mobile only” hide it from the other — the item, its link and its children all go with it."|t('menubuilder'),
         id: 'mobileVisibility',
         name: 'mobileVisibility',
         options: [
-            { label: "Desktop and mobile"|t('menu-builder'), value: 'both' },
-            { label: "Desktop only"|t('menu-builder'), value: 'desktopOnly' },
-            { label: "Mobile only"|t('menu-builder'), value: 'mobileOnly' },
+            { label: "Desktop and mobile"|t('menubuilder'), value: 'both' },
+            { label: "Desktop only"|t('menubuilder'), value: 'desktopOnly' },
+            { label: "Mobile only"|t('menubuilder'), value: 'mobileOnly' },
         ],
         value: item.mobileVisibility(),
     }) }}
     {{ forms.textField({
-        label: "Mobile order"|t('menu-builder'),
-        instructions: "Optional. Items with a number are placed in that order among their siblings on mobile; items without one keep the order you dragged them into and follow after. Only applies where the mobile navigation is rendered separately."|t('menu-builder'),
+        label: "Mobile order"|t('menubuilder'),
+        instructions: "Optional. Items with a number are placed in that order among their siblings on mobile; items without one keep the order you dragged them into and follow after. Only applies where the mobile navigation is rendered separately."|t('menubuilder'),
         id: 'mobileOrder',
         name: 'mobileOrder',
         type: 'number',
@@ -395,25 +395,25 @@
         value: mobileConfig.order ?? '',
     }) }}
     {{ forms.selectField({
-        label: "Children on mobile"|t('menu-builder'),
-        instructions: "By default a branch collapses behind a disclosure on mobile, so a deep menu still fits a phone. “Always expanded” renders its children in place instead. Items with no children are unaffected."|t('menu-builder'),
+        label: "Children on mobile"|t('menubuilder'),
+        instructions: "By default a branch collapses behind a disclosure on mobile, so a deep menu still fits a phone. “Always expanded” renders its children in place instead. Items with no children are unaffected."|t('menubuilder'),
         id: 'mobileCollapsible',
         name: 'mobileCollapsible',
         options: [
-            { label: "Collapsed by default"|t('menu-builder'), value: '' },
-            { label: "Always expanded"|t('menu-builder'), value: '0' },
+            { label: "Collapsed by default"|t('menubuilder'), value: '' },
+            { label: "Always expanded"|t('menubuilder'), value: '0' },
         ],
         value: (mobileConfig.collapsible ?? null) is same as(false) ? '0' : '',
     }) }}
     {{ forms.selectField({
-        label: "Mega menu on mobile"|t('menu-builder'),
-        instructions: "Only meaningful when this item has mega menu enabled above. Stacking is almost always right on a phone; hiding removes those links from the mobile navigation entirely, so make sure this item links somewhere that reaches them."|t('menu-builder'),
+        label: "Mega menu on mobile"|t('menubuilder'),
+        instructions: "Only meaningful when this item has mega menu enabled above. Stacking is almost always right on a phone; hiding removes those links from the mobile navigation entirely, so make sure this item links somewhere that reaches them."|t('menubuilder'),
         id: 'mobileMegaMenu',
         name: 'mobileMegaMenu',
         options: [
-            { label: "Stack the columns"|t('menu-builder'), value: 'stack' },
-            { label: "Keep the columns"|t('menu-builder'), value: 'columns' },
-            { label: "Hide the panel"|t('menu-builder'), value: 'hide' },
+            { label: "Stack the columns"|t('menubuilder'), value: 'stack' },
+            { label: "Keep the columns"|t('menubuilder'), value: 'columns' },
+            { label: "Hide the panel"|t('menubuilder'), value: 'hide' },
         ],
         value: item.mobileMegaMenuBehavior(),
     }) }}
@@ -425,7 +425,7 @@
 
 {% for tab in fieldLayoutForm.tabs %}
     {# Two nested elements on purpose. #}
-    <div data-mb-section="fields-{{ loop.index }}" data-mb-description="{{ "Set the custom fields configured for this menu."|t('menu-builder') }}">
+    <div data-mb-section="fields-{{ loop.index }}" data-mb-description="{{ "Set the custom fields configured for this menu."|t('menubuilder') }}">
         <h2>{{ tab.name }}</h2>
         <div id="{{ tab.getId() }}"
              class="flex-fields"
@@ -446,14 +446,14 @@
 {% endfor %}
 {% endif %}
 
-<div data-mb-section="advanced" data-mb-description="{{ "Set technical identifiers and custom HTML attributes."|t('menu-builder') }}">
-    <h2>{{ "Advanced"|t('menu-builder') }}</h2>
-    {{ forms.textField({ label: "Handle"|t('menu-builder'), instructions: "Used for anchor links and CSS targeting.", id: 'handle', name: 'handle', value: item.handle, errors: item.getErrors('handle') }) }}
-    {{ forms.textField({ label: "HTML id"|t('menu-builder'), id: 'htmlId', name: 'htmlId', value: item.htmlId }) }}
-    {{ forms.textField({ label: "rel"|t('menu-builder'), instructions: "Additional rel values beyond nofollow/sponsored above.", id: 'rel', name: 'rel', value: item.rel }) }}
+<div data-mb-section="advanced" data-mb-description="{{ "Set technical identifiers and custom HTML attributes."|t('menubuilder') }}">
+    <h2>{{ "Advanced"|t('menubuilder') }}</h2>
+    {{ forms.textField({ label: "Handle"|t('menubuilder'), instructions: "Used for anchor links and CSS targeting.", id: 'handle', name: 'handle', value: item.handle, errors: item.getErrors('handle') }) }}
+    {{ forms.textField({ label: "HTML id"|t('menubuilder'), id: 'htmlId', name: 'htmlId', value: item.htmlId }) }}
+    {{ forms.textField({ label: "rel"|t('menubuilder'), instructions: "Additional rel values beyond nofollow/sponsored above.", id: 'rel', name: 'rel', value: item.rel }) }}
     {{ forms.textareaField({
-        label: "HTML attributes"|t('menu-builder'),
-        instructions: "One `key: value` pair per line, e.g. `data-tracking: nav-main`."|t('menu-builder'),
+        label: "HTML attributes"|t('menubuilder'),
+        instructions: "One `key: value` pair per line, e.g. `data-tracking: nav-main`."|t('menubuilder'),
         id: 'htmlAttributes',
         name: 'htmlAttributes',
         value: item.htmlAttributes|map((v, k) => k ~ ': ' ~ v)|join("\n"),

@@ -546,7 +546,7 @@ class MenuBuilderApiTest extends TestCase
 
         $this->assertStringNotContainsString('token-uid-1234', $key);
         $this->assertStringNotContainsString('203.0.113.9', $key);
-        $this->assertStringStartsWith('menu-builder:api:rate:', $key);
+        $this->assertStringStartsWith('menubuilder:api:rate:', $key);
         $this->assertStringEndsWith(':42', $key);
     }
 
@@ -570,7 +570,7 @@ class MenuBuilderApiTest extends TestCase
         $key = MenuBuilderApiHelper::authFailureKey('203.0.113.9', 42);
 
         $this->assertStringNotContainsString('203.0.113.9', $key);
-        $this->assertStringStartsWith('menu-builder:api:auth-fail:', $key);
+        $this->assertStringStartsWith('menubuilder:api:auth-fail:', $key);
         $this->assertStringEndsWith(':42', $key);
     }
 

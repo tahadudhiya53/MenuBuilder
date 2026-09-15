@@ -33,7 +33,7 @@ Jump to: [Install](#install) · [Quick start](#quick-start) · [Editor's guide](
 | Craft CMS | `^5.0` |
 | PHP | `>= 8.2` |
 | Database | Whatever your Craft install uses (MySQL or PostgreSQL) |
-| Plugin handle | `menu-builder` |
+| Plugin handle | `menubuilder` |
 | License | [The Craft License](LICENSE.md) — a commercial plugin |
 
 No other dependencies. GraphQL and the REST API use Craft's own GraphQL schemas and tokens.
@@ -42,7 +42,7 @@ No other dependencies. GraphQL and the REST API use Craft's own GraphQL schemas 
 
 ```sh
 composer require tahadudhiya/craft-menu-builder
-php craft plugin/install menu-builder
+php craft plugin/install menubuilder
 ```
 
 Or install **MenuBuilder** from the Plugin Store. Installing creates the `menubuilder_groups` and
@@ -56,7 +56,7 @@ Or install **MenuBuilder** from the Plugin Store. Installing creates the `menubu
 3. Render it:
 
 ```twig
-{% import "menu-builder/_macros/tree" as menuMacros %}
+{% import "menubuilder/_macros/tree" as menuMacros %}
 
 {{ menuMacros.renderNav(craft.menuBuilder.get('main')) }}
 ```
@@ -375,7 +375,7 @@ The whole `craft.menuBuilder` variable is five methods:
 ## Rendering with the macros
 
 ```twig
-{% import "menu-builder/_macros/tree" as menuMacros %}
+{% import "menubuilder/_macros/tree" as menuMacros %}
 
 {{ menuMacros.renderNav(craft.menuBuilder.get('main')) }}    {# nav landmark + list #}
 {{ menuMacros.render(craft.menuBuilder.get('main').items) }} {# just the list #}
@@ -442,7 +442,7 @@ anchor-only item. Recomputed every request, never cached.
 {% set menu  = craft.menuBuilder.get('main') %}
 {% set trail = craft.menuBuilder.breadcrumbs(menu) %}   {# a handle also works #}
 
-{% import "menu-builder/_macros/breadcrumbs" as crumbs %}
+{% import "menubuilder/_macros/breadcrumbs" as crumbs %}
 {{ crumbs.render(trail) }}
 {{ crumbs.render(trail, 'You are here'|t, false) }}   {# own label; last crumb as text #}
 ```
@@ -616,7 +616,7 @@ campaign section with its own footer. Add a field of type **Navigation** to any 
 {% set nav = entry.navigation %}
 
 {% if nav %}
-  {% import 'menu-builder/_macros/tree' as menuMacros %}
+  {% import 'menubuilder/_macros/tree' as menuMacros %}
   {{ menuMacros.renderNav(nav.tree, nav.name) }}
 {% endif %}
 ```
@@ -716,7 +716,7 @@ A read-only JSON API for consumers that can't run Twig — a headless front end,
 external site. It is not a second API: it is a second transport over the same gates, audience and
 pipeline as GraphQL. If you render with Twig, use `craft.menuBuilder`.
 
-**Two switches, both required.** First the API, in `config/menu-builder.php` — without this file no
+**Two switches, both required.** First the API, in `config/menubuilder.php` — without this file no
 route is registered at all:
 
 ```php
@@ -895,8 +895,8 @@ invalidation matrix are in [ARCHITECTURE.md](ARCHITECTURE.md#caching).
 | A menu's item field layout | The database (`fieldlayoutId` → Craft's `fieldlayouts`) | The database |
 | Custom field *values* on items | A `MenuBuilderItemContent` element per item (Craft's `elements` tables) | The database |
 | Navigation **field** settings (allow-list, "allow disabled") | Project config, as part of the field, like any Craft field | Project config |
-| The active plugin edition (`free` / `pro`) | Project config (`plugins.menu-builder.edition`), where Craft's Plugin Store puts it | Project config |
-| REST API settings | The PHP file `config/menu-builder.php`, read per request | That file |
+| The active plugin edition (`free` / `pro`) | Project config (`plugins.menubuilder.edition`), where Craft's Plugin Store puts it | Project config |
+| REST API settings | The PHP file `config/menubuilder.php`, read per request | That file |
 
 **Menus are not project-config entities.** MenuBuilder writes nothing to `project.yaml` for a menu or
 an item, registers no project-config handlers for them, and takes no part in a project-config rebuild.
@@ -935,7 +935,7 @@ every cache key, so an upgrade reads fresh keys.
 | Dynamic children don't appear | The source config is incomplete, or the elements aren't normally visible | Set source type *and* source; entries must be live, categories and assets enabled |
 | A menu edit isn't visible on the front end | Rare — invalidation is automatic and targeted | Clear Craft's data caches; if it recurs, report it |
 | GraphQL says the field doesn't exist | The active schema names no MenuBuilder menu, so the fields aren't added at all | Tick the menu in **GraphQL → Schemas** |
-| REST returns `404` for everything | The API is off, so no route is registered | `config/menu-builder.php` must return `api.enabled => true` — a literal `true` |
+| REST returns `404` for everything | The API is off, so no route is registered | `config/menubuilder.php` must return `api.enabled => true` — a literal `true` |
 | REST returns `403` / `401` / `429` | The token's schema doesn't cover the site; no usable token and no public schema; over the rate limit | Call the right site's URL; send a valid token or allow the public schema; back off or raise `rateLimit` |
 | A browser call is blocked by CORS | No origins are allowlisted, which is the default | List the exact origin in `allowedOrigins` |
 | A referenced menu is missing after `project-config/apply` | Menus aren't in project config; only the field's settings are | Deploy the database — see [Where your data lives](#where-your-data-lives) |

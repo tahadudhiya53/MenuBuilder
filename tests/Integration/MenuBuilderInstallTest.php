@@ -320,7 +320,7 @@ class MenuBuilderInstallTest extends TestCase
     public function testUninstallLeavesNoProjectConfigBehind(): void
     {
         $this->assertNull(Craft::$app->getProjectConfig()->get('menuBuilder'));
-        $this->assertNull(Craft::$app->getProjectConfig()->get('menu-builder'));
+        $this->assertNull(Craft::$app->getProjectConfig()->get('menubuilder'));
     }
 
     // Helpers

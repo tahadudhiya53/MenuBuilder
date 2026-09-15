@@ -378,7 +378,7 @@ class MenuBuilderPreviewTest extends TestCase
     {
         $template = $this->previewTemplate();
 
-        $this->assertStringContainsString('{% import "menu-builder/_macros/tree" as menuMacros %}', $template);
+        $this->assertStringContainsString('{% import "menubuilder/_macros/tree" as menuMacros %}', $template);
         $this->assertStringContainsString('menuMacros.render(nodes)', $template);
     }
 
@@ -405,7 +405,7 @@ class MenuBuilderPreviewTest extends TestCase
     {
         $template = $this->previewTemplate();
 
-        $stage = strpos($template, 'menu-builder/preview/_stage');
+        $stage = strpos($template, 'menubuilder/preview/_stage');
         $controls = strpos($template, 'class="menu-builder-preview-controls"');
         $markup = strpos($template, 'menu-builder-preview-code');
 

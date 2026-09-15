@@ -20,9 +20,9 @@ use yii\db\Connection;
 */
 class MenuBuilderCacheService extends Component
 {
-    private const CACHE_TAG = 'menu-builder';
-    private const GROUP_TAG_PREFIX = 'menu-builder:group:';
-    private const KEY_PREFIX = 'menu-builder:tree:';
+    private const CACHE_TAG = 'menubuilder';
+    private const GROUP_TAG_PREFIX = 'menubuilder:group:';
+    private const KEY_PREFIX = 'menubuilder:tree:';
 
     /**
      * The classes whose shape the cached payload *is*.

@@ -1,11 +1,11 @@
 {% if canEdit and not isFiltered %}
     <p id="menu-builder-reorder-help" class="visually-hidden">
-        {{ "Up and down arrows move this item within the menu. Left and right arrows change how deeply it is nested. Changes save as you go."|t('menu-builder') }}
+        {{ "Up and down arrows move this item within the menu. Left and right arrows change how deeply it is nested. Changes save as you go."|t('menubuilder') }}
     </p>
 {% endif %}
 <ul class="menu-builder-tree-list" data-parent-id="">
     {# `treeContext` comes from dashboard/index.twig — see the comment there. #}
-    {% include "menu-builder/dashboard/_items" with treeContext|merge({
+    {% include "menubuilder/dashboard/_items" with treeContext|merge({
         items: items,
         level: level,
         openColumns: [],

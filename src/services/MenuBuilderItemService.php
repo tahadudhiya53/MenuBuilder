@@ -143,13 +143,13 @@ class MenuBuilderItemService extends Component
             : new MenuBuilderItemRecord();
 
         if (!$record) {
-            $item->addError('id', Craft::t('menu-builder', 'Navigation item not found.'));
+            $item->addError('id', Craft::t('menubuilder', 'Navigation item not found.'));
 
             return false;
         }
 
         if ($record->id !== null && !self::isGroupChangeAllowed((int)$record->groupId, $item->groupId)) {
-            $item->addError('groupId', Craft::t('menu-builder', 'A navigation menu item cannot be moved to a different navigation group.'));
+            $item->addError('groupId', Craft::t('menubuilder', 'A navigation menu item cannot be moved to a different navigation group.'));
 
             return false;
         }
@@ -212,7 +212,7 @@ class MenuBuilderItemService extends Component
         // tampered payload) — an existing item can't change groups at all, and the FK cascade
         // means its group is still there by definition.
         if ($isNew && !$this->groupExists($item->groupId)) {
-            $item->addError('groupId', Craft::t('menu-builder', 'The selected navigation group does not exist.'));
+            $item->addError('groupId', Craft::t('menubuilder', 'The selected navigation group does not exist.'));
 
             return false;
         }
@@ -272,7 +272,7 @@ class MenuBuilderItemService extends Component
         $record = MenuBuilderItemRecord::findOne($itemId);
 
         if (!$record) {
-            $this->moveError = Craft::t('menu-builder', 'Navigation menu not found.');
+            $this->moveError = Craft::t('menubuilder', 'Navigation menu not found.');
 
             return false;
         }
@@ -290,7 +290,7 @@ class MenuBuilderItemService extends Component
 
             if (!$record || (int)$record->groupId !== $groupId) {
                 $transaction->rollBack();
-                $this->moveError = Craft::t('menu-builder', 'Navigation menu not found.');
+                $this->moveError = Craft::t('menubuilder', 'Navigation menu not found.');
 
                 return false;
             }
@@ -301,7 +301,7 @@ class MenuBuilderItemService extends Component
             if (!$this->validateHierarchy($item)) {
                 $transaction->rollBack();
                 $this->moveError = $item->getFirstError('parentId')
-                    ?? Craft::t('menu-builder', 'That move isn’t allowed.');
+                    ?? Craft::t('menubuilder', 'That move isn’t allowed.');
 
                 return false;
             }
@@ -320,7 +320,7 @@ class MenuBuilderItemService extends Component
 
             if (!$record->save(false, ['parentId'])) {
                 $transaction->rollBack();
-                $this->moveError = Craft::t('menu-builder', 'That move isn’t allowed.');
+                $this->moveError = Craft::t('menubuilder', 'That move isn’t allowed.');
 
                 return false;
             }
@@ -331,7 +331,7 @@ class MenuBuilderItemService extends Component
         } catch (Throwable $exception) {
             $transaction->rollBack();
             Craft::warning('Failed to move navigation item: ' . $exception->getMessage(), __METHOD__);
-            $this->moveError = Craft::t('menu-builder', 'That move isn’t allowed.');
+            $this->moveError = Craft::t('menubuilder', 'That move isn’t allowed.');
 
             return false;
         }
@@ -635,7 +635,7 @@ class MenuBuilderItemService extends Component
     {
         if ($item->parentId !== null) {
             if ($item->parentId === $item->id) {
-                $item->addError('parentId', Craft::t('menu-builder', 'An item cannot be its own parent.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'An item cannot be its own parent.'));
 
                 return false;
             }
@@ -643,13 +643,13 @@ class MenuBuilderItemService extends Component
             $parent = MenuBuilderItemRecord::findOne($item->parentId);
 
             if (!$parent) {
-                $item->addError('parentId', Craft::t('menu-builder', 'The selected parent does not exist.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'The selected parent does not exist.'));
 
                 return false;
             }
 
             if ((int)$parent->groupId !== $item->groupId) {
-                $item->addError('parentId', Craft::t('menu-builder', 'A parent must belong to the same navigation group.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'A parent must belong to the same navigation group.'));
 
                 return false;
             }
@@ -665,13 +665,13 @@ class MenuBuilderItemService extends Component
             // every depth answer below meaningless, so fail closed rather than nest anything into
             // it.
             if (MenuBuilderHierarchyHelper::ancestryIsCyclic($parentMap, $item->parentId)) {
-                $item->addError('parentId', Craft::t('menu-builder', 'That move would create a circular reference.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'That move would create a circular reference.'));
 
                 return false;
             }
 
             if ($item->id !== null && MenuBuilderHierarchyHelper::wouldCreateCycle($parentMap, $item->id, $item->parentId)) {
-                $item->addError('parentId', Craft::t('menu-builder', 'That move would create a circular reference.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'That move would create a circular reference.'));
 
                 return false;
             }
@@ -690,7 +690,7 @@ class MenuBuilderItemService extends Component
             );
 
             if (!$group->allowsDepth($deepestLevel)) {
-                $item->addError('parentId', Craft::t('menu-builder', 'That move exceeds this group\'s maximum nesting depth.'));
+                $item->addError('parentId', Craft::t('menubuilder', 'That move exceeds this group\'s maximum nesting depth.'));
 
                 return false;
             }

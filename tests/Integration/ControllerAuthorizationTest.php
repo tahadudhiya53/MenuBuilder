@@ -693,7 +693,7 @@ class ControllerAuthorizationTest extends CraftIntegrationTestCase
         $_SERVER['SCRIPT_NAME'] = '/index.php';
         // `admin` is the default cpTrigger, and it is what makes getIsCpRequest() true — the site
         // path below is the same request arriving at the front end instead.
-        $_SERVER['REQUEST_URI'] = $cpRequest ? '/admin/actions/menu-builder' : '/menu-builder';
+        $_SERVER['REQUEST_URI'] = $cpRequest ? '/admin/actions/menubuilder' : '/menubuilder';
         $_SERVER['SERVER_NAME'] = 'primary.test';
         $_SERVER['HTTP_HOST'] = 'primary.test';
         $_SERVER['HTTPS'] = 'on';

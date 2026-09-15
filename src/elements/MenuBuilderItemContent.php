@@ -15,22 +15,22 @@ class MenuBuilderItemContent extends Element
 {
     public static function displayName(): string
     {
-        return Craft::t('menu-builder', 'Navigation Item Content');
+        return Craft::t('menubuilder', 'Navigation Item Content');
     }
 
     public static function lowerDisplayName(): string
     {
-        return Craft::t('menu-builder', 'navigation item content');
+        return Craft::t('menubuilder', 'navigation item content');
     }
 
     public static function pluralDisplayName(): string
     {
-        return Craft::t('menu-builder', 'Navigation Item Content');
+        return Craft::t('menubuilder', 'Navigation Item Content');
     }
 
     public static function pluralLowerDisplayName(): string
     {
-        return Craft::t('menu-builder', 'navigation item content');
+        return Craft::t('menubuilder', 'navigation item content');
     }
 
     /**

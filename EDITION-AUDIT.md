@@ -28,14 +28,14 @@ to other sites. Existing-menu edits do not acquire the creation lock.
 registration are independent of the active plugin edition. No schema migration
 or custom edition configuration is necessary.
 
-Craft owns `plugins.menu-builder.edition`, installation defaults, project-config
+Craft owns `plugins.menubuilder.edition`, installation defaults, project-config
 application, and `Plugins::switchEdition()`. MenuBuilder reads the native edition
 and calls `Plugin::is('pro', '>=')`. Craft's `Plugins::createPlugin()` normalizes
 an unsupported stored edition, including legacy `standard`, to the first declared
 edition. MenuBuilder additionally treats unknown runtime values as Free for limits.
 
 `composer.json` correctly declares `tahadudhiya/craft-menu-builder`, type
-`craft-plugin`, handle `menu-builder`, the MenuBuilder class, PHP `>=8.2.0`, Craft
+`craft-plugin`, handle `menubuilder`, the MenuBuilder class, PHP `>=8.2.0`, Craft
 `^5.0`, and `proprietary` with `LICENSE.md` containing the Craft License. There is
 no Standard edition or pricing declaration in package metadata. The checked-out
 tag and changelog identify 1.0.0; no explicit Composer version is required.

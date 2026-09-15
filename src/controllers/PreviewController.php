@@ -60,7 +60,7 @@ class PreviewController extends BaseMenuBuilderController
         $site = $options->siteId !== null ? Craft::$app->getSites()->getSiteById($options->siteId) : null;
         $site ??= Craft::$app->getSites()->getCurrentSite();
 
-        return $this->renderTemplate('menu-builder/preview/index', [
+        return $this->renderTemplate('menubuilder/preview/index', [
             'groups' => MenuBuilder::getInstance()->groups->getAll(),
             // The service itself, so the markup panel can re-indent the captured output
             // (MenuBuilderPreviewService::formatMarkup()) — a service, never a record, and

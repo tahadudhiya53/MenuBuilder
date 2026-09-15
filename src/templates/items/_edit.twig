@@ -1,8 +1,8 @@
 {% extends "_layouts/cp" %}
 
 {# `is not empty` would call a title of "0" empty, which is a real title. #}
-{% set itemLabel = (item.title is not null and item.title|trim != '') ? item.title : "(untitled)"|t('menu-builder') %}
-{% set title = isNew ? "New menu item"|t('menu-builder') : itemLabel %}
+{% set itemLabel = (item.title is not null and item.title|trim != '') ? item.title : "(untitled)"|t('menubuilder') %}
+{% set title = isNew ? "New menu item"|t('menubuilder') : itemLabel %}
 
 {#
    Read-only when the viewer may look but not save: `items/edit` needs only `view`, and this route
@@ -10,28 +10,28 @@
 #}
 {% set fullPageForm = canEdit %}
 {% set crumbs = [
-    { label: "Menus"|t('menu-builder'), url: url('menu-builder') },
-    { label: group.name, url: url('menu-builder/' ~ group.handle) },
+    { label: "Menus"|t('menubuilder'), url: url('menubuilder') },
+    { label: group.name, url: url('menubuilder/' ~ group.handle) },
 ] %}
 
 {# Delete lives in the action-button menu rather than in a <form> of its own. #}
 {% set formActions = canDelete and not isNew ? [
     {
-        label: "Delete menu item"|t('menu-builder'),
-        action: 'menu-builder/items/delete',
+        label: "Delete menu item"|t('menubuilder'),
+        action: 'menubuilder/items/delete',
         params: { id: item.id },
-        redirect: ('menu-builder/' ~ group.handle)|hash,
-        confirm: 'Delete “{title}”? This also deletes any child menu items. This cannot be undone.'|t('menu-builder', { title: itemLabel }),
+        redirect: ('menubuilder/' ~ group.handle)|hash,
+        confirm: 'Delete “{title}”? This also deletes any child menu items. This cannot be undone.'|t('menubuilder', { title: itemLabel }),
         destructive: true,
     },
 ] : null %}
 
 {% if not canEdit %}
-    {% set contentNotice = "You have read-only access to this menu item."|t('menu-builder') %}
+    {% set contentNotice = "You have read-only access to this menu item."|t('menubuilder') %}
 {% endif %}
 
 {% block content %}
-    {% include "menu-builder/items/_fields" %}
+    {% include "menubuilder/items/_fields" %}
 {% endblock %}
 
 {% do view.registerAssetBundle("Tahadudhiya\\MenuBuilder\\web\\assets\\cp\\CpAsset") %}

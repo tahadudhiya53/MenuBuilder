@@ -4,6 +4,26 @@ All notable changes to MenuBuilder are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.1] - 2026-09-15
+
+Fixes plugin installation. MenuBuilder 1.0.0 could not be installed from the Plugin Store or the
+command line; this release corrects the plugin handle and everything Craft derives from it.
+
+### Fixed
+
+* Corrected the Craft plugin handle to `menubuilder`, matching the Plugin Store listing. MenuBuilder
+  1.0.0 declared `menu-builder` in `composer.json`, so `php craft plugin/install menubuilder` and
+  Plugin Store installation both failed with *Invalid plugin: No plugin exists with the handle
+  "menubuilder"*.
+* Updated everything Craft derives from the handle: control-panel routes and URL rules, controller
+  action routes, the template root, the translation category, the control-panel navigation item, and
+  the project-config key (now `plugins.menubuilder.edition`).
+* Unified the internal cache, cache-tag, mutex, and API rate-limit key namespaces under
+  `menubuilder:`.
+* Updated the documentation to use the corrected handle, including the installation command, the
+  control-panel routes, and the plugin configuration filename.
+
+
 ## [1.0.0] - 2026-09-13
 
 First stable release of MenuBuilder for Craft CMS 5.

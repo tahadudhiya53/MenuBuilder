@@ -31,7 +31,7 @@ class MenuBuilderGroupService extends Component
     */
     private const MAX_STRING_LENGTH = 255;
 
-    private const CREATION_LOCK = 'menu-builder:create-menu';
+    private const CREATION_LOCK = 'menubuilder:create-menu';
 
     /** @var MenuBuilderGroup[]|null */
     private ?array $allCache = null;
@@ -103,7 +103,7 @@ class MenuBuilderGroupService extends Component
     /**
      * The edition ceiling is enforced here rather than in the controller, and only for a *new*
      * menu: this is the one path a menu can be created through (see {@see
-     * MenuBuilderMenuLimitService}), so a direct POST to `menu-builder/groups/save`, a console
+     * MenuBuilderMenuLimitService}), so a direct POST to `menubuilder/groups/save`, a console
      * command or third-party code all meet the same refusal.
     */
     public function save(MenuBuilderGroup $group, bool $runValidation = true): bool
@@ -115,7 +115,7 @@ class MenuBuilderGroupService extends Component
         $mutex = Craft::$app->getMutex();
 
         if (!$mutex->acquire(self::CREATION_LOCK, 15)) {
-            $group->addError('name', Craft::t('menu-builder', 'Another menu is being created. Please try again.'));
+            $group->addError('name', Craft::t('menubuilder', 'Another menu is being created. Please try again.'));
 
             return false;
         }
@@ -144,7 +144,7 @@ class MenuBuilderGroupService extends Component
             : new MenuBuilderGroupRecord();
 
         if (!$record) {
-            $group->addError('id', Craft::t('menu-builder', 'Navigation group not found.'));
+            $group->addError('id', Craft::t('menubuilder', 'Navigation group not found.'));
 
             return false;
         }
@@ -155,7 +155,7 @@ class MenuBuilderGroupService extends Component
             ->exists();
 
         if ($existing) {
-            $group->addError('handle', Craft::t('menu-builder', 'That handle is already in use.'));
+            $group->addError('handle', Craft::t('menubuilder', 'That handle is already in use.'));
 
             return false;
         }

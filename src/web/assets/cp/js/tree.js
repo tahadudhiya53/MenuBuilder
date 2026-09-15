@@ -207,7 +207,7 @@
                             .insertBefore($row.find('.menu-builder-item-actions'));
                     }
 
-                    var label = Craft.t('menu-builder', '{count} child items', { count: childCount });
+                    var label = Craft.t('menubuilder', '{count} child items', { count: childCount });
 
                     // The badge is a number plus a visually-hidden reading of what it counts (see
                     // dashboard/_items.twig).
@@ -283,7 +283,7 @@
                     return;
                 }
 
-                return window.MenuBuilder.request('POST', 'menu-builder/items/reorder', {
+                return window.MenuBuilder.request('POST', 'menubuilder/items/reorder', {
                     data: {
                         itemId: itemId,
                         groupId: self.groupId,
@@ -291,10 +291,10 @@
                         siblingIds: siblingIds,
                     },
                 }).then(function() {
-                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menu order updated.'));
+                    window.MenuBuilder.success(Craft.t('menubuilder', 'Menu order updated.'));
                 }).catch(function(error) {
                     self._reloading = true;
-                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'That move isn’t allowed.'));
+                    window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'That move isn’t allowed.'));
                     window.location.reload();
                 });
             });
@@ -496,7 +496,7 @@
             var bounds = this.levelBounds($prev, this.getSubtree($item).last().next('li.menu-builder-item'), this.subtreeDelta($item));
 
             if (!bounds || bounds.max < this.level($item) + 1) {
-                this.announce(Craft.t('menu-builder', 'Can’t nest this item any deeper here.'));
+                this.announce(Craft.t('menubuilder', 'Can’t nest this item any deeper here.'));
 
                 return false;
             }
@@ -559,7 +559,7 @@
             var siblingIds = this.getSiblingIds(parentId, level).map(String);
             var position = siblingIds.indexOf(String($item.data('id'))) + 1;
 
-            this.announce(Craft.t('menu-builder', '{title}: item {position} of {total}, level {level}.', {
+            this.announce(Craft.t('menubuilder', '{title}: item {position} of {total}, level {level}.', {
                 title: $item.data('title') || '',
                 position: position,
                 total: siblingIds.length,
@@ -598,10 +598,10 @@
             // notifications, so a link must not be able to put words into one.
             var title = $item.length ? ($item.data('title') || '') : '';
             var messages = {
-                added: Craft.t('menu-builder', '“{title}” added.', { title: title }),
-                duplicated: Craft.t('menu-builder', '“{title}” duplicated.', { title: title }),
-                saved: Craft.t('menu-builder', 'Menu item saved.'),
-                deleted: Craft.t('menu-builder', '{count} menu item(s) deleted.', { count: count }),
+                added: Craft.t('menubuilder', '“{title}” added.', { title: title }),
+                duplicated: Craft.t('menubuilder', '“{title}” duplicated.', { title: title }),
+                saved: Craft.t('menubuilder', 'Menu item saved.'),
+                deleted: Craft.t('menubuilder', '{count} menu item(s) deleted.', { count: count }),
             };
 
             if (messages[notice]) {
@@ -787,51 +787,51 @@
             if (enabled) {
                 $flag.remove();
             } else if (!$flag.length) {
-                $('<span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">' + Craft.t('menu-builder', 'Disabled') + '</span>')
+                $('<span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">' + Craft.t('menubuilder', 'Disabled') + '</span>')
                     .insertAfter($row.find('.menu-builder-item-type'));
             }
 
             // The row menu itself may be detached (see above), so reach its Disable/Enable entry by
             // id rather than through the row.
             Garnish.$bod.find('[data-mb-action="toggle"][data-id="' + id + '"]')
-                .text(enabled ? Craft.t('menu-builder', 'Disable') : Craft.t('menu-builder', 'Enable'));
+                .text(enabled ? Craft.t('menubuilder', 'Disable') : Craft.t('menubuilder', 'Enable'));
         },
 
         toggle: function(id) {
             var self = this;
 
-            return window.MenuBuilder.request('POST', 'menu-builder/items/toggle', { data: { id: id } })
+            return window.MenuBuilder.request('POST', 'menubuilder/items/toggle', { data: { id: id } })
                 .then(function(response) {
                     var enabled = !!(response.data && response.data.enabled);
                     self.setRowEnabled(id, enabled);
                     // "Updated." said nothing about which way it went, which matters most for the
                     // one editor who can't see the row's badge change.
                     window.MenuBuilder.success(enabled
-                        ? Craft.t('menu-builder', 'Menu item enabled.')
-                        : Craft.t('menu-builder', 'Menu item disabled.'));
+                        ? Craft.t('menubuilder', 'Menu item enabled.')
+                        : Craft.t('menubuilder', 'Menu item disabled.'));
                 })
                 .catch(function(error) {
-                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t update that menu item.'));
+                    window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t update that menu item.'));
                 });
         },
 
         duplicate: function(id) {
             var self = this;
 
-            return window.MenuBuilder.request('POST', 'menu-builder/items/duplicate', { data: { id: id } })
+            return window.MenuBuilder.request('POST', 'menubuilder/items/duplicate', { data: { id: id } })
                 .then(function(response) {
                     // The copy lands at the end of its level; reload straight to it rather than
                     // leaving the editor to find it.
                     self.reloadWith('duplicated', response.data && response.data.id);
                 })
                 .catch(function(error) {
-                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t duplicate that menu item.'));
+                    window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t duplicate that menu item.'));
                 });
         },
 
         remove: function(id, title, hasChildren) {
             if (!hasChildren) {
-                if (!confirm(Craft.t('menu-builder', 'Delete “{title}”? This cannot be undone.', { title: title }))) {
+                if (!confirm(Craft.t('menubuilder', 'Delete “{title}”? This cannot be undone.', { title: title }))) {
                     return;
                 }
 
@@ -869,10 +869,10 @@
             ).appendTo(Garnish.$bod);
 
             $('<h2></h2>')
-                .text(Craft.t('menu-builder', 'Delete “{title}”?', { title: title }))
+                .text(Craft.t('menubuilder', 'Delete “{title}”?', { title: title }))
                 .appendTo($modal.find('.body'));
             $('<p></p>')
-                .text(Craft.t('menu-builder', 'This item has {count} child item(s). Choose what happens to them. This cannot be undone.', { count: childCount }))
+                .text(Craft.t('menubuilder', 'This item has {count} child item(s). Choose what happens to them. This cannot be undone.', { count: childCount }))
                 .appendTo($modal.find('.body'));
 
             var $buttons = $modal.find('.buttons');
@@ -880,11 +880,11 @@
                 .text(Craft.t('app', 'Cancel'))
                 .appendTo($buttons);
             var $keep = $('<button type="button" class="btn"></button>')
-                .text(Craft.t('menu-builder', 'Keep children'))
-                .attr('title', Craft.t('menu-builder', 'The children move up one level.'))
+                .text(Craft.t('menubuilder', 'Keep children'))
+                .attr('title', Craft.t('menubuilder', 'The children move up one level.'))
                 .appendTo($buttons);
             var $deleteAll = $('<button type="button" class="btn submit delete"></button>')
-                .text(Craft.t('menu-builder', 'Delete all {count}', { count: childCount + 1 }))
+                .text(Craft.t('menubuilder', 'Delete all {count}', { count: childCount + 1 }))
                 .appendTo($buttons);
 
             var modal = new Garnish.Modal($modal, {
@@ -918,14 +918,14 @@
             var self = this;
 
             return this.withRowBusy(id, function() {
-                return window.MenuBuilder.request('POST', 'menu-builder/items/delete', { data: { id: id, keepChildren: keepChildren ? 1 : 0 } })
+                return window.MenuBuilder.request('POST', 'menubuilder/items/delete', { data: { id: id, keepChildren: keepChildren ? 1 : 0 } })
                     .then(function() {
                         // Deleting changes child counts, connector lines and sort order across the
                         // tree, so the server's answer is the only trustworthy one.
                         self.reloadWith('deleted');
                     })
                     .catch(function(error) {
-                        window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t delete that menu item.'));
+                        window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t delete that menu item.'));
                     });
             });
         },
@@ -1026,7 +1026,7 @@
                 .attr('data-level', this._draggeeLevel)
                 .css('--mb-level', this._draggeeLevel)
                 .find('.menu-builder-drop-position-label')
-                .text(Craft.t('menu-builder', 'Drop here'))
+                .text(Craft.t('menubuilder', 'Drop here'))
                 .end();
         },
 

@@ -3,7 +3,7 @@
 namespace Tahadudhiya\MenuBuilder\models;
 
 /**
- * The read-only REST API's configuration, as read from `config/menu-builder.php`.
+ * The read-only REST API's configuration, as read from `config/menubuilder.php`.
 */
 final class MenuBuilderApiConfig
 {
@@ -76,7 +76,7 @@ final class MenuBuilderApiConfig
     }
 
     /**
-     * Reads the `api` key of a `config/menu-builder.php` array.
+     * Reads the `api` key of a `config/menubuilder.php` array.
      *
      * @param mixed $config The whole config file's array, or anything at all.
     */

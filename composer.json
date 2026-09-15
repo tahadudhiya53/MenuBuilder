@@ -44,7 +44,7 @@
     },
     "extra": {
         "class": "Tahadudhiya\\MenuBuilder\\MenuBuilder",
-        "handle": "menu-builder",
+        "handle": "menubuilder",
         "name": "MenuBuilder",
         "developer": "Tahadudhiya",
         "documentationUrl": "https://github.com/tahadudhiya53/MenuBuilder#readme",

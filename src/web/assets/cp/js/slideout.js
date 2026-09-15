@@ -77,7 +77,7 @@
             return;
         }
 
-        if (isDirty && !confirm(Craft.t('menu-builder', 'You have unsaved changes. Leave without saving?'))) {
+        if (isDirty && !confirm(Craft.t('menubuilder', 'You have unsaved changes. Leave without saving?'))) {
             return;
         }
 
@@ -110,7 +110,7 @@
     window.MenuBuilder.openItemSlideout = function(params, onSaved) {
         build();
 
-        if (isOpen && isDirty && !confirm(Craft.t('menu-builder', 'You have unsaved changes. Leave without saving?'))) {
+        if (isOpen && isDirty && !confirm(Craft.t('menubuilder', 'You have unsaved changes. Leave without saving?'))) {
             return;
         }
 
@@ -122,13 +122,13 @@
         $panel.addClass('is-open');
         $shade.addClass('is-open');
         Garnish.$bod.addClass('menu-builder-slideout-open');
-        $title.text(Craft.t('menu-builder', 'Loading…'));
+        $title.text(Craft.t('menubuilder', 'Loading…'));
         // A bare spinner announces nothing; screen readers were told only that the dialog was
         // empty.
         $body
             .attr('aria-busy', 'true')
             .html('<div class="menu-builder-slideout-loading"><div class="spinner"></div><p class="light">' +
-                Craft.t('menu-builder', 'Loading menu item…') + '</p></div>');
+                Craft.t('menubuilder', 'Loading menu item…') + '</p></div>');
         $panel.attr('data-group-handle', params.groupHandle);
         $saveBtn.removeClass('hidden').prop('disabled', true);
         $panel.trigger('focus');
@@ -136,7 +136,7 @@
         // already implements the trap Craft's own slideouts use.
         Craft.trapFocusWithin($panel[0]);
 
-        window.MenuBuilder.request('GET', 'menu-builder/items/edit', { params: params })
+        window.MenuBuilder.request('GET', 'menubuilder/items/edit', { params: params })
             .then(function(response) {
                 $title.text(response.data.title);
                 $body.removeAttr('aria-busy').html(response.data.html);
@@ -163,13 +163,13 @@
                 Craft.setFocusWithin($body[0]);
             })
             .catch(function(error) {
-                $title.text(Craft.t('menu-builder', 'Menu item'));
+                $title.text(Craft.t('menubuilder', 'Menu item'));
                 $body
                     .removeAttr('aria-busy')
                     .html('')
                     .append(
                         $('<p class="error" role="alert"></p>').text(
-                            window.MenuBuilder.errorMessage(error, Craft.t('menu-builder', 'Couldn’t load that menu item.'))
+                            window.MenuBuilder.errorMessage(error, Craft.t('menubuilder', 'Couldn’t load that menu item.'))
                         )
                     );
                 $saveBtn.addClass('hidden');
@@ -243,7 +243,7 @@
         $spinner.removeClass('hidden');
         $body.attr('aria-busy', 'true');
 
-        window.MenuBuilder.request('POST', 'menu-builder/items/save', { data: payload })
+        window.MenuBuilder.request('POST', 'menubuilder/items/save', { data: payload })
             .then(function(response) {
                 isDirty = false;
                 var callback = currentOnSaved;
@@ -258,7 +258,7 @@
                 var shown = window.MenuBuilder.applyFieldErrors($form[0], window.MenuBuilder.errorsFor(error));
 
                 if (!shown) {
-                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t save that menu item.'));
+                    window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t save that menu item.'));
                 }
             })
             .finally(function() {

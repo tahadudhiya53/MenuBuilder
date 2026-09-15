@@ -46,7 +46,7 @@ class GroupsController extends BaseMenuBuilderController
         $group = MenuBuilder::getInstance()->groups->getById($id);
 
         if (!$group) {
-            return $this->asFailure(Craft::t('menu-builder', 'That menu no longer exists.'));
+            return $this->asFailure(Craft::t('menubuilder', 'That menu no longer exists.'));
         }
 
         $group->enabled = !$group->enabled;
@@ -54,11 +54,11 @@ class GroupsController extends BaseMenuBuilderController
 
         return $this->respondToMutation(
             $success,
-            Craft::t('menu-builder', 'Couldn’t update that menu.'),
+            Craft::t('menubuilder', 'Couldn’t update that menu.'),
             data: ['enabled' => $group->enabled],
             successMessage: $group->enabled
-                ? Craft::t('menu-builder', 'Menu enabled.')
-                : Craft::t('menu-builder', 'Menu disabled.'),
+                ? Craft::t('menubuilder', 'Menu enabled.')
+                : Craft::t('menubuilder', 'Menu disabled.'),
         );
     }
 
@@ -80,8 +80,8 @@ class GroupsController extends BaseMenuBuilderController
 
         return $this->respondToMutation(
             $success,
-            Craft::t('menu-builder', 'Couldn’t reorder the menus.'),
-            successMessage: Craft::t('menu-builder', 'Menus reordered.'),
+            Craft::t('menubuilder', 'Couldn’t reorder the menus.'),
+            successMessage: Craft::t('menubuilder', 'Menus reordered.'),
         );
     }
 
@@ -94,7 +94,7 @@ class GroupsController extends BaseMenuBuilderController
             'itemCount' => MenuBuilder::getInstance()->groups->countItems($group->id),
         ], $groups);
 
-        return $this->renderTemplate('menu-builder/groups/_index', [
+        return $this->renderTemplate('menubuilder/groups/_index', [
             'rows' => $rows,
             // One call, one shape — see MenuBuilderMenuLimitService::cpSummary().
             'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
@@ -116,7 +116,7 @@ class GroupsController extends BaseMenuBuilderController
                 if (!MenuBuilder::getInstance()->menuLimit->canCreateMenu()) {
                     Craft::$app->getSession()->setError(MenuBuilderMenuLimitService::limitMessage());
 
-                    return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+                    return $this->redirect(UrlHelper::cpUrl('menubuilder'));
                 }
 
                 $group = new MenuBuilderGroup();
@@ -124,7 +124,7 @@ class GroupsController extends BaseMenuBuilderController
         }
 
         // `edit` only needs `view`, so this form is reachable read-only.
-        return $this->renderTemplate('menu-builder/groups/_edit', [
+        return $this->renderTemplate('menubuilder/groups/_edit', [
             'group' => $group,
             'isNew' => $group->id === null,
             'itemCount' => $group->id !== null
@@ -173,12 +173,12 @@ class GroupsController extends BaseMenuBuilderController
         if (!MenuBuilder::getInstance()->groups->save($group)) {
             // asModelFailure() sets the error flash itself — setting one here as well surfaced
             // the same message twice in the CP.
-            return $this->asModelFailure($group, Craft::t('menu-builder', 'Couldn’t save that menu.'), 'group');
+            return $this->asModelFailure($group, Craft::t('menubuilder', 'Couldn’t save that menu.'), 'group');
         }
 
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu saved.'));
+        Craft::$app->getSession()->setSuccess(Craft::t('menubuilder', 'Menu saved.'));
 
-        return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menu-builder/' . $group->handle));
+        return $this->redirectToPostedUrl($group, UrlHelper::cpUrl('menubuilder/' . $group->handle));
     }
 
 
@@ -195,15 +195,15 @@ class GroupsController extends BaseMenuBuilderController
         $clone = MenuBuilder::getInstance()->groups->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu.'));
+            return $this->asFailure(Craft::t('menubuilder', 'Couldn’t duplicate that menu.'));
         }
 
         // The message matters on the non-JSON path: the edit screen's Duplicate is a form action
         // now, so it posts and redirects like an ordinary save and would otherwise land on a
         // generic flash.
-        return $this->asSuccess(Craft::t('menu-builder', 'Menu duplicated.'), data: [
+        return $this->asSuccess(Craft::t('menubuilder', 'Menu duplicated.'), data: [
             'id' => $clone->id,
-            'url' => UrlHelper::cpUrl('menu-builder/' . $clone->handle),
+            'url' => UrlHelper::cpUrl('menubuilder/' . $clone->handle),
         ]);
     }
 
@@ -218,9 +218,9 @@ class GroupsController extends BaseMenuBuilderController
         // from may well have been the deleted menu's own.
         return $this->respondToMutation(
             $success,
-            Craft::t('menu-builder', 'Couldn’t delete that menu.'),
-            successMessage: Craft::t('menu-builder', 'Menu deleted.'),
-            redirectUrl: UrlHelper::cpUrl('menu-builder'),
+            Craft::t('menubuilder', 'Couldn’t delete that menu.'),
+            successMessage: Craft::t('menubuilder', 'Menu deleted.'),
+            redirectUrl: UrlHelper::cpUrl('menubuilder'),
         );
     }
 }

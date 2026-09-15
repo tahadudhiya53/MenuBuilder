@@ -87,14 +87,14 @@ class MenuBuilder extends Plugin
     public string $schemaVersion = '1.0.0';
 
     /**
-     * The REST API's configuration, read from `config/menu-builder.php` once per request.
+     * The REST API's configuration, read from `config/menubuilder.php` once per request.
     */
     private static ?MenuBuilderApiConfig $apiConfig = null;
 
     public static function apiConfig(): MenuBuilderApiConfig
     {
         if (self::$apiConfig === null) {
-            $config = Craft::$app->getConfig()->getConfigFromFile('menu-builder');
+            $config = Craft::$app->getConfig()->getConfigFromFile('menubuilder');
 
             // getConfigFromFile() can hand back a callable or a BaseConfig for the config files
             // Craft itself owns.
@@ -151,7 +151,7 @@ class MenuBuilder extends Plugin
             View::class,
             View::EVENT_REGISTER_SITE_TEMPLATE_ROOTS,
             function(RegisterTemplateRootsEvent $event) {
-                $event->roots['menu-builder'] = __DIR__ . '/templates';
+                $event->roots['menubuilder'] = __DIR__ . '/templates';
             }
         );
 
@@ -159,12 +159,12 @@ class MenuBuilder extends Plugin
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
             function(RegisterUrlRulesEvent $event) {
-                $event->rules['menu-builder'] = 'menu-builder/groups/index';
-                $event->rules['menu-builder/groups/new'] = 'menu-builder/groups/edit';
-                $event->rules['menu-builder/groups/<groupId:\d+>'] = 'menu-builder/groups/edit';
-                $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>'] = 'menu-builder/dashboard/index';
-                $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/preview'] = 'menu-builder/preview/index';
-                $event->rules['menu-builder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/items/<itemId:\d+>'] = 'menu-builder/items/edit';
+                $event->rules['menubuilder'] = 'menubuilder/groups/index';
+                $event->rules['menubuilder/groups/new'] = 'menubuilder/groups/edit';
+                $event->rules['menubuilder/groups/<groupId:\d+>'] = 'menubuilder/groups/edit';
+                $event->rules['menubuilder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>'] = 'menubuilder/dashboard/index';
+                $event->rules['menubuilder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/preview'] = 'menubuilder/preview/index';
+                $event->rules['menubuilder/<groupHandle:[a-zA-Z][a-zA-Z0-9_]*>/items/<itemId:\d+>'] = 'menubuilder/items/edit';
             }
         );
 
@@ -179,12 +179,12 @@ class MenuBuilder extends Plugin
                 function(RegisterUrlRulesEvent $event) use ($apiConfig) {
                     $prefix = $apiConfig->routePrefix();
 
-                    $event->rules[$prefix . '/navigations'] = 'menu-builder/api/index';
+                    $event->rules[$prefix . '/navigations'] = 'menubuilder/api/index';
 
                     // Deliberately `[^/]+` rather than Craft's handle grammar: a handle-shaped
                     // pattern would let a malformed handle fall through to Craft's own 404, which
                     // is an HTML error page an API consumer has to parse.
-                    $event->rules[$prefix . '/navigations/<handle:[^/]+>'] = 'menu-builder/api/view';
+                    $event->rules[$prefix . '/navigations/<handle:[^/]+>'] = 'menubuilder/api/view';
                 }
             );
         }
@@ -205,7 +205,7 @@ class MenuBuilder extends Plugin
                 $components = MenuBuilderNavigationQuery::schemaComponents();
 
                 if ($components !== []) {
-                    $event->queries[Craft::t('menu-builder', 'MenuBuilder')] = $components;
+                    $event->queries[Craft::t('menubuilder', 'MenuBuilder')] = $components;
                 }
             }
         );
@@ -243,19 +243,19 @@ class MenuBuilder extends Plugin
                     'heading' => 'MenuBuilder',
                     'permissions' => [
                         'menuBuilder:view' => [
-                            'label' => Craft::t('menu-builder', 'View navigation'),
+                            'label' => Craft::t('menubuilder', 'View navigation'),
                         ],
                         'menuBuilder:create' => [
-                            'label' => Craft::t('menu-builder', 'Create menu items'),
+                            'label' => Craft::t('menubuilder', 'Create menu items'),
                         ],
                         'menuBuilder:edit' => [
-                            'label' => Craft::t('menu-builder', 'Edit menu items'),
+                            'label' => Craft::t('menubuilder', 'Edit menu items'),
                         ],
                         'menuBuilder:delete' => [
-                            'label' => Craft::t('menu-builder', 'Delete navigation groups and menus'),
+                            'label' => Craft::t('menubuilder', 'Delete navigation groups and menus'),
                         ],
                         'menuBuilder:manageSettings' => [
-                            'label' => Craft::t('menu-builder', 'Manage navigation groups (create, edit, and duplicate)'),
+                            'label' => Craft::t('menubuilder', 'Manage navigation groups (create, edit, and duplicate)'),
                         ],
                     ],
                 ];
@@ -312,7 +312,7 @@ class MenuBuilder extends Plugin
             return null;
         }
 
-        $item['label'] = Craft::t('menu-builder', 'MenuBuilder');
+        $item['label'] = Craft::t('menubuilder', 'MenuBuilder');
 
         $currentUser = Craft::$app->getUser()->getIdentity();
         $canView = $currentUser !== null
@@ -334,7 +334,7 @@ class MenuBuilder extends Plugin
             return null;
         }
 
-        $item['url'] = 'menu-builder';
+        $item['url'] = 'menubuilder';
         unset($item['subnav']);
 
         return $item;

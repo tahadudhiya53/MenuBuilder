@@ -59,8 +59,8 @@ trait NavMacroRendering
                 // The plugin's templates refer to each other the way Craft resolves them — by the
                 // registered `menu-builder` root (`preview/index.twig` does the same) — which a
                 // bare FilesystemLoader knows nothing about.
-                'menu-builder/_macros/tree' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
-                'menu-builder/_macros/tree.twig' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
+                'menubuilder/_macros/tree' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
+                'menubuilder/_macros/tree.twig' => file_get_contents(self::TEMPLATE_DIR . '/_macros/tree.twig'),
             ]),
         ]), [
             'autoescape' => 'html',

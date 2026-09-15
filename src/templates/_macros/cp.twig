@@ -12,7 +12,7 @@
  # the metadata key the controller reads are the same in both places, so the
  # controls have to be too.
  #
- #   {% import "menu-builder/_macros/cp" as cp %}
+ #   {% import "menubuilder/_macros/cp" as cp %}
  #}
 
 {#
@@ -24,18 +24,18 @@
  # sidebar has never shown it, because a disabled menu still previews.
  #}
 {% macro menuSidebar(groups, currentGroup, urlSuffix = '', showStatus = false) %}
-    <nav aria-label="{{ 'Menus'|t('menu-builder') }}">
+    <nav aria-label="{{ 'Menus'|t('menubuilder') }}">
         <ul>
             {% for g in groups %}
                 {% set isCurrent = currentGroup and g.id == currentGroup.id %}
                 <li>
-                    <a href="{{ url('menu-builder/' ~ g.handle ~ urlSuffix) }}"
+                    <a href="{{ url('menubuilder/' ~ g.handle ~ urlSuffix) }}"
                        class="{{ isCurrent ? 'sel' }}"
                        {% if isCurrent %}aria-current="page"{% endif %}>
                         <span class="label">{{ g.name }}</span>
                         {% if showStatus and not g.enabled %}
-                            <span class="status disabled" title="{{ 'Disabled'|t('menu-builder') }}"></span>
-                            <span class="visually-hidden">{{ "Disabled"|t('menu-builder') }}</span>
+                            <span class="status disabled" title="{{ 'Disabled'|t('menubuilder') }}"></span>
+                            <span class="visually-hidden">{{ "Disabled"|t('menubuilder') }}</span>
                         {% endif %}
                     </a>
                 </li>
@@ -58,14 +58,14 @@
         name: 'type',
         value: value,
         options: [
-            { label: "Entry"|t('menu-builder'), value: 'entry' },
-            { label: "Category"|t('menu-builder'), value: 'category' },
-            { label: "Asset"|t('menu-builder'), value: 'asset' },
-            { label: "Custom URL"|t('menu-builder'), value: 'url' },
-            { label: "Anchor"|t('menu-builder'), value: 'anchor' },
-            { label: "Non-clickable heading"|t('menu-builder'), value: 'nonclickable' },
-            { label: "Separator"|t('menu-builder'), value: 'separator' },
-            { label: "Dynamic navigation"|t('menu-builder'), value: 'dynamic' },
+            { label: "Entry"|t('menubuilder'), value: 'entry' },
+            { label: "Category"|t('menubuilder'), value: 'category' },
+            { label: "Asset"|t('menubuilder'), value: 'asset' },
+            { label: "Custom URL"|t('menubuilder'), value: 'url' },
+            { label: "Anchor"|t('menubuilder'), value: 'anchor' },
+            { label: "Non-clickable heading"|t('menubuilder'), value: 'nonclickable' },
+            { label: "Separator"|t('menubuilder'), value: 'separator' },
+            { label: "Dynamic navigation"|t('menubuilder'), value: 'dynamic' },
         ],
     }) }}
 {% endmacro %}
@@ -95,14 +95,14 @@
 {% macro dynamicSourceTypeField(id, value) %}
     {% import "_includes/forms" as forms %}
     {{ forms.selectField({
-        label: "Source"|t('menu-builder'),
+        label: "Source"|t('menubuilder'),
         id: id,
         name: 'dynamicSourceType',
         value: value,
         options: [
-            { label: "Entries (by section)"|t('menu-builder'), value: 'entries' },
-            { label: "Categories (by group)"|t('menu-builder'), value: 'categories' },
-            { label: "Assets (by volume)"|t('menu-builder'), value: 'assets' },
+            { label: "Entries (by section)"|t('menubuilder'), value: 'entries' },
+            { label: "Categories (by group)"|t('menubuilder'), value: 'categories' },
+            { label: "Assets (by volume)"|t('menubuilder'), value: 'assets' },
         ],
     }) }}
 {% endmacro %}
@@ -126,25 +126,25 @@
         {
             key: 'entries',
             id: ids.entries,
-            label: "Section"|t('menu-builder'),
-            instructions: "Children are pulled from this section."|t('menu-builder'),
-            placeholder: "Select a section…"|t('menu-builder'),
+            label: "Section"|t('menubuilder'),
+            instructions: "Children are pulled from this section."|t('menubuilder'),
+            placeholder: "Select a section…"|t('menubuilder'),
             options: craft.app.entries.getAllSections()|map(section => { label: section.name, value: section.id })|values,
         },
         {
             key: 'categories',
             id: ids.categories,
-            label: "Category group"|t('menu-builder'),
-            instructions: "Children are pulled from this category group."|t('menu-builder'),
-            placeholder: "Select a category group…"|t('menu-builder'),
+            label: "Category group"|t('menubuilder'),
+            instructions: "Children are pulled from this category group."|t('menubuilder'),
+            placeholder: "Select a category group…"|t('menubuilder'),
             options: craft.app.categories.getAllGroups()|map(categoryGroup => { label: categoryGroup.name, value: categoryGroup.id })|values,
         },
         {
             key: 'assets',
             id: ids.assets,
-            label: "Volume"|t('menu-builder'),
-            instructions: "Children are pulled from this asset volume."|t('menu-builder'),
-            placeholder: "Select a volume…"|t('menu-builder'),
+            label: "Volume"|t('menubuilder'),
+            instructions: "Children are pulled from this asset volume."|t('menubuilder'),
+            placeholder: "Select a volume…"|t('menubuilder'),
             options: craft.app.volumes.getAllVolumes()|map(volume => { label: volume.name, value: volume.id })|values,
         },
     ] %}

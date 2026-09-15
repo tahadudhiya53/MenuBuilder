@@ -1,14 +1,14 @@
 {% extends "_layouts/cp" %}
 
-{% set title = "Menus"|t('menu-builder') %}
+{% set title = "Menus"|t('menubuilder') %}
 
 {% block actionButton %}
     {% if canManageSettings %}
         {% if edition.canCreate %}
-            <a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a>
+            <a href="{{ url('menubuilder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menubuilder') }}</a>
         {% else %}
             {# The button stays, and answers. #}
-            <button type="button" class="btn add icon" data-mb-action="upgrade-required">{{ "New menu"|t('menu-builder') }}</button>
+            <button type="button" class="btn add icon" data-mb-action="upgrade-required">{{ "New menu"|t('menubuilder') }}</button>
         {% endif %}
     {% endif %}
 {% endblock %}
@@ -18,28 +18,28 @@
     <div class="menu-builder-edition">
         <div class="menu-builder-edition-facts">
             <div class="menu-builder-edition-fact">
-                <span class="menu-builder-edition-label">{{ "Edition"|t('menu-builder') }}</span>
+                <span class="menu-builder-edition-label">{{ "Edition"|t('menubuilder') }}</span>
                 <span class="menu-builder-edition-value">{{ edition.editionName }}</span>
             </div>
             <div class="menu-builder-edition-fact">
-                <span class="menu-builder-edition-label">{{ "Menus"|t('menu-builder') }}</span>
+                <span class="menu-builder-edition-label">{{ "Menus"|t('menubuilder') }}</span>
                 <span class="menu-builder-edition-value">
                     {%- if edition.maxMenus is null -%}
-                        {{ "Unlimited"|t('menu-builder') }}
+                        {{ "Unlimited"|t('menubuilder') }}
                     {%- else -%}
-                        {{ "{count} / {max}"|t('menu-builder', { count: edition.menuCount, max: edition.maxMenus }) }}
+                        {{ "{count} / {max}"|t('menubuilder', { count: edition.menuCount, max: edition.maxMenus }) }}
                     {%- endif -%}
                 </span>
             </div>
             {% if edition.isPro and edition.licenseActive %}
                 <div class="menu-builder-edition-fact">
-                    <span class="menu-builder-edition-label">{{ "License"|t('menu-builder') }}</span>
-                    <span class="menu-builder-edition-value"><span class="status green"></span>{{ "Active"|t('menu-builder') }}</span>
+                    <span class="menu-builder-edition-label">{{ "License"|t('menubuilder') }}</span>
+                    <span class="menu-builder-edition-value"><span class="status green"></span>{{ "Active"|t('menubuilder') }}</span>
                 </div>
             {% endif %}
         </div>
         {% if not edition.isPro and edition.upgradeUrl %}
-            <a href="{{ edition.upgradeUrl }}" class="btn menu-builder-edition-upgrade">{{ "Upgrade to Pro"|t('menu-builder') }}</a>
+            <a href="{{ edition.upgradeUrl }}" class="btn menu-builder-edition-upgrade">{{ "Upgrade to Pro"|t('menubuilder') }}</a>
         {% endif %}
     </div>
 
@@ -55,7 +55,7 @@
 
     {% if canReorder %}
         <p id="menu-builder-group-reorder-help" class="visually-hidden">
-            {{ "Up and down arrows move this menu within the list. Changes save as you go."|t('menu-builder') }}
+            {{ "Up and down arrows move this menu within the list. Changes save as you go."|t('menubuilder') }}
         </p>
     {% endif %}
 
@@ -65,14 +65,14 @@
                 <thead>
                     <tr>
                         {% if canReorder %}
-                            <td class="thin"><span class="visually-hidden">{{ "Reorder"|t('menu-builder') }}</span></td>
+                            <td class="thin"><span class="visually-hidden">{{ "Reorder"|t('menubuilder') }}</span></td>
                         {% endif %}
-                        <th scope="col">{{ "Name"|t('menu-builder') }}</th>
-                        <th scope="col">{{ "Handle"|t('menu-builder') }}</th>
-                        <th scope="col">{{ "Status"|t('menu-builder') }}</th>
-                        <th scope="col">{{ "Items"|t('menu-builder') }}</th>
-                        <th scope="col">{{ "Last updated"|t('menu-builder') }}</th>
-                        <td class="thin"><span class="visually-hidden">{{ "Actions"|t('menu-builder') }}</span></td>
+                        <th scope="col">{{ "Name"|t('menubuilder') }}</th>
+                        <th scope="col">{{ "Handle"|t('menubuilder') }}</th>
+                        <th scope="col">{{ "Status"|t('menubuilder') }}</th>
+                        <th scope="col">{{ "Items"|t('menubuilder') }}</th>
+                        <th scope="col">{{ "Last updated"|t('menubuilder') }}</th>
+                        <td class="thin"><span class="visually-hidden">{{ "Actions"|t('menubuilder') }}</span></td>
                     </tr>
                 </thead>
                 <tbody>
@@ -90,13 +90,13 @@
                                     <a class="menu-builder-drag-handle move icon"
                                        role="button"
                                        tabindex="0"
-                                       title="{{ 'Drag to reorder, or use the arrow keys'|t('menu-builder') }}"
-                                       aria-label="{{ 'Reorder {name}. Use the up and down arrow keys to move it within the list.'|t('menu-builder', { name: group.name }) }}"
+                                       title="{{ 'Drag to reorder, or use the arrow keys'|t('menubuilder') }}"
+                                       aria-label="{{ 'Reorder {name}. Use the up and down arrow keys to move it within the list.'|t('menubuilder', { name: group.name }) }}"
                                        aria-describedby="menu-builder-group-reorder-help"></a>
                                 </td>
                             {% endif %}
                             <th scope="row">
-                                <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ group.name }}</a>
+                                <a href="{{ url('menubuilder/' ~ group.handle) }}">{{ group.name }}</a>
                             </th>
                             <td><code>{{ group.handle }}</code></td>
                             <td>
@@ -105,20 +105,20 @@
                                    ''` was an empty circle that read as "no status" rather than
                                    "off".
                                 #}
-                                <span class="status {{ group.enabled ? 'green' : 'disabled' }}"></span><span class="menu-builder-status-label">{{ group.enabled ? "Enabled"|t('menu-builder') : "Disabled"|t('menu-builder') }}</span>
+                                <span class="status {{ group.enabled ? 'green' : 'disabled' }}"></span><span class="menu-builder-status-label">{{ group.enabled ? "Enabled"|t('menubuilder') : "Disabled"|t('menubuilder') }}</span>
                             </td>
                             <td>{{ row.itemCount }}</td>
                             <td>{{ group.dateUpdated ? group.dateUpdated|datetime('short') : '' }}</td>
                             <td class="thin">
                                 <div class="menu-builder-row-actions">
-                                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {name}'|t('menu-builder', { name: group.name }) }}"></button>
+                                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menubuilder') }}" aria-label="{{ 'Actions for {name}'|t('menubuilder', { name: group.name }) }}"></button>
                                     <div class="menu">
                                         <ul>
-                                            <li><a href="{{ url('menu-builder/' ~ group.handle) }}" role="button">{{ "Edit menu items"|t('menu-builder') }}</a></li>
-                                            <li><a href="{{ url('menu-builder/groups/' ~ group.id) }}" role="button">{{ canManageSettings ? "Menu settings"|t('menu-builder') : "View menu settings"|t('menu-builder') }}</a></li>
+                                            <li><a href="{{ url('menubuilder/' ~ group.handle) }}" role="button">{{ "Edit menu items"|t('menubuilder') }}</a></li>
+                                            <li><a href="{{ url('menubuilder/groups/' ~ group.id) }}" role="button">{{ canManageSettings ? "Menu settings"|t('menubuilder') : "View menu settings"|t('menubuilder') }}</a></li>
                                             {% if canManageSettings %}
-                                                <li><a data-mb-action="toggle-group" data-id="{{ group.id }}" role="button">{{ group.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}</a></li>
-                                                <li><a data-mb-action="duplicate-group" data-id="{{ group.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a></li>
+                                                <li><a data-mb-action="toggle-group" data-id="{{ group.id }}" role="button">{{ group.enabled ? "Disable"|t('menubuilder') : "Enable"|t('menubuilder') }}</a></li>
+                                                <li><a data-mb-action="duplicate-group" data-id="{{ group.id }}" role="button">{{ "Duplicate"|t('menubuilder') }}</a></li>
                                             {% endif %}
                                         </ul>
                                         {% if canDelete %}
@@ -137,14 +137,14 @@
         </div>
     {% else %}
         <div class="zilch">
-            <p>{{ "No menus yet"|t('menu-builder') }}</p>
-            <p class="light">{{ "A menu holds the items your templates render as navigation."|t('menu-builder') }}</p>
+            <p>{{ "No menus yet"|t('menubuilder') }}</p>
+            <p class="light">{{ "A menu holds the items your templates render as navigation."|t('menubuilder') }}</p>
             {% if canManageSettings and edition.canCreate %}
-                <p><a href="{{ url('menu-builder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menu-builder') }}</a></p>
+                <p><a href="{{ url('menubuilder/groups/new') }}" class="btn submit add icon">{{ "New menu"|t('menubuilder') }}</a></p>
             {% elseif canManageSettings %}
                 <p class="light">{{ edition.limitMessage }}</p>
             {% else %}
-                <p class="light">{{ "You don’t have permission to create menus."|t('menu-builder') }}</p>
+                <p class="light">{{ "You don’t have permission to create menus."|t('menubuilder') }}</p>
             {% endif %}
         </div>
     {% endif %}
@@ -198,7 +198,7 @@
                 return;
             }
 
-            if (window.confirm(message + '\n\n' + Craft.t('menu-builder', 'Upgrade to Pro?'))) {
+            if (window.confirm(message + '\n\n' + Craft.t('menubuilder', 'Upgrade to Pro?'))) {
                 window.location.href = upgradeUrl;
             }
         });
@@ -207,8 +207,8 @@
     document.querySelectorAll('[data-mb-action="duplicate-group"]').forEach(function(link) {
         link.addEventListener('click', function(event) {
             event.preventDefault();
-            run(link, 'menu-builder/groups/duplicate', { id: link.getAttribute('data-id') },
-                Craft.t('menu-builder', 'Couldn’t duplicate that menu.'),
+            run(link, 'menubuilder/groups/duplicate', { id: link.getAttribute('data-id') },
+                Craft.t('menubuilder', 'Couldn’t duplicate that menu.'),
                 function(response) {
                     // Straight to the copy, which is what the editor wants to rename — the list
                     // reload used to leave them hunting for a row named "… 1" somewhere in the
@@ -224,8 +224,8 @@
 
             var id = link.getAttribute('data-id');
 
-            run(link, 'menu-builder/groups/toggle', { id: id },
-                Craft.t('menu-builder', 'Couldn’t update that menu.'),
+            run(link, 'menubuilder/groups/toggle', { id: id },
+                Craft.t('menubuilder', 'Couldn’t update that menu.'),
                 function(response) {
                     // Patched in place rather than reloaded: a full reload for a status flip threw
                     // away scroll position and wiped the confirmation it had just raised.
@@ -242,8 +242,8 @@
 
                         if (statusLabel) {
                             statusLabel.textContent = enabled
-                                ? Craft.t('menu-builder', 'Enabled')
-                                : Craft.t('menu-builder', 'Disabled');
+                                ? Craft.t('menubuilder', 'Enabled')
+                                : Craft.t('menubuilder', 'Disabled');
                         }
 
                         row.removeAttribute('aria-busy');
@@ -256,15 +256,15 @@
                     var toggle = document.querySelector('[data-mb-action="toggle-group"][data-id="' + id + '"]');
                     if (toggle) {
                         toggle.textContent = enabled
-                            ? Craft.t('menu-builder', 'Disable')
-                            : Craft.t('menu-builder', 'Enable');
+                            ? Craft.t('menubuilder', 'Disable')
+                            : Craft.t('menubuilder', 'Enable');
                     }
 
                     delete busy[id];
 
                     window.MenuBuilder.success(enabled
-                        ? Craft.t('menu-builder', 'Menu enabled.')
-                        : Craft.t('menu-builder', 'Menu disabled.'));
+                        ? Craft.t('menubuilder', 'Menu enabled.')
+                        : Craft.t('menubuilder', 'Menu disabled.'));
                 });
         });
     });
@@ -296,14 +296,14 @@
                 function(row) { return row.getAttribute('data-id'); }
             );
 
-            Craft.sendActionRequest('POST', 'menu-builder/groups/reorder', { data: { ids: ids } })
+            Craft.sendActionRequest('POST', 'menubuilder/groups/reorder', { data: { ids: ids } })
                 .then(function() {
                     saving = false;
-                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menus reordered.'));
+                    window.MenuBuilder.success(Craft.t('menubuilder', 'Menus reordered.'));
                 })
                 .catch(function(error) {
                     saving = false;
-                    window.MenuBuilder.displayError(error, Craft.t('menu-builder', 'Couldn’t reorder the menus.'));
+                    window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'Couldn’t reorder the menus.'));
 
                     // The server is the order of record, and it just refused this one.
                     window.location.reload();
@@ -370,8 +370,8 @@
             // Say how much is about to go: "and all of its menu items" gave no sense of whether
             // that was two items or two hundred.
             var message = itemCount
-                ? Craft.t('menu-builder', 'Delete “{name}” and its {count} menu item(s)? This cannot be undone.', { name: name, count: itemCount })
-                : Craft.t('menu-builder', 'Delete “{name}”? This cannot be undone.', { name: name });
+                ? Craft.t('menubuilder', 'Delete “{name}” and its {count} menu item(s)? This cannot be undone.', { name: name, count: itemCount })
+                : Craft.t('menubuilder', 'Delete “{name}”? This cannot be undone.', { name: name });
 
             if (!confirm(message)) {
                 return;
@@ -379,8 +379,8 @@
 
             var id = link.getAttribute('data-id');
 
-            run(link, 'menu-builder/groups/delete', { id: id },
-                Craft.t('menu-builder', 'Couldn’t delete that menu.'),
+            run(link, 'menubuilder/groups/delete', { id: id },
+                Craft.t('menubuilder', 'Couldn’t delete that menu.'),
                 function() {
                     var row = document.querySelector('tr[data-id="' + id + '"]');
                     var table = row && row.closest('table');
@@ -389,7 +389,7 @@
                         row.remove();
                     }
 
-                    window.MenuBuilder.success(Craft.t('menu-builder', 'Menu deleted.'));
+                    window.MenuBuilder.success(Craft.t('menubuilder', 'Menu deleted.'));
 
                     // Nothing left to list — reload so the empty state (and its "New menu" call
                     // to action) replaces the bare table.

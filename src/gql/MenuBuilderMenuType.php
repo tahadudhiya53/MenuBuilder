@@ -20,7 +20,7 @@ class MenuBuilderMenuType
     {
         return GqlEntityRegistry::getOrCreate(self::NAME, fn() => new ObjectType([
             'name' => self::NAME,
-            'description' => Craft::t('menu-builder', 'A navigation selected by a MenuBuilder Navigation field.'),
+            'description' => Craft::t('menubuilder', 'A navigation selected by a MenuBuilder Navigation field.'),
             'fields' => self::fieldDefinitions(),
         ]));
     }
@@ -36,31 +36,31 @@ class MenuBuilderMenuType
             'uid' => [
                 'name' => 'uid',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'The selected navigation’s UID — stable across handle renames and environments.'),
+                'description' => Craft::t('menubuilder', 'The selected navigation’s UID — stable across handle renames and environments.'),
                 'resolve' => static fn(MenuBuilderFieldValue $value) => $value->groupUid,
             ],
             'handle' => [
                 'name' => 'handle',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'The selected navigation’s handle, or null if it no longer exists.'),
+                'description' => Craft::t('menubuilder', 'The selected navigation’s handle, or null if it no longer exists.'),
                 'resolve' => static fn(MenuBuilderFieldValue $value) => $value->getHandle(),
             ],
             'name' => [
                 'name' => 'name',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'The selected navigation’s name, or null if it no longer exists.'),
+                'description' => Craft::t('menubuilder', 'The selected navigation’s name, or null if it no longer exists.'),
                 'resolve' => static fn(MenuBuilderFieldValue $value) => $value->getName(),
             ],
             'exists' => [
                 'name' => 'exists',
                 'type' => Type::nonNull(Type::boolean()),
-                'description' => Craft::t('menu-builder', 'Whether the selected navigation still exists.'),
+                'description' => Craft::t('menubuilder', 'Whether the selected navigation still exists.'),
                 'resolve' => static fn(MenuBuilderFieldValue $value) => $value->exists(),
             ],
             'enabled' => [
                 'name' => 'enabled',
                 'type' => Type::nonNull(Type::boolean()),
-                'description' => Craft::t('menu-builder', 'Whether the selected navigation is enabled. A disabled navigation renders nothing.'),
+                'description' => Craft::t('menubuilder', 'Whether the selected navigation is enabled. A disabled navigation renders nothing.'),
                 'resolve' => static fn(MenuBuilderFieldValue $value) => $value->isEnabled(),
             ],
         ];

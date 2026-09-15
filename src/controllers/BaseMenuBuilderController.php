@@ -145,9 +145,9 @@ abstract class BaseMenuBuilderController extends Controller
             return $group;
         }
 
-        Craft::$app->getSession()->setError(Craft::t('menu-builder', 'That navigation menu doesn’t exist.'));
+        Craft::$app->getSession()->setError(Craft::t('menubuilder', 'That navigation menu doesn’t exist.'));
 
-        return $this->redirect(UrlHelper::cpUrl('menu-builder'));
+        return $this->redirect(UrlHelper::cpUrl('menubuilder'));
     }
 
     /**
@@ -208,7 +208,7 @@ abstract class BaseMenuBuilderController extends Controller
 
         if ($success) {
             Craft::$app->getSession()->setSuccess(
-                $successMessage ?? Craft::t('menu-builder', 'Changes saved.')
+                $successMessage ?? Craft::t('menubuilder', 'Changes saved.')
             );
         } else {
             Craft::$app->getSession()->setError($failureMessage);

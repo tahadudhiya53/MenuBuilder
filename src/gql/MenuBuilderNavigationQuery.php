@@ -30,14 +30,14 @@ class MenuBuilderNavigationQuery
                 'type' => MenuBuilderNavigationType::getType(),
                 'args' => self::arguments(withHandle: true),
                 'resolve' => MenuBuilderNavigationResolver::class . '::resolveOne',
-                'description' => Craft::t('menu-builder', 'Query one MenuBuilder navigation by handle. Returns null when the menu doesn’t exist, is disabled, isn’t available on the requested site, or isn’t in this schema’s scope.'),
+                'description' => Craft::t('menubuilder', 'Query one MenuBuilder navigation by handle. Returns null when the menu doesn’t exist, is disabled, isn’t available on the requested site, or isn’t in this schema’s scope.'),
                 'complexity' => GqlHelper::singleQueryComplexity(),
             ],
             'menuBuilderNavigations' => [
                 'type' => Type::nonNull(Type::listOf(Type::nonNull(MenuBuilderNavigationType::getType()))),
                 'args' => self::arguments(),
                 'resolve' => MenuBuilderNavigationResolver::class . '::resolveAll',
-                'description' => Craft::t('menu-builder', 'Query every enabled MenuBuilder navigation this schema may read, on the requested site.'),
+                'description' => Craft::t('menubuilder', 'Query every enabled MenuBuilder navigation this schema may read, on the requested site.'),
                 'complexity' => GqlHelper::nPlus1Complexity(),
             ],
         ];
@@ -56,7 +56,7 @@ class MenuBuilderNavigationQuery
             $args['handle'] = [
                 'name' => 'handle',
                 'type' => Type::nonNull(Type::string()),
-                'description' => Craft::t('menu-builder', 'The navigation’s handle.'),
+                'description' => Craft::t('menubuilder', 'The navigation’s handle.'),
             ];
         }
 
@@ -64,22 +64,22 @@ class MenuBuilderNavigationQuery
             'site' => [
                 'name' => 'site',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'The site to resolve for, by handle. Defaults to the request’s site. Must be a site this schema is allowed to query.'),
+                'description' => Craft::t('menubuilder', 'The site to resolve for, by handle. Defaults to the request’s site. Must be a site this schema is allowed to query.'),
             ],
             'siteId' => [
                 'name' => 'siteId',
                 'type' => Type::int(),
-                'description' => Craft::t('menu-builder', 'The site to resolve for, by ID. An alternative to `site`; giving both is only valid if they name the same site.'),
+                'description' => Craft::t('menubuilder', 'The site to resolve for, by ID. An alternative to `site`; giving both is only valid if they name the same site.'),
             ],
             'currentUri' => [
                 'name' => 'currentUri',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'The URI of the page being rendered, so `isActive` and `isActiveAncestor` can be computed. Without it, both are false — a GraphQL request has no current page of its own.'),
+                'description' => Craft::t('menubuilder', 'The URI of the page being rendered, so `isActive` and `isActiveAncestor` can be computed. Without it, both are false — a GraphQL request has no current page of its own.'),
             ],
             'viewport' => [
                 'name' => 'viewport',
                 'type' => Type::string(),
-                'description' => Craft::t('menu-builder', 'Reshape the menu for one viewport — “desktop” or “mobile”: items restricted to the other one are removed, and mobile order is applied. Omit for the unshaped menu.'),
+                'description' => Craft::t('menubuilder', 'Reshape the menu for one viewport — “desktop” or “mobile”: items restricted to the other one are removed, and mobile order is applied. Omit for the unshaped menu.'),
             ],
         ];
     }
@@ -101,7 +101,7 @@ class MenuBuilderNavigationQuery
             }
 
             $components["$component:read"] = [
-                'label' => Craft::t('menu-builder', 'View the “{menu}” navigation', ['menu' => $group->name]),
+                'label' => Craft::t('menubuilder', 'View the “{menu}” navigation', ['menu' => $group->name]),
             ];
         }
 

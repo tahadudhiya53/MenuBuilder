@@ -1,12 +1,12 @@
 {% set typeLabels = {
-    entry: 'Entry'|t('menu-builder'),
-    category: 'Category'|t('menu-builder'),
-    asset: 'Asset'|t('menu-builder'),
-    url: 'Custom Link'|t('menu-builder'),
-    anchor: 'Anchor'|t('menu-builder'),
-    nonclickable: 'Heading'|t('menu-builder'),
-    separator: 'Separator'|t('menu-builder'),
-    dynamic: 'Dynamic'|t('menu-builder'),
+    entry: 'Entry'|t('menubuilder'),
+    category: 'Category'|t('menubuilder'),
+    asset: 'Asset'|t('menubuilder'),
+    url: 'Custom Link'|t('menubuilder'),
+    anchor: 'Anchor'|t('menubuilder'),
+    nonclickable: 'Heading'|t('menubuilder'),
+    separator: 'Separator'|t('menubuilder'),
+    dynamic: 'Dynamic'|t('menubuilder'),
 } %}
 
 {% set canSelect = canEdit or canDelete %}
@@ -24,8 +24,8 @@
     {% set itemLabel = (item.title is not null and item.title|trim != '')
         ? item.title
         : (item.type in ['entry', 'category', 'asset']
-            ? "(uses linked element's title)"|t('menu-builder')
-            : "(untitled)"|t('menu-builder')) %}
+            ? "(uses linked element's title)"|t('menubuilder')
+            : "(untitled)"|t('menubuilder')) %}
 
     {#
        One lookup per row; healthy items are in the map too, so a missing key means "not checked"
@@ -41,7 +41,7 @@
         <div class="menu-builder-item-row">
             {% if canSelect %}
                 <label class="menu-builder-bulk-checkbox">
-                    <input type="checkbox" data-mb-bulk-select data-id="{{ item.id }}" aria-label="{{ 'Select {title}'|t('menu-builder', { title: itemLabel }) }}">
+                    <input type="checkbox" data-mb-bulk-select data-id="{{ item.id }}" aria-label="{{ 'Select {title}'|t('menubuilder', { title: itemLabel }) }}">
                 </label>
             {% endif %}
 
@@ -54,15 +54,15 @@
                 <a class="menu-builder-drag-handle move icon"
                    role="button"
                    tabindex="0"
-                   title="{{ 'Drag to reorder, or use the arrow keys'|t('menu-builder') }}"
-                   aria-label="{{ 'Reorder {title}. Use the arrow keys to move it up, down, or in and out one level.'|t('menu-builder', { title: itemLabel }) }}"
+                   title="{{ 'Drag to reorder, or use the arrow keys'|t('menubuilder') }}"
+                   aria-label="{{ 'Reorder {title}. Use the arrow keys to move it up, down, or in and out one level.'|t('menubuilder', { title: itemLabel }) }}"
                    aria-describedby="menu-builder-reorder-help"></a>
             {% elseif canEdit %}
                 {#
                    Reordering is off while a search filters the tree — the rows on screen aren't
                    the real sibling set.
                 #}
-                <span class="menu-builder-drag-handle move icon is-disabled" aria-hidden="true" title="{{ 'Clear the search to reorder items.'|t('menu-builder') }}"></span>
+                <span class="menu-builder-drag-handle move icon is-disabled" aria-hidden="true" title="{{ 'Clear the search to reorder items.'|t('menubuilder') }}"></span>
             {% endif %}
 
             <span class="menu-builder-item-title">
@@ -78,13 +78,13 @@
                which one" is answerable without opening the slide-out.
             #}
             {% if item.hasBadge() %}
-                <span class="menu-builder-item-badge badge {{ item.badgeStyle() ? 'menu-builder-item-badge--' ~ item.badgeStyle() }}" title="{{ 'Badge'|t('menu-builder') }}">{{ item.badge }}</span>
+                <span class="menu-builder-item-badge badge {{ item.badgeStyle() ? 'menu-builder-item-badge--' ~ item.badgeStyle() }}" title="{{ 'Badge'|t('menubuilder') }}">{{ item.badge }}</span>
             {% endif %}
 
             <span class="menu-builder-item-type badge">{{ typeLabels[item.type] ?? item.type }}</span>
 
             {% if item.metadata.megaMenu.enabled ?? false %}
-                <span class="menu-builder-item-status badge" title="{{ 'This item presents its children as a mega menu.'|t('menu-builder') }}">{{ "Mega menu"|t('menu-builder') }}</span>
+                <span class="menu-builder-item-status badge" title="{{ 'This item presents its children as a mega menu.'|t('menubuilder') }}">{{ "Mega menu"|t('menubuilder') }}</span>
             {% endif %}
 
             {% if not item.enabled %}
@@ -93,7 +93,7 @@
                    with the mega-menu and link-health badges, so the JS that adds/removes this one
                    on toggle needs a selector that can't collide with them (see tree.js `toggle()`).
                 #}
-                <span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">{{ "Disabled"|t('menu-builder') }}</span>
+                <span class="menu-builder-item-status menu-builder-item-disabled-flag badge disabled-badge">{{ "Disabled"|t('menubuilder') }}</span>
             {% endif %}
 
             {#
@@ -114,15 +114,15 @@
                    `title` alone is not reliably announced, and a bare number read out on its own
                    says nothing about what it counts.
                 #}
-                <span class="menu-builder-item-childcount light" title="{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}">
+                <span class="menu-builder-item-childcount light" title="{{ '{count} child items'|t('menubuilder', { count: item.children|length }) }}">
                     <span aria-hidden="true">{{ item.children|length }}</span>
-                    <span class="visually-hidden">{{ '{count} child items'|t('menu-builder', { count: item.children|length }) }}</span>
+                    <span class="visually-hidden">{{ '{count} child items'|t('menubuilder', { count: item.children|length }) }}</span>
                 </span>
             {% endif %}
 
             {% if canEdit or canCreate or canDelete %}
                 <div class="menu-builder-item-actions">
-                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menu-builder') }}" aria-label="{{ 'Actions for {title}'|t('menu-builder', { title: itemLabel }) }}"></button>
+                    <button type="button" class="btn small settings icon menubtn" title="{{ 'Actions'|t('menubuilder') }}" aria-label="{{ 'Actions for {title}'|t('menubuilder', { title: itemLabel }) }}"></button>
                     <div class="menu">
                         <ul>
                             {% if canEdit %}
@@ -132,7 +132,7 @@
                             {% endif %}
                             {% if canCreate %}
                                 <li>
-                                    <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menu-builder') }}</a>
+                                    <a data-mb-action="duplicate" data-id="{{ item.id }}" role="button">{{ "Duplicate"|t('menubuilder') }}</a>
                                 </li>
                             {% endif %}
                         </ul>
@@ -141,7 +141,7 @@
                             <hr>
                             <ul>
                                 <li>
-                                    <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Fix this link…"|t('menu-builder') }}</a>
+                                    <a data-mb-action="edit" data-id="{{ item.id }}" role="button">{{ "Fix this link…"|t('menubuilder') }}</a>
                                 </li>
                             </ul>
                         {% endif %}
@@ -150,7 +150,7 @@
                             {% if canEdit %}
                                 <li>
                                     <a data-mb-action="toggle" data-id="{{ item.id }}" role="button">
-                                        {{ item.enabled ? "Disable"|t('menu-builder') : "Enable"|t('menu-builder') }}
+                                        {{ item.enabled ? "Disable"|t('menubuilder') : "Enable"|t('menubuilder') }}
                                     </a>
                                 </li>
                             {% endif %}
@@ -170,7 +170,7 @@
         {# This item's own column (level - 1) stays open for its descendants
            only while it still has a sibling below to reach. Level-1 rows own
            no column, hence the level check. #}
-        {% include "menu-builder/dashboard/_items" with treeContext|merge({
+        {% include "menubuilder/dashboard/_items" with treeContext|merge({
             items: item.children,
             level: level + 1,
             parentId: item.id,

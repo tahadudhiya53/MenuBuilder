@@ -89,10 +89,10 @@ class ItemsController extends BaseMenuBuilderController
 
         if (Craft::$app->getRequest()->getIsAjax() && Craft::$app->getRequest()->getAcceptsJson()) {
             $view = $this->getView();
-            $html = $view->renderTemplate('menu-builder/items/_fields', $variables);
+            $html = $view->renderTemplate('menubuilder/items/_fields', $variables);
 
             return $this->asJson([
-                'title' => $variables['isNew'] ? Craft::t('menu-builder', 'New menu item') : $this->itemLabel($item),
+                'title' => $variables['isNew'] ? Craft::t('menubuilder', 'New menu item') : $this->itemLabel($item),
                 'html' => $html,
                 'headHtml' => $view->getHeadHtml(),
                 'footHtml' => $view->getBodyHtml(),
@@ -102,7 +102,7 @@ class ItemsController extends BaseMenuBuilderController
             ]);
         }
 
-        return $this->renderTemplate('menu-builder/items/_edit', $variables);
+        return $this->renderTemplate('menubuilder/items/_edit', $variables);
     }
 
     /**
@@ -112,7 +112,7 @@ class ItemsController extends BaseMenuBuilderController
     {
         $title = trim((string)$item->title);
 
-        return $title !== '' ? $title : Craft::t('menu-builder', '(untitled)');
+        return $title !== '' ? $title : Craft::t('menubuilder', '(untitled)');
     }
 
     public function actionSave(): ?Response
@@ -189,7 +189,7 @@ class ItemsController extends BaseMenuBuilderController
             // asModelFailure() sets the error flash itself (and returns the field errors to the
             // slide-out) — setting one here as well surfaced the same message twice, once as a
             // flash and once as the notification the JS raises from the response.
-            return $this->asModelFailure($item, Craft::t('menu-builder', 'Couldn’t save that menu item.'), 'item');
+            return $this->asModelFailure($item, Craft::t('menubuilder', 'Couldn’t save that menu item.'), 'item');
         }
 
         $group = MenuBuilder::getInstance()->groups->getById($item->groupId);
@@ -201,9 +201,9 @@ class ItemsController extends BaseMenuBuilderController
             return $this->asSuccess(data: ['id' => $item->id, 'title' => $item->title]);
         }
 
-        Craft::$app->getSession()->setSuccess(Craft::t('menu-builder', 'Menu item saved.'));
+        Craft::$app->getSession()->setSuccess(Craft::t('menubuilder', 'Menu item saved.'));
 
-        return $this->redirectToPostedUrl($item, UrlHelper::cpUrl('menu-builder/' . $group?->handle));
+        return $this->redirectToPostedUrl($item, UrlHelper::cpUrl('menubuilder/' . $group?->handle));
     }
 
     public function actionDelete(): Response
@@ -225,7 +225,7 @@ class ItemsController extends BaseMenuBuilderController
 
         $success = $itemsService->deleteById($id, (bool)$keepChildrenParam);
 
-        return $this->respondToMutation($success, Craft::t('menu-builder', 'Couldn’t delete that menu item.'));
+        return $this->respondToMutation($success, Craft::t('menubuilder', 'Couldn’t delete that menu item.'));
     }
 
     public function actionDuplicate(): Response
@@ -236,7 +236,7 @@ class ItemsController extends BaseMenuBuilderController
         $clone = MenuBuilder::getInstance()->items->duplicate($id);
 
         if ($clone === null) {
-            return $this->asFailure(Craft::t('menu-builder', 'Couldn’t duplicate that menu item.'));
+            return $this->asFailure(Craft::t('menubuilder', 'Couldn’t duplicate that menu item.'));
         }
 
         return $this->asSuccess(data: ['id' => $clone->id]);
@@ -250,13 +250,13 @@ class ItemsController extends BaseMenuBuilderController
         $item = MenuBuilder::getInstance()->items->getById($id);
 
         if (!$item) {
-            return $this->asFailure(Craft::t('menu-builder', 'That menu item no longer exists.'));
+            return $this->asFailure(Craft::t('menubuilder', 'That menu item no longer exists.'));
         }
 
         $item->enabled = !$item->enabled;
         $success = MenuBuilder::getInstance()->items->save($item, runValidation: false);
 
-        return $this->respondToMutation($success, Craft::t('menu-builder', 'Couldn’t update that menu item.'), ['enabled' => $item->enabled]);
+        return $this->respondToMutation($success, Craft::t('menubuilder', 'Couldn’t update that menu item.'), ['enabled' => $item->enabled]);
     }
 
     /**
@@ -282,7 +282,7 @@ class ItemsController extends BaseMenuBuilderController
 
         // An item's group is fixed at creation.
         if ($item->groupId !== $groupId) {
-            return $this->asFailure(Craft::t('menu-builder', 'A navigation menu item cannot be moved to a different navigation group.'));
+            return $this->asFailure(Craft::t('menubuilder', 'A navigation menu item cannot be moved to a different navigation group.'));
         }
 
         $newSortOrder = array_search($itemId, $siblingIds, true);
@@ -290,7 +290,7 @@ class ItemsController extends BaseMenuBuilderController
 
         if (!$itemsService->move($itemId, $newParentId, $newSortOrder, $siblingIds)) {
             return $this->asFailure(
-                $itemsService->getLastMoveError() ?? Craft::t('menu-builder', 'That move isn’t allowed.')
+                $itemsService->getLastMoveError() ?? Craft::t('menubuilder', 'That move isn’t allowed.')
             );
         }
 
@@ -308,7 +308,7 @@ class ItemsController extends BaseMenuBuilderController
         $ids = array_filter(array_map('intval', $this->bodyArray('ids')));
 
         if (empty($ids)) {
-            return $this->asFailure(Craft::t('menu-builder', 'No menu items were selected.'));
+            return $this->asFailure(Craft::t('menubuilder', 'No menu items were selected.'));
         }
 
         $itemsService = MenuBuilder::getInstance()->items;
@@ -320,7 +320,7 @@ class ItemsController extends BaseMenuBuilderController
             default => false,
         };
 
-        return $this->respondToMutation($success, Craft::t('menu-builder', 'That bulk action couldn’t be completed.'));
+        return $this->respondToMutation($success, Craft::t('menubuilder', 'That bulk action couldn’t be completed.'));
     }
 
     /**

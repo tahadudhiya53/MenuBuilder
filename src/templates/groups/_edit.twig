@@ -1,33 +1,33 @@
 {% extends "_layouts/cp" %}
 {% import "_includes/forms" as forms %}
 
-{% set title = isNew ? "New menu"|t('menu-builder') : group.name %}
+{% set title = isNew ? "New menu"|t('menubuilder') : group.name %}
 
 {# `groups/edit` needs only `view`, so this form is reachable by someone who may not save it. #}
 {% set fullPageForm = canManageSettings %}
-{% set crumbs = [{ label: "Menus"|t('menu-builder'), url: url('menu-builder') }] %}
+{% set crumbs = [{ label: "Menus"|t('menubuilder'), url: url('menubuilder') }] %}
 
 {# Duplicate and Delete live in the action-button menu, not in a <form> of their own. #}
 {% set formActions = [] %}
 {% if not isNew and canManageSettings %}
     {% set formActions = formActions|merge([{
-        label: "Save and continue editing"|t('menu-builder'),
-        redirect: ('menu-builder/groups/' ~ group.id)|hash,
+        label: "Save and continue editing"|t('menubuilder'),
+        redirect: ('menubuilder/groups/' ~ group.id)|hash,
         shortcut: true,
         retainScroll: true,
     }, {
-        label: "Duplicate menu"|t('menu-builder'),
-        action: 'menu-builder/groups/duplicate',
+        label: "Duplicate menu"|t('menubuilder'),
+        action: 'menubuilder/groups/duplicate',
         params: { id: group.id },
     }]) %}
 {% endif %}
 {% if not isNew and canDelete %}
     {% set formActions = formActions|merge([{
-        label: "Delete menu"|t('menu-builder'),
-        action: 'menu-builder/groups/delete',
+        label: "Delete menu"|t('menubuilder'),
+        action: 'menubuilder/groups/delete',
         params: { id: group.id },
-        redirect: 'menu-builder'|hash,
-        confirm: 'Delete “{name}” and all of its menu items? This cannot be undone.'|t('menu-builder', { name: group.name }),
+        redirect: 'menubuilder'|hash,
+        confirm: 'Delete “{name}” and all of its menu items? This cannot be undone.'|t('menubuilder', { name: group.name }),
         destructive: true,
     }]) %}
 {% endif %}
@@ -39,23 +39,23 @@
 #}
 {% set showFieldsTab = not isNew %}
 {% set tabs = {
-    settings: { label: "Settings"|t('menu-builder'), url: '#menu-builder-tab-settings' },
+    settings: { label: "Settings"|t('menubuilder'), url: '#menu-builder-tab-settings' },
 } %}
 {% if showFieldsTab %}
     {% set tabs = tabs|merge({
-        fields: { label: "Item Fields"|t('menu-builder'), url: '#menu-builder-tab-fields' },
+        fields: { label: "Item Fields"|t('menubuilder'), url: '#menu-builder-tab-fields' },
     }) %}
 {% endif %}
 
 {% if not canManageSettings %}
-    {% set contentNotice = "You have read-only access to menu settings."|t('menu-builder') %}
+    {% set contentNotice = "You have read-only access to menu settings."|t('menubuilder') %}
 {% endif %}
 
 {% block content %}
 {% if canManageSettings %}
-<input type="hidden" name="action" value="menu-builder/groups/save">
+<input type="hidden" name="action" value="menubuilder/groups/save">
 <input type="hidden" name="groupId" value="{{ group.id }}">
-{{ redirectInput('menu-builder') }}
+{{ redirectInput('menubuilder') }}
 {{ csrfInput() }}
 {% endif %}
 
@@ -68,7 +68,7 @@
 <fieldset class="menu-builder-fieldset"{{ canManageSettings ? '' : ' disabled' }}>
 
 {{ forms.textField({
-    label: "Name"|t('menu-builder'),
+    label: "Name"|t('menubuilder'),
     id: 'name',
     name: 'name',
     value: group.name,
@@ -78,8 +78,8 @@
 }) }}
 
 {{ forms.textField({
-    label: "Handle"|t('menu-builder'),
-    instructions: "Referenced from Twig as `craft.menuBuilder.get('{handle}')`."|t('menu-builder'),
+    label: "Handle"|t('menubuilder'),
+    instructions: "Referenced from Twig as `craft.menuBuilder.get('{handle}')`."|t('menubuilder'),
     id: 'handle',
     name: 'handle',
     class: 'code',
@@ -99,7 +99,7 @@
 {% endif %}
 
 {{ forms.textareaField({
-    label: "Description"|t('menu-builder'),
+    label: "Description"|t('menubuilder'),
     id: 'description',
     name: 'description',
     value: group.description,
@@ -107,15 +107,15 @@
 }) }}
 
 {{ forms.lightswitchField({
-    label: "Enabled"|t('menu-builder'),
+    label: "Enabled"|t('menubuilder'),
     id: 'enabled',
     name: 'enabled',
     on: group.enabled,
 }) }}
 
 {{ forms.textField({
-    label: "Maximum nesting depth"|t('menu-builder'),
-    instructions: "Leave blank for no limit. 1 = a flat list, 2 = one level of children, etc. Enforced both in the CP and when menus are rendered."|t('menu-builder'),
+    label: "Maximum nesting depth"|t('menubuilder'),
+    instructions: "Leave blank for no limit. 1 = a flat list, 2 = one level of children, etc. Enforced both in the CP and when menus are rendered."|t('menubuilder'),
     id: 'maxDepth',
     name: 'maxDepth',
     type: 'number',
@@ -127,8 +127,8 @@
 
 {% if craft.app.getIsMultiSite() %}
     {{ forms.checkboxSelectField({
-        label: "Restrict to sites"|t('menu-builder'),
-        instructions: "Leave everything unchecked to make this menu available on every site. When restricted, `craft.menuBuilder.get()` returns nothing on the other sites."|t('menu-builder'),
+        label: "Restrict to sites"|t('menubuilder'),
+        instructions: "Leave everything unchecked to make this menu available on every site. When restricted, `craft.menuBuilder.get()` returns nothing on the other sites."|t('menubuilder'),
         id: 'siteIds',
         name: 'siteIds',
         values: group.siteIds,
@@ -138,16 +138,16 @@
 {% endif %}
 
 {{ forms.textField({
-    label: "CSS class"|t('menu-builder'),
-    instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menu-builder'),
+    label: "CSS class"|t('menubuilder'),
+    instructions: "Applied to the rendered <nav>/wrapper element, if your templates use it."|t('menubuilder'),
     id: 'cssClass',
     name: 'cssClass',
     value: group.cssClass,
 }) }}
 
 {{ forms.textareaField({
-    label: "HTML attributes"|t('menu-builder'),
-    instructions: "One `key: value` pair per line."|t('menu-builder'),
+    label: "HTML attributes"|t('menubuilder'),
+    instructions: "One `key: value` pair per line."|t('menubuilder'),
     id: 'htmlAttributes',
     name: 'htmlAttributes',
     value: group.htmlAttributes|map((v, k) => k ~ ': ' ~ v)|join("\n"),
@@ -159,8 +159,8 @@
 {% if not isNew %}
     <hr>
     <p class="light">
-        {{ "{count} menu items"|t('menu-builder', { count: itemCount }) }} &middot;
-        <a href="{{ url('menu-builder/' ~ group.handle) }}">{{ "Edit this menu’s items"|t('menu-builder') }}</a>
+        {{ "{count} menu items"|t('menubuilder', { count: itemCount }) }} &middot;
+        <a href="{{ url('menubuilder/' ~ group.handle) }}">{{ "Edit this menu’s items"|t('menubuilder') }}</a>
     </p>
 {% endif %}
 </div>
@@ -175,7 +175,7 @@
                 customizableUi: true,
             }) }}
         {% else %}
-            <p class="light">{{ "You have read-only access to menu settings."|t('menu-builder') }}</p>
+            <p class="light">{{ "You have read-only access to menu settings."|t('menubuilder') }}</p>
         {% endif %}
     </div>
 {% endif %}

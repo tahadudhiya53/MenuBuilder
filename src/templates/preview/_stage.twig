@@ -38,15 +38,15 @@
 
 <div class="menu-builder-preview-stage menu-builder-preview-stage--{{ isMobile ? 'mobile' : 'desktop' }} menu-builder-preview-stage--{{ placement }}" data-mb-preview>
     <div class="menu-builder-preview-stage-meta" aria-hidden="true">
-        <span class="menu-builder-preview-stage-label">{{ "Illustrative website preview"|t('menu-builder') }}</span>
-        <span class="menu-builder-preview-stage-context">{{ showBoth ? "Header + footer treatment"|t('menu-builder') : (showFooter ? "Footer treatment"|t('menu-builder') : "Header treatment"|t('menu-builder')) }}</span>
-        <span class="menu-builder-preview-stage-viewport">{{ isMobile ? "390 px"|t('menu-builder') : "Responsive desktop"|t('menu-builder') }}</span>
+        <span class="menu-builder-preview-stage-label">{{ "Illustrative website preview"|t('menubuilder') }}</span>
+        <span class="menu-builder-preview-stage-context">{{ showBoth ? "Header + footer treatment"|t('menubuilder') : (showFooter ? "Footer treatment"|t('menubuilder') : "Header treatment"|t('menubuilder')) }}</span>
+        <span class="menu-builder-preview-stage-viewport">{{ isMobile ? "390 px"|t('menubuilder') : "Responsive desktop"|t('menubuilder') }}</span>
     </div>
 
     <div class="menu-builder-preview-device">
         <div class="menu-builder-preview-page">
             <div class="menu-builder-preview-announcement" aria-hidden="true">
-                <span>{{ "New: Discover what’s possible with a better digital experience"|t('menu-builder') }}</span>
+                <span>{{ "New: Discover what’s possible with a better digital experience"|t('menubuilder') }}</span>
                 <span class="menu-builder-preview-announcement-arrow">&#8594;</span>
             </div>
 
@@ -63,14 +63,14 @@
                             aria-expanded="false"
                             aria-controls="menu-builder-preview-nav-header">
                         <span class="menu-builder-preview-burger-bars" aria-hidden="true"></span>
-                        <span class="visually-hidden">{{ "Show or hide the navigation"|t('menu-builder') }}</span>
+                        <span class="visually-hidden">{{ "Show or hide the navigation"|t('menubuilder') }}</span>
                     </button>
                 {% endif %}
 
                 {% if showHeader %}
                     {{ stage.nav(
                         headerPreviewMarkup,
-                        showBoth ? "{label} — header"|t('menu-builder', { label: navLabel }) : navLabel,
+                        showBoth ? "{label} — header"|t('menubuilder', { label: navLabel }) : navLabel,
                         'header',
                         isMobile
                     ) }}
@@ -80,7 +80,7 @@
 
                 <span class="menu-builder-preview-header-slot" aria-hidden="true">
                     <span class="menu-builder-preview-header-search">&#8981;</span>
-                    <span class="menu-builder-preview-header-cta">{{ "Contact us"|t('menu-builder') }} <span>&#8594;</span></span>
+                    <span class="menu-builder-preview-header-cta">{{ "Contact us"|t('menubuilder') }} <span>&#8594;</span></span>
                 </span>
             </header>
 
@@ -95,12 +95,12 @@
             <main class="menu-builder-preview-canvas" aria-hidden="true">
                 <section class="menu-builder-preview-hero">
                     <div class="menu-builder-preview-hero-copy">
-                        <span class="menu-builder-preview-eyebrow">{{ "Built for ambitious teams"|t('menu-builder') }}</span>
-                        <span class="menu-builder-preview-display">{{ "Turn bold ideas into meaningful progress."|t('menu-builder') }}</span>
-                        <span class="menu-builder-preview-lede">{{ "One connected platform to help your organization move faster, serve people better, and grow with confidence."|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-eyebrow">{{ "Built for ambitious teams"|t('menubuilder') }}</span>
+                        <span class="menu-builder-preview-display">{{ "Turn bold ideas into meaningful progress."|t('menubuilder') }}</span>
+                        <span class="menu-builder-preview-lede">{{ "One connected platform to help your organization move faster, serve people better, and grow with confidence."|t('menubuilder') }}</span>
                         <span class="menu-builder-preview-hero-actions">
-                            <span class="menu-builder-preview-primary-action">{{ "Get started"|t('menu-builder') }} <span>&#8594;</span></span>
-                            <span class="menu-builder-preview-secondary-action">{{ "Explore solutions"|t('menu-builder') }}</span>
+                            <span class="menu-builder-preview-primary-action">{{ "Get started"|t('menubuilder') }} <span>&#8594;</span></span>
+                            <span class="menu-builder-preview-secondary-action">{{ "Explore solutions"|t('menubuilder') }}</span>
                         </span>
                     </div>
                     <div class="menu-builder-preview-hero-visual">
@@ -119,21 +119,21 @@
                 </section>
 
                 <section class="menu-builder-preview-proof">
-                    <span>{{ "Trusted by modern teams worldwide"|t('menu-builder') }}</span>
+                    <span>{{ "Trusted by modern teams worldwide"|t('menubuilder') }}</span>
                     <span class="menu-builder-preview-logo-row"><span>APEX</span><span>NORTH</span><span>VERTEX</span><span>STUDIO</span></span>
                 </section>
 
                 <section class="menu-builder-preview-feature-grid">
                     {% for feature in [
-                        { number: '01', title: "Strategy"|t('menu-builder') },
-                        { number: '02', title: "Technology"|t('menu-builder') },
-                        { number: '03', title: "Growth"|t('menu-builder') }
+                        { number: '01', title: "Strategy"|t('menubuilder') },
+                        { number: '02', title: "Technology"|t('menubuilder') },
+                        { number: '03', title: "Growth"|t('menubuilder') }
                     ] %}
                         <span class="menu-builder-preview-feature-card">
                             <span class="menu-builder-preview-feature-icon">{{ feature.number }}</span>
                             <span class="menu-builder-preview-feature-title">{{ feature.title }}</span>
-                            <span class="menu-builder-preview-feature-copy">{{ "Clear thinking, connected tools, and practical expertise for the next stage."|t('menu-builder') }}</span>
-                            <span class="menu-builder-preview-feature-link">{{ "Learn more"|t('menu-builder') }} &#8594;</span>
+                            <span class="menu-builder-preview-feature-copy">{{ "Clear thinking, connected tools, and practical expertise for the next stage."|t('menubuilder') }}</span>
+                            <span class="menu-builder-preview-feature-link">{{ "Learn more"|t('menubuilder') }} &#8594;</span>
                         </span>
                     {% endfor %}
                 </section>
@@ -142,10 +142,10 @@
             <footer class="menu-builder-preview-sitefooter">
                 <span class="menu-builder-preview-footer-cta" aria-hidden="true">
                     <span>
-                        <span class="menu-builder-preview-footer-eyebrow">{{ "Start a conversation"|t('menu-builder') }}</span>
-                        <span class="menu-builder-preview-footer-cta-title">{{ "Ready to build what’s next?"|t('menu-builder') }}</span>
+                        <span class="menu-builder-preview-footer-eyebrow">{{ "Start a conversation"|t('menubuilder') }}</span>
+                        <span class="menu-builder-preview-footer-cta-title">{{ "Ready to build what’s next?"|t('menubuilder') }}</span>
                     </span>
-                    <span class="menu-builder-preview-footer-cta-action">{{ "Talk to our team"|t('menu-builder') }} <span>&#8594;</span></span>
+                    <span class="menu-builder-preview-footer-cta-action">{{ "Talk to our team"|t('menubuilder') }} <span>&#8594;</span></span>
                 </span>
 
                 <span class="menu-builder-preview-footer-intro" aria-hidden="true">
@@ -153,14 +153,14 @@
                         <span class="menu-builder-preview-brand-mark">{{ siteName|slice(0, 1)|upper }}</span>
                         <span class="menu-builder-preview-brand-name">{{ siteName }}</span>
                     </span>
-                    <span class="menu-builder-preview-footer-tagline">{{ "Building better digital experiences for people and business."|t('menu-builder') }}</span>
-                    <span class="menu-builder-preview-footer-locale">&#9678; {{ "Global · English"|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-footer-tagline">{{ "Building better digital experiences for people and business."|t('menubuilder') }}</span>
+                    <span class="menu-builder-preview-footer-locale">&#9678; {{ "Global · English"|t('menubuilder') }}</span>
                 </span>
 
                 {% if showFooter %}
                     {{ stage.nav(
                         footerPreviewMarkup,
-                        showBoth ? "{label} — footer"|t('menu-builder', { label: navLabel }) : navLabel,
+                        showBoth ? "{label} — footer"|t('menubuilder', { label: navLabel }) : navLabel,
                         'footer'
                     ) }}
                 {% else %}
@@ -168,16 +168,16 @@
                 {% endif %}
 
                 <span class="menu-builder-preview-footer-follow" aria-hidden="true">
-                    <span class="menu-builder-preview-footer-follow-label">{{ "Follow us"|t('menu-builder') }}</span>
+                    <span class="menu-builder-preview-footer-follow-label">{{ "Follow us"|t('menubuilder') }}</span>
                     <span class="menu-builder-preview-footer-socials"><span>f</span><span>x</span><span>&#9654;</span><span>in</span></span>
                 </span>
 
                 <span class="menu-builder-preview-footer-bottom" aria-hidden="true">
-                    <span>&copy; {{ "Example company"|t('menu-builder') }}</span>
+                    <span>&copy; {{ "Example company"|t('menubuilder') }}</span>
                     <span class="menu-builder-preview-footer-legal">
-                        <span>{{ "Privacy"|t('menu-builder') }}</span>
-                        <span>{{ "Terms"|t('menu-builder') }}</span>
-                        <span>{{ "Accessibility"|t('menu-builder') }}</span>
+                        <span>{{ "Privacy"|t('menubuilder') }}</span>
+                        <span>{{ "Terms"|t('menubuilder') }}</span>
+                        <span>{{ "Accessibility"|t('menubuilder') }}</span>
                     </span>
                 </span>
             </footer>
@@ -186,9 +186,9 @@
 
     <p class="menu-builder-preview-hint" data-mb-preview-hint role="status">
         {{ showBoth
-            ? "Header and footer treatments shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')
+            ? "Header and footer treatments shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menubuilder')
             : (showFooter
-                ? "Footer treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')
-                : "Header treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menu-builder')) }}
+                ? "Footer treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menubuilder')
+                : "Header treatment shown. Hover, focus, or click the real menu items to test them; links stay inside the preview."|t('menubuilder')) }}
     </p>
 </div>

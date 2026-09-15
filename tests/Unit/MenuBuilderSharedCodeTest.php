@@ -425,7 +425,7 @@ class MenuBuilderSharedCodeTest extends TestCase
         $editor = self::template('items/_fields.twig');
 
         foreach ([$quickAdd, $editor] as $form) {
-            $this->assertStringContainsString('{% import "menu-builder/_macros/cp" as cp %}', $form);
+            $this->assertStringContainsString('{% import "menubuilder/_macros/cp" as cp %}', $form);
             $this->assertStringContainsString('cp.linkTypeField(', $form);
             $this->assertStringContainsString('cp.dynamicSourceTypeField(', $form);
             $this->assertStringContainsString('cp.dynamicSourcePickers(', $form);
@@ -482,7 +482,7 @@ class MenuBuilderSharedCodeTest extends TestCase
         foreach (['dashboard/index.twig', 'dashboard/_branch.twig', 'dashboard/_items.twig'] as $path) {
             $source = self::template($path);
 
-            if (!str_contains($source, '{% include "menu-builder/dashboard/_')) {
+            if (!str_contains($source, '{% include "menubuilder/dashboard/_')) {
                 continue;
             }
 

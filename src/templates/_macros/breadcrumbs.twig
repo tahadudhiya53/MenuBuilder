@@ -6,7 +6,7 @@
 {% macro render(trail, label = null, linkCurrent = true) %}
     {% import _self as self %}
     {% if trail is not empty %}
-        <nav class="menu-builder-breadcrumbs" aria-label="{{ label ?: "Breadcrumb"|t('menu-builder') }}" data-menu-builder-breadcrumbs>
+        <nav class="menu-builder-breadcrumbs" aria-label="{{ label ?: "Breadcrumb"|t('menubuilder') }}" data-menu-builder-breadcrumbs>
             <ol class="menu-builder-breadcrumbs-list">
                 {% for crumb in trail %}
                     {{ self.crumb(crumb, loop.last, linkCurrent) }}
@@ -23,7 +23,7 @@
        crumb that opens a new tab owes a screen-reader user the same warning the menu's own link
        does, and one definition of that phrase is one place for it to stay correct.
     #}
-    {% import "menu-builder/_macros/tree" as menuMacros %}
+    {% import "menubuilder/_macros/tree" as menuMacros %}
     <li class="menu-builder-breadcrumb{{ isCurrent ? ' is-current' : '' }}{{ node.cssClass ? ' ' ~ node.cssClass : '' }}">
         {%- if node.isClickable and (linkCurrent or not isCurrent) -%}
             <a href="{{ node.url }}"

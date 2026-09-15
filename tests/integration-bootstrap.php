@@ -110,7 +110,7 @@ $app->setIsInstalled(true);
 // multi-menu fixture. An empty value tests Craft's default edition selection.
 $installEdition = $env('MENUBUILDER_TEST_INSTALL_EDITION', MenuBuilder::EDITION_PRO);
 ob_start();
-$pluginInstalled = $app->getPlugins()->installPlugin('menu-builder', $installEdition ?: null);
+$pluginInstalled = $app->getPlugins()->installPlugin('menubuilder', $installEdition ?: null);
 $pluginOutput = (string)ob_get_clean();
 
 if (!$pluginInstalled) {
@@ -125,4 +125,4 @@ if (!MenuBuilder::getInstance()->is($expectedEdition) ||
     throw new RuntimeException('Craft did not install the requested MenuBuilder edition.');
 }
 
-$app->getPlugins()->switchEdition('menu-builder', MenuBuilder::EDITION_PRO);
+$app->getPlugins()->switchEdition('menubuilder', MenuBuilder::EDITION_PRO);

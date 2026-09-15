@@ -185,14 +185,14 @@ class MenuBuilderLinkHealth
     public function label(): string
     {
         return match ($this->status) {
-            self::STATUS_MISSING => Craft::t('menu-builder', 'Linked content missing'),
-            self::STATUS_NOT_ON_SITE => Craft::t('menu-builder', 'Not on this site'),
-            self::STATUS_DISABLED => Craft::t('menu-builder', 'Linked content disabled'),
-            self::STATUS_UNPUBLISHED => Craft::t('menu-builder', 'Linked content unpublished'),
-            self::STATUS_NO_URL => Craft::t('menu-builder', 'Linked content has no URL'),
-            self::STATUS_INVALID_URL => Craft::t('menu-builder', 'Invalid link'),
-            self::STATUS_INVALID_SOURCE => Craft::t('menu-builder', 'Dynamic source unavailable'),
-            default => Craft::t('menu-builder', 'OK'),
+            self::STATUS_MISSING => Craft::t('menubuilder', 'Linked content missing'),
+            self::STATUS_NOT_ON_SITE => Craft::t('menubuilder', 'Not on this site'),
+            self::STATUS_DISABLED => Craft::t('menubuilder', 'Linked content disabled'),
+            self::STATUS_UNPUBLISHED => Craft::t('menubuilder', 'Linked content unpublished'),
+            self::STATUS_NO_URL => Craft::t('menubuilder', 'Linked content has no URL'),
+            self::STATUS_INVALID_URL => Craft::t('menubuilder', 'Invalid link'),
+            self::STATUS_INVALID_SOURCE => Craft::t('menubuilder', 'Dynamic source unavailable'),
+            default => Craft::t('menubuilder', 'OK'),
         };
     }
 
@@ -202,14 +202,14 @@ class MenuBuilderLinkHealth
     public function message(): string
     {
         return match ($this->status) {
-            self::STATUS_MISSING => Craft::t('menu-builder', 'The entry, category or asset this item links to no longer exists.'),
-            self::STATUS_NOT_ON_SITE => Craft::t('menu-builder', 'The linked content isn’t available on the site you’re looking at.'),
-            self::STATUS_DISABLED => Craft::t('menu-builder', 'The linked content is disabled, either everywhere or for this site.'),
-            self::STATUS_UNPUBLISHED => Craft::t('menu-builder', 'The linked content isn’t published — it is pending, expired, or otherwise not live.'),
-            self::STATUS_NO_URL => Craft::t('menu-builder', 'The linked content has no public URL to link to.'),
-            self::STATUS_INVALID_URL => Craft::t('menu-builder', 'This item’s URL or anchor target isn’t a valid, safe link.'),
-            self::STATUS_INVALID_SOURCE => Craft::t('menu-builder', 'This item’s dynamic navigation source is missing or misconfigured.'),
-            default => Craft::t('menu-builder', 'This item’s link resolves normally.'),
+            self::STATUS_MISSING => Craft::t('menubuilder', 'The entry, category or asset this item links to no longer exists.'),
+            self::STATUS_NOT_ON_SITE => Craft::t('menubuilder', 'The linked content isn’t available on the site you’re looking at.'),
+            self::STATUS_DISABLED => Craft::t('menubuilder', 'The linked content is disabled, either everywhere or for this site.'),
+            self::STATUS_UNPUBLISHED => Craft::t('menubuilder', 'The linked content isn’t published — it is pending, expired, or otherwise not live.'),
+            self::STATUS_NO_URL => Craft::t('menubuilder', 'The linked content has no public URL to link to.'),
+            self::STATUS_INVALID_URL => Craft::t('menubuilder', 'This item’s URL or anchor target isn’t a valid, safe link.'),
+            self::STATUS_INVALID_SOURCE => Craft::t('menubuilder', 'This item’s dynamic navigation source is missing or misconfigured.'),
+            default => Craft::t('menubuilder', 'This item’s link resolves normally.'),
         };
     }
 
@@ -224,15 +224,15 @@ class MenuBuilderLinkHealth
         }
 
         if (!$this->itemEnabled) {
-            return Craft::t('menu-builder', 'This menu item is disabled, so it renders nowhere on the front end either way.');
+            return Craft::t('menubuilder', 'This menu item is disabled, so it renders nowhere on the front end either way.');
         }
 
         return match ($this->fallbackBehavior) {
-            MenuBuilderItem::FALLBACK_DISABLE_LINK => Craft::t('menu-builder', 'The item still appears on the front end, as plain text with no link.'),
+            MenuBuilderItem::FALLBACK_DISABLE_LINK => Craft::t('menubuilder', 'The item still appears on the front end, as plain text with no link.'),
             MenuBuilderItem::FALLBACK_FALLBACK_URL => $this->fallbackUsable
-                ? Craft::t('menu-builder', 'The item still appears on the front end, linked to its fallback URL.')
-                : Craft::t('menu-builder', 'The item is set to use a fallback URL, but that URL isn’t usable — it appears as plain text with no link.'),
-            default => Craft::t('menu-builder', 'The item is hidden on the front end until this is fixed.'),
+                ? Craft::t('menubuilder', 'The item still appears on the front end, linked to its fallback URL.')
+                : Craft::t('menubuilder', 'The item is set to use a fallback URL, but that URL isn’t usable — it appears as plain text with no link.'),
+            default => Craft::t('menubuilder', 'The item is hidden on the front end until this is fixed.'),
         };
     }
 

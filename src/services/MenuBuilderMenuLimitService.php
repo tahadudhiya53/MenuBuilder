@@ -63,7 +63,7 @@ class MenuBuilderMenuLimitService extends Component
     */
     public static function limitMessage(): string
     {
-        return Craft::t('menu-builder', 'You’ve reached the Free plan limit. MenuBuilder Free includes {count} menu. Upgrade to Pro to create unlimited menus.', [
+        return Craft::t('menubuilder', 'You’ve reached the Free plan limit. MenuBuilder Free includes {count} menu. Upgrade to Pro to create unlimited menus.', [
             'count' => self::FREE_MAX_MENUS,
         ]);
     }

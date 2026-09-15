@@ -16,7 +16,7 @@ class MenuBuilderLicenseService extends Component
     /**
      * The plugin's Craft Plugin Store handle.
     */
-    public const PLUGIN_HANDLE = 'menu-builder';
+    public const PLUGIN_HANDLE = 'menubuilder';
 
     /**
      * The active edition — `free` or `pro`.
@@ -68,8 +68,8 @@ class MenuBuilderLicenseService extends Component
     public static function editionName(?string $edition): string
     {
         return self::editionIsPro($edition)
-            ? Craft::t('menu-builder', 'Pro')
-            : Craft::t('menu-builder', 'Free');
+            ? Craft::t('menubuilder', 'Pro')
+            : Craft::t('menubuilder', 'Free');
     }
 
     /**

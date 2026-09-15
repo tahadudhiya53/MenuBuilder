@@ -46,11 +46,11 @@ class DashboardController extends BaseMenuBuilderController
         // Built from the unfiltered tree so a search never narrows the parents the quick-add form
         // can target.
         $parentOptions = array_merge(
-            [['label' => Craft::t('menu-builder', 'Top level'), 'value' => '']],
+            [['label' => Craft::t('menubuilder', 'Top level'), 'value' => '']],
             $this->parentOptions($tree, $group)
         );
 
-        return $this->renderTemplate('menu-builder/dashboard/index', [
+        return $this->renderTemplate('menubuilder/dashboard/index', [
             'groups' => $groups,
             'group' => $group,
             'items' => $items,
@@ -108,7 +108,7 @@ class DashboardController extends BaseMenuBuilderController
                         . ($level > 1 ? "\u{21b3} " : '')
                         . ($item->title !== '' && $item->title !== null
                             ? $item->title
-                            : Craft::t('menu-builder', '(untitled)')),
+                            : Craft::t('menubuilder', '(untitled)')),
                     'value' => (string)$item->id,
                 ];
             }

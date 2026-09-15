@@ -108,13 +108,13 @@
         var parts = [];
 
         if (!href) {
-            return Craft.t('menu-builder', 'This item is a heading, not a link.');
+            return Craft.t('menubuilder', 'This item is a heading, not a link.');
         }
 
-        parts.push(Craft.t('menu-builder', 'Links to {url}', { url: href }));
+        parts.push(Craft.t('menubuilder', 'Links to {url}', { url: href }));
 
         if (link.getAttribute('target') === '_blank') {
-            parts.push(Craft.t('menu-builder', 'opens in a new tab'));
+            parts.push(Craft.t('menubuilder', 'opens in a new tab'));
         }
 
         var rel = link.getAttribute('rel');
@@ -124,7 +124,7 @@
         }
 
         if (link.getAttribute('aria-current') === 'page') {
-            parts.push(Craft.t('menu-builder', 'this is the page being previewed'));
+            parts.push(Craft.t('menubuilder', 'this is the page being previewed'));
         }
 
         return parts.join(' · ');
@@ -154,8 +154,8 @@
             setHint(
                 stage,
                 open
-                    ? Craft.t('menu-builder', 'Mobile navigation opened.')
-                    : Craft.t('menu-builder', 'Mobile navigation closed.')
+                    ? Craft.t('menubuilder', 'Mobile navigation opened.')
+                    : Craft.t('menubuilder', 'Mobile navigation closed.')
             );
         }
 
@@ -342,7 +342,7 @@
 
                 navigator.clipboard.writeText(code.innerText).then(function() {
                     var original = button.textContent;
-                    button.textContent = Craft.t('menu-builder', 'Copied');
+                    button.textContent = Craft.t('menubuilder', 'Copied');
                     window.setTimeout(function() {
                         button.textContent = original;
                     }, 1600);

@@ -660,7 +660,7 @@ content.
 `MenuBuilderCacheService` caches **only** the link-resolved node tree (pipeline step 3). Visibility
 filtering and active-state marking are deliberately never cached.
 
-The key is `menu-builder:tree:{siteId}:{handle}:{configVersion}`
+The key is `menubuilder:tree:{siteId}:{handle}:{configVersion}`
 (`MenuBuilderCacheService::cacheKey()`, a pure public static method so key construction is
 unit-testable), because three things can make two payloads differ:
 
@@ -692,7 +692,7 @@ element query caches.
 ### Invalidation
 
 Every entry is tagged twice: with a **per-menu** tag (`groupTag()`, keyed by menu **ID**) and with
-the global `menu-builder` tag. Targeted invalidation is therefore one tag invalidation for the
+the global `menubuilder` tag. Targeted invalidation is therefore one tag invalidation for the
 affected menu, and it reaches that menu's entry on *every* site and under *every* config version it
 was ever written under — without enumerating site IDs and without knowing which versions exist.
 Keying the tag by ID rather than handle is what makes a **rename** safe: the entries written under
@@ -804,7 +804,7 @@ server-side shape validation on its model instead of a schema to lean on.
 
 There is no plugin settings model and no control-panel settings screen (`hasCpSettings` is `false`):
 every editor-managed value lives in these two tables. The plugin ships no config file of its own and
-requires none; the one file it will *read* if the project provides it is `config/menu-builder.php`,
+requires none; the one file it will *read* if the project provides it is `config/menubuilder.php`,
 which configures the REST API and nothing else (see [REST API](#rest-api)). It is a file, not project
 config, and it is read per request through `MenuBuilder::apiConfig()`.
 
@@ -925,8 +925,8 @@ Every value this plugin is responsible for, and which store owns it:
 | A menu's item **field layout** | Craft's `fieldlayouts`, referenced by `menubuilder_groups.fieldLayoutId` | Database | Deploying the database |
 | Custom field **values** on an item | A `MenuBuilderItemContent` element (Craft's `elements` tables), referenced by `menubuilder_items.contentId` | Database | Deploying the database |
 | Navigation **field** settings (`allowedGroupUids`, `includeDisabledMenus`) | Project config, as part of the field — Craft writes it, not this plugin | Project config | `project-config/apply` |
-| The active edition (`free` / `pro`) | Project config (`plugins.menu-builder.edition`), written by Craft's Plugin Store | Project config | `project-config/apply` |
-| REST API configuration | The project's `config/menu-builder.php` file | That file | Deploying the file |
+| The active edition (`free` / `pro`) | Project config (`plugins.menubuilder.edition`), written by Craft's Plugin Store | Project config | `project-config/apply` |
+| REST API configuration | The project's `config/menubuilder.php` file | That file | Deploying the file |
 
 **What a project-config sync does and doesn't do.** Applying project config can install or reconfigure
 a Navigation *field*, and can switch the plugin's edition. It can **never** create, change, reorder or
@@ -1008,7 +1008,7 @@ below, and no license check anywhere in the resolve pipeline.
 
 | Class | Answers | Notes |
 |---|---|---|
-| `MenuBuilderLicenseService` | "Which edition is running?" | Compares editions with Craft's documented `Plugin::is($edition, '>=')`, guarded by a declared-edition check because `is()` throws on an edition it doesn't know and the value comes from project config. Reads `Plugin::$edition`, which Craft sets from project config (`plugins.menu-builder.edition`) and changes via `Plugins::switchEdition()`. Adds no second mechanism, stores nothing, and never reads the license *key*. Also derives the upgrade URL — Craft's in-CP `plugin-store/buy/<handle>/pro` for an admin who may change things, the public plugin listing otherwise, both the way `craft\helpers\App::licenseInfo()` derives them |
+| `MenuBuilderLicenseService` | "Which edition is running?" | Compares editions with Craft's documented `Plugin::is($edition, '>=')`, guarded by a declared-edition check because `is()` throws on an edition it doesn't know and the value comes from project config. Reads `Plugin::$edition`, which Craft sets from project config (`plugins.menubuilder.edition`) and changes via `Plugins::switchEdition()`. Adds no second mechanism, stores nothing, and never reads the license *key*. Also derives the upgrade URL — Craft's in-CP `plugin-store/buy/<handle>/pro` for an admin who may change things, the public plugin listing otherwise, both the way `craft\helpers\App::licenseInfo()` derives them |
 | `MenuBuilderMenuLimitService` | "May this install have another menu?" | Owns `FREE_MAX_MENUS = 1` — the only place the number appears — plus the count, the refusal wording and the CP summary |
 
 **An install that predates editions.** Craft stores `edition: standard` for a plugin that declares
@@ -1066,7 +1066,7 @@ Nothing about editions reads, writes, hides or deletes menu data:
   `MenuBuilderEditionSwitchTest` runs it again through Craft's own `Plugins::switchEdition()` while
   *fingerprinting every menu row* before and after — a row count alone would pass a downgrade that
   silently rewrote a column.
-- Switching the edition writes exactly one project-config value (`plugins.menu-builder.edition`) and
+- Switching the edition writes exactly one project-config value (`plugins.menubuilder.edition`) and
   touches nothing else, in either direction; a `project-config/apply` therefore carries no menu data
   and can neither create nor delete a menu, however the editions differ between environments.
 - The resolve pipeline (`MenuBuilderResolver`, the cache, the Twig API, GraphQL, the REST API, the
@@ -1167,7 +1167,7 @@ runs, since that method mutates `->children` in place. "Top level" submits `''`,
 
 ## Preview
 
-`menu-builder/<handle>/preview` renders one saved menu the way a chosen audience, on a chosen site,
+`menubuilder/<handle>/preview` renders one saved menu the way a chosen audience, on a chosen site,
 viewing a chosen page would receive it. It is a **simulation of the request**, not a second
 renderer and not a sandbox for edits.
 
@@ -1641,7 +1641,7 @@ The bundled `_macros/tree.twig` renders none of them: custom fields are for the 
 templates, so nothing about them leaks into the shipped markup by default.
 
 The site (front-end) template root is registered explicitly in `attachEventHandlers()` —
-`craft\base\Plugin` auto-registers only the CP root, and `menu-builder/_macros/tree` is meant to be
+`craft\base\Plugin` auto-registers only the CP root, and `menubuilder/_macros/tree` is meant to be
 importable from front-end templates.
 
 ---
@@ -1916,8 +1916,8 @@ A read-only JSON transport over the *same* surface GraphQL exposes, for consumer
 Twig: headless Craft behind Next.js or Nuxt, native mobile applications, external front ends.
 
 ```
-GET {basePath}/v1/navigations            → menu-builder/api/index
-GET {basePath}/v1/navigations/{handle}   → menu-builder/api/view
+GET {basePath}/v1/navigations            → menubuilder/api/index
+GET {basePath}/v1/navigations/{handle}   → menubuilder/api/view
 ```
 
 ### Why it exists at all, given GraphQL
@@ -1949,13 +1949,13 @@ concern.
 | `services/MenuBuilderScopeService` | The five gates and the resolve, shared with GraphQL |
 | `controllers/ApiController` | HTTP: methods, authentication, CORS, rate limiting, status codes, headers |
 | `helpers/MenuBuilderApiHelper` | The decidable half: parameter validation, JSON shapes, the error envelope, ETag/cache-control/rate-limit arithmetic |
-| `models/MenuBuilderApiConfig` | `config/menu-builder.php`, normalized by one pure static that never throws |
+| `models/MenuBuilderApiConfig` | `config/menubuilder.php`, normalized by one pure static that never throws |
 
 ### Two switches, both off
 
 | Switch | What it decides | Default |
 |---|---|---|
-| `api.enabled` in `config/menu-builder.php` | Whether the API **exists**. When off, `MenuBuilder::attachEventHandlers()` registers no URL rule at all, and `ApiController::beforeAction()` answers 404 regardless | Off |
+| `api.enabled` in `config/menubuilder.php` | Whether the API **exists**. When off, `MenuBuilder::attachEventHandlers()` registers no URL rule at all, and `ApiController::beforeAction()` answers 404 regardless | Off |
 | The GraphQL schema component `menuBuilderGroups.{uid}:read` | Which menus it can ever serve | Unticked |
 
 The master switch is not redundant with the scope. Reusing the GraphQL scope is what keeps "menus
@@ -2222,8 +2222,8 @@ to keep in sync and no second place for a hierarchy bug to hide.
   source; limit and order-by are optional to `validateDynamicSource()`, defaulted by
   `MenuBuilderDynamicNavigationService::normalizeConfig()`, and set in the editor afterwards.
   `ItemsController::actionEdit()` is edit-only: its new-item branch and the
-  `menu-builder/<groupHandle>/items/new` route are gone, and `openItemSlideout()` takes `itemId`
-  only. The full-page `menu-builder/<groupHandle>/items/<itemId>` route stays — it renders the same
+  `menubuilder/<groupHandle>/items/new` route are gone, and `openItemSlideout()` takes `itemId`
+  only. The full-page `menubuilder/<groupHandle>/items/<itemId>` route stays — it renders the same
   `items/_fields` partial the slideout loads (one form, two wrappers) and is the no-JS/deep-link
   fallback, not a second editor.
 - **Reflecting an item's enabled state** — `MenuBuilderTree.setRowEnabled(id, enabled)`, called by

@@ -583,8 +583,97 @@ class MenuBuilderSharedCodeTest extends TestCase
         ];
     }
     // ---------------------------------------------------------------------
+    // The derived title
+    //
+    // Both screens that pick a linked element fill a blank Title with that
+    // element's own title, and neither may overwrite one the editor typed.
+    // One implementation, called twice.
+    // ---------------------------------------------------------------------
+
+    public function testBothScreensShareOneTitleSyncImplementation(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+        $dashboard = self::template('dashboard/index.twig');
+
+        $this->assertStringContainsString('window.MenuBuilder.initTitleSync = function(root, config)', $fields);
+
+        $this->assertStringContainsString("sectionAttribute: 'data-link-section',", $fields);
+        $this->assertStringContainsString("sectionAttribute: 'data-quick-add-section',", $dashboard);
+
+        // Called once per screen, and defined once.
+        $this->assertSame(1, substr_count($dashboard, 'MenuBuilder.initTitleSync(panel, {'));
+        $this->assertSame(1, substr_count($fields, 'MenuBuilder.initTitleSync(root, {'));
+        $this->assertSame(1, substr_count($fields, 'window.MenuBuilder.initTitleSync = function'));
+    }
+
+    /**
+     * The title the editor sees is a *placeholder*, never a written value.
+     *
+     * `menubuilder_items.title` is one column for every site, and the per-site title comes from
+     * leaving it blank — that blank is what makes the resolver fall through to the element as
+     * loaded for the current site. Writing the CP's current-site label into it would freeze one
+     * site's wording across all of them. A placeholder shows the same text without touching what
+     * is stored, and needs no "derived vs. typed" bookkeeping: a value simply covers it.
+    */
+    public function testTheElementTitleIsShownAsAPlaceholderAndNeverWrittenToTheField(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+
+        preg_match('~initTitleSync = function\(root, config\) \{(.*?)\n    \};~s', $fields, $body);
+        $this->assertNotEmpty($body, 'initTitleSync() could not be read.');
+
+        $this->assertStringContainsString(
+            "titleInput.setAttribute('placeholder', selectedLabel() || originalPlaceholder);",
+            $body[1]
+        );
+        $this->assertStringNotContainsString(
+            'titleInput.value =',
+            $body[1],
+            'The sync must never assign the title field a value.'
+        );
+        $this->assertStringNotContainsString(
+            'isDerived',
+            $body[1],
+            'A placeholder needs no derived/typed bookkeeping.'
+        );
+    }
+
+    /**
+     * No request is made for a title that is already on the page: Craft writes each selected
+     * element's site-specific label onto its chip.
+    */
+    public function testTheDerivedTitleIsReadFromTheChipRatherThanFetched(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+
+        $this->assertStringContainsString("\$element.data('label')", $fields);
+        $this->assertStringNotContainsString('MenuBuilder.request', $fields);
+        $this->assertStringNotContainsString('sendActionRequest', $fields);
+    }
+
+    /**
+     * The blank title an older item stored still means "use the element's own", on every layer
+     * that reads it — this fills the box in, it does not change what a stored blank does.
+    */
+    public function testABlankTitleStillFallsBackToTheLinkedElement(): void
+    {
+        $item = new MenuBuilderItem();
+        $item->type = MenuBuilderItem::TYPE_ENTRY;
+        $item->title = '';
+        $item->elementId = 5;
+        $item->validate();
+
+        $this->assertSame([], $item->getErrors('title'), 'A linked item may still be saved with no title of its own.');
+    }
+
+    // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
+
+    private static function asset(string $path): string
+    {
+        return (string)file_get_contents(dirname(__DIR__, 2) . '/src/web/assets/cp/' . $path);
+    }
 
     private static function template(string $path): string
     {

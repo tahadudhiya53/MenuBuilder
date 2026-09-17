@@ -752,6 +752,15 @@ title arrives from `MenuBuilderLinkHealthService::getElementTitles()`, which reu
 per-site element load the dashboard's health pass already performs — naming every row therefore
 costs no query of its own, and `MenuBuilderPerformanceTest` pins that at zero.
 
+The CP does *show* the element's title: picking an element puts it in the Title field as a
+**placeholder** (`MenuBuilder.initTitleSync()`, shared by the quick-add panel and the item
+editor), so the editor can see what will render. It is deliberately a placeholder and never a
+value. `title` is one column for every site, and the blank is precisely what makes the resolver
+fall through to the element *as loaded for the current site*; writing the CP's current-site label
+into that column would freeze one site's wording across all of them, silently and with no way
+back. A placeholder shows the same text, stores nothing, and needs no "derived vs. typed"
+bookkeeping — a typed value simply covers it.
+
 `invalidateAll()` is the global tag, and `MenuBuilderElementService::handleSiteChange()` is its
 **only** caller anywhere in the plugin — `MenuBuilderGroupTest` scans `src/` to keep it that way, so
 a future change to one menu can't quietly start flushing the install.

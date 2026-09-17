@@ -582,6 +582,119 @@ class MenuBuilderSharedCodeTest extends TestCase
             'blank heading' => ['', MenuBuilderItem::TYPE_NONCLICKABLE, '(untitled)'],
         ];
     }
+
+    /**
+     * A drag persists, and then the list of parents the quick-add panel offers is rebuilt in
+     * place. Without that rebuild the panel kept offering the hierarchy from page load: an item
+     * added straight after a reorder could be nested under a row that had since become a child of
+     * the very item it was listed beside, and a row dragged past the depth ceiling stayed on
+     * offer as a parent until the editor happened to reload.
+    */
+    public function testAPersistedMoveRebuildsTheParentPickerWithoutAReload(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        $this->assertStringContainsString('syncParentOptions: function()', $tree);
+        // syncHierarchyMetadata() is the existing "keep the page in step with the move" step, so
+        // the rebuild hangs off it rather than off each of the drag and keyboard entry points.
+        $this->assertSame(
+            1,
+            substr_count($tree, 'this.syncParentOptions();'),
+            'The parent picker is rebuilt from one place.'
+        );
+        $this->assertMatchesRegularExpression(
+            '~syncHierarchyMetadata: function.*?this\.syncParentOptions\(\);~s',
+            $tree,
+            'The rebuild runs as part of syncing the hierarchy, so both drag and keyboard moves reach it.'
+        );
+        // The picker is rebuilt from the tree's own DOM, which persistMove() has already posted
+        // — re-asking the server would only be told what is already on screen.
+        preg_match('~syncParentOptions: function\(\) \{(.*?)\n        \},~s', $tree, $body);
+
+        $this->assertNotEmpty($body, 'syncParentOptions() could not be read.');
+        $this->assertStringNotContainsString('MenuBuilder.request', $body[1], 'The rebuild costs no request.');
+        $this->assertStringNotContainsString('location.reload', $body[1], 'Nor a reload.');
+    }
+
+    /**
+     * The rebuilt options read `data-title` as an *attribute*.
+     *
+     * jQuery's `.data()` reader type-coerces, so a title of "0" came back as the number 0 and
+     * "false" as the boolean — both falsy, both collapsing to "(untitled)" and contradicting
+     * DashboardController::itemLabel(), which treats "0" as the real title it is.
+    */
+    public function testARebuiltOptionKeepsATitleThatLooksLikeANumberOrABoolean(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        preg_match('~syncParentOptions: function\(\) \{(.*?)\n        \},~s', $tree, $body);
+        $this->assertNotEmpty($body, 'syncParentOptions() could not be read.');
+
+        $this->assertStringContainsString("\$li.attr('data-title')", $body[1]);
+        $this->assertStringContainsString("\$li.attr('data-id')", $body[1]);
+        $this->assertStringNotContainsString("\$li.data('title')", $body[1], 'data() would coerce "0" to falsy.');
+        $this->assertStringNotContainsString("\$li.data('id')", $body[1]);
+    }
+
+    /**
+     * The move queue must never be left holding a rejected promise.
+     *
+     * Everything that waits on `_pendingMove` does so with `.then()` — the next move chains onto
+     * it, and so does opening the editor — and `.then()` on a rejected promise skips its callback
+     * without a sound. One escaped rejection would strand reordering *and* Edit for the rest of
+     * the page's life.
+    */
+    public function testTheMoveQueueAlwaysSettlesResolved(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        preg_match('~persistMove: function\(.*?\n        \},~s', $tree, $body);
+        $this->assertNotEmpty($body, 'persistMove() could not be read.');
+
+        $this->assertMatchesRegularExpression(
+            '~\}\)\.catch\(function\(error\) \{~',
+            $body[0],
+            'The assignment to _pendingMove ends in a terminal catch.'
+        );
+        $this->assertSame(
+            2,
+            substr_count($body[0], '.catch('),
+            'One catch reports the failed move, one guarantees the queue head resolves.'
+        );
+    }
+
+    /**
+     * The editor posts the item's parent back as a hidden field, so it must not be built from a
+     * read that overtook a move still in flight — opening it between a drop and its save would
+     * load the old parent and hand it back on Save, silently undoing the drag.
+    */
+    public function testTheEditorIsNotOpenedOverAMoveStillInFlight(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        $this->assertMatchesRegularExpression(
+            '~editItem: function\(id\) \{.*?this\._pendingMove.*?openEditor\(id\);~s',
+            $tree,
+            'Opening the editor joins the queue moves are already serialised through.'
+        );
+    }
+
+    /**
+     * Both producers exclude the same rows: a separator can never take children, and neither can
+     * a row whose children would land past the menu's depth ceiling.
+    */
+    public function testBothProducersOfTheParentListApplyTheSameExclusions(): void
+    {
+        $controller = self::source(DashboardController::class);
+        $tree = self::asset('js/tree.js');
+
+        $this->assertStringContainsString('MenuBuilderItem::TYPE_SEPARATOR', $controller);
+        $this->assertStringContainsString('$group->allowsDepth($level + 1)', $controller);
+
+        $this->assertStringContainsString("\$li.attr('data-no-children') === '1'", $tree);
+        $this->assertStringContainsString('self.maxDepth && level + 1 > self.maxDepth', $tree);
+    }
+
     // ---------------------------------------------------------------------
     // The derived title
     //

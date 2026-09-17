@@ -696,6 +696,36 @@ class MenuBuilderSharedCodeTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // The item editor's Craft-rendered controls
+    // ---------------------------------------------------------------------
+
+    /**
+     * The slide-out builds its body after the page has loaded, so nothing Craft renders into it
+     * has been through Craft's initialiser.
+     *
+     * This is what left the custom fields' three-dot action menus inert: Craft renders the
+     * trigger as `[data-disclosure-trigger]` and turns it into a real menu in
+     * `Craft.initUiElements()`, which only ever ran against the document at first paint. The same
+     * omission left every lightswitch and checkbox select in the panel un-upgraded.
+    */
+    public function testTheSlideoutInitialisesTheControlsCraftRenderedIntoIt(): void
+    {
+        $slideout = self::asset('js/slideout.js');
+
+        $this->assertMatchesRegularExpression(
+            '~\$body\s*\n?\s*\.?removeAttr\(.aria-busy.\)\.html\(response\.data\.html\);~',
+            $slideout,
+            'The body is still filled from the edit response.'
+        );
+        $this->assertStringContainsString('Craft.initUiElements($body);', $slideout);
+        $this->assertMatchesRegularExpression(
+            '~Craft\.appendBodyHtml\(response\.data\.footHtml\);.*?Craft\.initUiElements\(\$body\);~s',
+            $slideout,
+            'Craft’s own inline JS is appended first, exactly as Craft’s slideouts do it.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
     // The derived title
     //
     // Both screens that pick a linked element fill a blank Title with that

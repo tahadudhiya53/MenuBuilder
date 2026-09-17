@@ -3757,6 +3757,16 @@ li.menu-builder-item.menu-builder-item-added {
 }
 
 /*
+ * Craft pulls `.tablepane` up by a pane's own top padding, so the table sits flush against the top
+ * of the pane it starts. The menus table doesn't start this pane — the edition strip does — so that
+ * pull-up dragged the table over the strip. Sit in normal flow instead; the horizontal bleed, which
+ * is what `.tablepane` is wanted for here, is untouched.
+*/
+.menu-builder-groups-pane {
+    margin-block-start: 0;
+}
+
+/*
  * The limit explanation, directly under the strip it belongs to, so the count and the reason read
  * as one statement.
 */

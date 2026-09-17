@@ -26,6 +26,57 @@ class MenuBuilderLinkHealthService extends Component
     }
 
     /**
+     * Linked elements' titles on the current site, collected as a side-benefit of the batched
+     * lookup {@see elementStatuses()} already performs, keyed `[type][elementId]`. Null means the
+     * element was found but has no usable title.
+     *
+     * @var array<string,array<int,string|null>>
+    */
+    private array $elementTitles = [];
+
+    /**
+     * Classifications already resolved this request, keyed `[type][elementId]`, so the health pass
+     * and the label pass over the same rows share one batch.
+     *
+     * @var array<string,array<int,string>>
+    */
+    private array $elementStatusCache = [];
+
+    /**
+     * The linked element's own title for each of `$items` that has one, keyed by *item* ID.
+     *
+     * This is what the control panel shows on a row whose own `title` is blank — the same value
+     * MenuBuilderLinkResolver would fall through to when rendering, resolved for the current site,
+     * so the CP names a row the way the front end will. Items with no linked element, or whose
+     * element is missing or untitled, are simply absent from the result.
+     *
+     * @param MenuBuilderItem[] $items
+     * @return array<int,string>
+    */
+    public function getElementTitles(array $items): array
+    {
+        // Populates $elementTitles as it goes; the batch is shared with the health pass the CP
+        // already runs for these same rows.
+        $this->elementStatuses($items);
+
+        $titles = [];
+
+        foreach ($items as $item) {
+            if ($item->id === null || $item->elementId === null) {
+                continue;
+            }
+
+            $title = $this->elementTitles[$item->type][(int)$item->elementId] ?? null;
+
+            if ($title !== null) {
+                $titles[$item->id] = $title;
+            }
+        }
+
+        return $titles;
+    }
+
+    /**
      * @param MenuBuilderItem[] $items
      * @return array<int,MenuBuilderLinkHealth>
     */
@@ -135,7 +186,24 @@ class MenuBuilderLinkHealthService extends Component
 
         foreach ($idsByType as $type => $idSet) {
             $elementClass = MenuBuilderLinkHealth::elementClasses()[$type];
-            $ids = array_keys($idSet);
+            $this->elementStatusCache[$type] ??= [];
+            $this->elementTitles[$type] ??= [];
+
+            // Only ask about elements this request hasn't already looked up. The dashboard needs
+            // both the health of these rows and the titles behind them, and each is a separate
+            // entry point; without this the same two element queries per type ran twice per page.
+            $ids = array_values(array_diff(
+                array_keys($idSet),
+                array_keys($this->elementStatusCache[$type]),
+            ));
+
+            if (empty($ids)) {
+                foreach (array_keys($idSet) as $id) {
+                    $result[$type][$id] = $this->elementStatusCache[$type][$id];
+                }
+
+                continue;
+            }
 
             $existsAnywhere = array_flip(array_map('intval', $elementClass::find()
                 ->id($ids)
@@ -160,14 +228,26 @@ class MenuBuilderLinkHealthService extends Component
                     $element->getStatus(),
                     $this->hasUrl($element),
                 );
+
+                // These elements are already loaded, and loaded for the *current* site, which is
+                // exactly the title the CP should show beside the row. Keeping it here costs
+                // nothing — the alternative is a second pass over the same rows — and `status(null)`
+                // above means a disabled or unpublished element still gets named, which is
+                // precisely when an editor most needs to know which row they are looking at.
+                $title = trim((string)($element->title ?? ''));
+                $this->elementTitles[$type][(int)$element->id] = $title !== '' ? $title : null;
             }
 
             foreach ($ids as $id) {
-                $result[$type][$id] = match (true) {
+                $this->elementStatusCache[$type][$id] = match (true) {
                     isset($statuses[$id]) => $statuses[$id],
                     isset($existsAnywhere[$id]) => MenuBuilderLinkHealth::STATUS_NOT_ON_SITE,
                     default => MenuBuilderLinkHealth::STATUS_MISSING,
                 };
+            }
+
+            foreach (array_keys($idSet) as $id) {
+                $result[$type][$id] = $this->elementStatusCache[$type][$id];
             }
         }
 

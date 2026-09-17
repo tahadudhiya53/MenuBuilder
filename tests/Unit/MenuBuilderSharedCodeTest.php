@@ -12,6 +12,7 @@ use Tahadudhiya\MenuBuilder\controllers\PreviewController;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderApiHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderLabelHelper;
 use Tahadudhiya\MenuBuilder\models\IconAccessors;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -522,6 +523,65 @@ class MenuBuilderSharedCodeTest extends TestCase
         $this->assertStringNotContainsString("? 'aria-current", $macros);
     }
 
+    // ---------------------------------------------------------------------
+    // The quick-add parent picker
+    //
+    // The "Nest under" options are rendered once by the server and rebuilt in
+    // the browser after every drag, because a drag never reloads the page.
+    // Two producers of one list, so both the labels and the exclusions have
+    // to agree — otherwise the dropdown describes a hierarchy the editor has
+    // already moved away from, or renames its rows the moment one is dragged.
+    // ---------------------------------------------------------------------
+
+    /**
+     * With an element title available, that is what every screen shows — the row, the parent
+     * picker and the editor heading — instead of a placeholder.
+    */
+    public function testAnItemWithNoTitleOfItsOwnIsNamedAfterTheElementItLinksTo(): void
+    {
+        foreach (MenuBuilderItem::ELEMENT_TYPES as $type) {
+            $item = new MenuBuilderItem();
+            $item->title = '';
+            $item->type = $type;
+
+            $this->assertSame('Careers', MenuBuilderLabelHelper::itemLabel($item, 'Careers'));
+        }
+
+        // A title the editor typed still wins over the element's.
+        $own = new MenuBuilderItem();
+        $own->title = 'Work with us';
+        $own->type = MenuBuilderItem::TYPE_ENTRY;
+
+        $this->assertSame('Work with us', MenuBuilderLabelHelper::itemLabel($own, 'Careers'));
+    }
+
+    /** @dataProvider parentOptionLabelProvider */
+    public function testTheParentPickerNamesEachItemExactlyAsTheTreeRowDoes(
+        string $title,
+        string $type,
+        string $expected,
+    ): void {
+        $item = new MenuBuilderItem();
+        $item->title = $title;
+        $item->type = $type;
+
+        $this->assertSame($expected, MenuBuilderLabelHelper::itemLabel($item));
+    }
+
+    /** @return array<string,array{string,string,string}> */
+    public static function parentOptionLabelProvider(): array
+    {
+        return [
+            'a real title' => ['Products', MenuBuilderItem::TYPE_URL, 'Products'],
+            // "0" is a title, not an absence.
+            'a title of zero' => ['0', MenuBuilderItem::TYPE_URL, '0'],
+            'whitespace only' => ['   ', MenuBuilderItem::TYPE_URL, '(untitled)'],
+            'blank, linked to an entry' => ['', MenuBuilderItem::TYPE_ENTRY, "(uses linked element's title)"],
+            'blank, linked to a category' => ['', MenuBuilderItem::TYPE_CATEGORY, "(uses linked element's title)"],
+            'blank, linked to an asset' => ['', MenuBuilderItem::TYPE_ASSET, "(uses linked element's title)"],
+            'blank heading' => ['', MenuBuilderItem::TYPE_NONCLICKABLE, '(untitled)'],
+        ];
+    }
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------

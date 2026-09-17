@@ -739,10 +739,18 @@ never justify an invalidation. An element with no determinable container (a nest
 `sectionId`) fails *open* to the coarser `getGroupIdsWithDynamicItems()` list rather than risking a
 stale menu.
 
-Nothing about a linked element is ever *stored* on a menu item — no URL, no title. `title` is the
-editor's own override and stays blank when the element's title should be inherited (see
-[Link resolution](#link-resolution)), so "stale" can only ever mean "a cached tree that should have
-been rebuilt", never a persisted value that has to be migrated.
+Nothing about a linked element is ever *stored* on a menu item by the plugin — no URL, no title.
+`title` is the editor's own override and stays blank when the element's title should be inherited
+(see [Link resolution](#link-resolution)), so "stale" can only ever mean "a cached tree that should
+have been rebuilt", never a persisted value that has to be migrated.
+
+`MenuBuilderLabelHelper::itemLabel()` is the single answer to "what is this item called on
+screen", asked by the tree row, the quick-add parent picker and the editor heading alike. It
+prefers the editor's own title and falls through to the linked element's, in the same order
+`MenuBuilderLinkResolver` renders with, so a row is named the way the menu will be. The element
+title arrives from `MenuBuilderLinkHealthService::getElementTitles()`, which reuses the batched
+per-site element load the dashboard's health pass already performs — naming every row therefore
+costs no query of its own, and `MenuBuilderPerformanceTest` pins that at zero.
 
 `invalidateAll()` is the global tag, and `MenuBuilderElementService::handleSiteChange()` is its
 **only** caller anywhere in the plugin — `MenuBuilderGroupTest` scans `src/` to keep it that way, so

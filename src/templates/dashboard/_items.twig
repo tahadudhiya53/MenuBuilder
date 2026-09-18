@@ -19,13 +19,11 @@
 {% set openColumns = openColumns ?? [] %}
 
 {% for item in items %}
-    {# The one label every control on this row refers to. #}
-    {# `is not empty` would call a title of "0" empty, which is a real title. #}
-    {% set itemLabel = (item.title is not null and item.title|trim != '')
-        ? item.title
-        : (item.type in ['entry', 'category', 'asset']
-            ? "(uses linked element's title)"|t('menubuilder')
-            : "(untitled)"|t('menubuilder')) %}
+    {# The one label every control on this row refers to, resolved once per screen by
+       MenuBuilderLabelHelper (see DashboardController::actionIndex) so the row, the quick-add
+       parent picker and the editor heading can't drift — and so an item with no title of its own
+       is named after the element it links to rather than by a placeholder. #}
+    {% set itemLabel = itemLabels[item.id] ?? "(untitled)"|t('menubuilder') %}
 
     {#
        One lookup per row; healthy items are in the map too, so a missing key means "not checked"

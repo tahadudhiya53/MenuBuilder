@@ -152,7 +152,13 @@ arrow keys to move it up, down, in or out one level.
 | Separator | A divider (`<hr>`) | Visually splitting a list |
 | Dynamic | Children generated from a source | Lists that should keep themselves up to date — see [Dynamic navigation](#dynamic-navigation) |
 
-Leave the title blank on an element-backed item to inherit the element's own title.
+Pick an element and the Title field shows that element's own title as a placeholder, so you can
+see the label that will render without having to type it. The menu tree names the item the same
+way, so a row linked to an entry called "Careers" reads "Careers" rather than a placeholder.
+
+Leave the box empty and the item keeps inheriting the element's title at render time — per site,
+so a translated entry keeps its own title on each site. Type a title and that one is used
+everywhere instead.
 
 | Tab | Settings |
 |---|---|

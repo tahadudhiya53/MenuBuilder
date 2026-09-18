@@ -34,6 +34,96 @@
     };
 
     /**
+     * The item types whose title falls back to the linked element's own title.
+    */
+    var ELEMENT_TYPES = ['entry', 'category', 'asset'];
+
+    /**
+     * Shows the linked element's own title in the Title box, as a placeholder.
+     *
+     * MenuBuilderResolver has always fallen back to the linked element's title when an item's own
+     * is blank, but the editor only ever saw that as an absence — an empty box, and
+     * "(uses linked element's title)" on the row. This puts the real title in front of the editor
+     * without changing what is stored.
+     *
+     * A placeholder rather than a value, deliberately. `menubuilder_items.title` is one column for
+     * every site; the per-site title comes from leaving it blank, because that is what makes
+     * MenuBuilderLinkResolver fall through to the element as loaded for the *current* site. Writing
+     * the CP's current-site label into that column would freeze one site's wording across all of
+     * them, silently and with no way back. A placeholder is visible only while the box is empty, so
+     * it also needs no notion of "derived vs. typed": type anything and the placeholder is simply
+     * covered by the value.
+     *
+     * No request is made: Craft renders each selected element's site-specific label onto its chip
+     * as `data-label`, and the element select keeps a live handle on its own selection, so the
+     * title is already on the page by the time this runs.
+     *
+     * @param {Element} root the form or panel to search within
+     * @param {Object} config `titleInput`, `typeField`, and `sectionAttribute` — the attribute
+     *                        naming each link-type section, which differs between the two screens.
+    */
+    window.MenuBuilder.initTitleSync = function(root, config) {
+        var $ = window.jQuery;
+        var titleInput = config.titleInput;
+        var typeField = config.typeField;
+        var sectionAttribute = config.sectionAttribute;
+
+        if (!$ || !root || !titleInput || !typeField) {
+            return;
+        }
+
+        // Whatever the field already offered before any element was picked.
+        var originalPlaceholder = titleInput.getAttribute('placeholder') || '';
+
+        /**
+         * The label of the element currently selected in the section matching the chosen type, or
+         * null when there is no such selection (or it has no usable title).
+        */
+        function selectedLabel() {
+            if (ELEMENT_TYPES.indexOf(typeField.value) === -1) {
+                return null;
+            }
+
+            var section = root.querySelector('[' + sectionAttribute + '="' + typeField.value + '"]');
+            var container = section && section.querySelector('.elementselect');
+
+            if (!container) {
+                return null;
+            }
+
+            // The input's own `$elements` is updated before it announces the change, whereas the
+            // chip it drops lingers in the DOM for the length of its removal animation — so ask
+            // the input, and fall back to the markup only before it has been instantiated.
+            var input = $(container).data('elementSelect');
+            var $element = (input && input.$elements)
+                ? input.$elements.first()
+                : $(container).find('.element').first();
+
+            if (!$element || !$element.length) {
+                return null;
+            }
+
+            var label = String($element.data('label') || '').trim();
+
+            return label !== '' ? label : null;
+        }
+
+        function sync() {
+            titleInput.setAttribute('placeholder', selectedLabel() || originalPlaceholder);
+        }
+
+        // Craft announces a selection, an addition and a removal all as a `change` on the
+        // `.elementselect` container — and as a jQuery event, so it has to be heard with jQuery.
+        $(root).on('change', '.elementselect', sync);
+
+        // Every type change re-derives: switching to another element type reads that type's own
+        // picker, and switching to one that has no element clears the placeholder again.
+        typeField.addEventListener('change', sync);
+
+        sync();
+    };
+
+    /**
      * Turns the editor's long stack of settings into scannable, independently collapsible cards.
     */
     function initSectionCards(root) {
@@ -119,6 +209,12 @@
         if (!typeField) {
             return;
         }
+
+        window.MenuBuilder.initTitleSync(root, {
+            titleInput: root.querySelector('#title'),
+            typeField: typeField,
+            sectionAttribute: 'data-link-section',
+        });
 
         function isHeadingType() {
             return typeField.value === 'nonclickable' || typeField.value === 'separator';

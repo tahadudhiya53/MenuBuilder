@@ -25,6 +25,7 @@
     canDelete: canDelete,
     isFiltered: isFiltered,
     itemHealth: itemHealth,
+    itemLabels: itemLabels,
 } %}
 
 {% block sidebar %}
@@ -459,6 +460,13 @@
         }
 
         updateSections();
+
+        // Shared with the full item editor — see MenuBuilder.initTitleSync() in item-fields.js.
+        window.MenuBuilder.initTitleSync(panel, {
+            titleInput: document.getElementById('quick-add-title'),
+            typeField: typeField,
+            sectionAttribute: 'data-quick-add-section',
+        });
 
         document.querySelectorAll('[data-mb-action="focus-quick-add"]').forEach(function(link) {
             link.addEventListener('click', function(event) {

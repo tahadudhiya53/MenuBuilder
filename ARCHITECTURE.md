@@ -739,10 +739,27 @@ never justify an invalidation. An element with no determinable container (a nest
 `sectionId`) fails *open* to the coarser `getGroupIdsWithDynamicItems()` list rather than risking a
 stale menu.
 
-Nothing about a linked element is ever *stored* on a menu item — no URL, no title. `title` is the
-editor's own override and stays blank when the element's title should be inherited (see
-[Link resolution](#link-resolution)), so "stale" can only ever mean "a cached tree that should have
-been rebuilt", never a persisted value that has to be migrated.
+Nothing about a linked element is ever *stored* on a menu item by the plugin — no URL, no title.
+`title` is the editor's own override and stays blank when the element's title should be inherited
+(see [Link resolution](#link-resolution)), so "stale" can only ever mean "a cached tree that should
+have been rebuilt", never a persisted value that has to be migrated.
+
+`MenuBuilderLabelHelper::itemLabel()` is the single answer to "what is this item called on
+screen", asked by the tree row, the quick-add parent picker and the editor heading alike. It
+prefers the editor's own title and falls through to the linked element's, in the same order
+`MenuBuilderLinkResolver` renders with, so a row is named the way the menu will be. The element
+title arrives from `MenuBuilderLinkHealthService::getElementTitles()`, which reuses the batched
+per-site element load the dashboard's health pass already performs — naming every row therefore
+costs no query of its own, and `MenuBuilderPerformanceTest` pins that at zero.
+
+The CP does *show* the element's title: picking an element puts it in the Title field as a
+**placeholder** (`MenuBuilder.initTitleSync()`, shared by the quick-add panel and the item
+editor), so the editor can see what will render. It is deliberately a placeholder and never a
+value. `title` is one column for every site, and the blank is precisely what makes the resolver
+fall through to the element *as loaded for the current site*; writing the CP's current-site label
+into that column would freeze one site's wording across all of them, silently and with no way
+back. A placeholder shows the same text, stores nothing, and needs no "derived vs. typed"
+bookkeeping — a typed value simply covers it.
 
 `invalidateAll()` is the global tag, and `MenuBuilderElementService::handleSiteChange()` is its
 **only** caller anywhere in the plugin — `MenuBuilderGroupTest` scans `src/` to keep it that way, so
@@ -1008,7 +1025,7 @@ below, and no license check anywhere in the resolve pipeline.
 
 | Class | Answers | Notes |
 |---|---|---|
-| `MenuBuilderLicenseService` | "Which edition is running?" | Compares editions with Craft's documented `Plugin::is($edition, '>=')`, guarded by a declared-edition check because `is()` throws on an edition it doesn't know and the value comes from project config. Reads `Plugin::$edition`, which Craft sets from project config (`plugins.menubuilder.edition`) and changes via `Plugins::switchEdition()`. Adds no second mechanism, stores nothing, and never reads the license *key*. Also derives the upgrade URL — Craft's in-CP `plugin-store/buy/<handle>/pro` for an admin who may change things, the public plugin listing otherwise, both the way `craft\helpers\App::licenseInfo()` derives them |
+| `MenuBuilderLicenseService` | "Which edition is running?" | Compares editions with Craft's documented `Plugin::is($edition, '>=')`, guarded by a declared-edition check because `is()` throws on an edition it doesn't know and the value comes from project config. Reads `Plugin::$edition`, which Craft sets from project config (`plugins.menubuilder.edition`) and changes via `Plugins::switchEdition()`. Adds no second mechanism, stores nothing, and never reads the license *key*. Also derives the upgrade URL — the Plugin Store's own editions screen, `plugin-store/<handle>/editions`, for an admin who may change things, the public plugin listing otherwise. Not `plugin-store/buy/<handle>/pro`: that route asks the Store to cart the plugin, and the Store decides whether it can from the price of the *first* edition, which here is Free at no cost — so it bounces to the Store index |
 | `MenuBuilderMenuLimitService` | "May this install have another menu?" | Owns `FREE_MAX_MENUS = 1` — the only place the number appears — plus the count, the refusal wording and the CP summary |
 
 **An install that predates editions.** Craft stores `edition: standard` for a plugin that declares

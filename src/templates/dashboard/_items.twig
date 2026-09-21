@@ -161,6 +161,23 @@
                     </div>
                 </div>
             {% endif %}
+
+            {#
+               The same affordance Craft's own element indexes give every row with a public URL:
+               one click from the menu to the page it points at, in a new tab, so a link can be
+               checked without rebuilding it in the address bar. Only rows that address a real,
+               reachable page get one — see MenuBuilderVisitUrlHelper.
+            #}
+            {% set itemUrl = (itemUrls is defined and itemUrls[item.id] is defined) ? itemUrls[item.id] : null %}
+            {% if itemUrl %}
+                <a class="menu-builder-item-visit"
+                   href="{{ itemUrl }}"
+                   target="_blank"
+                   rel="noopener"
+                   data-icon="world"
+                   title="{{ 'Visit webpage'|t('app') }}"
+                   aria-label="{{ 'Visit {title}'|t('menubuilder', { title: itemLabel }) }}"></a>
+            {% endif %}
         </div>
     </li>
 

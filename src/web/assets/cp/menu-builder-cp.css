@@ -449,6 +449,31 @@ li.menu-builder-item.menu-builder-just-dropped {
     background: var(--gray-100, #f2f4f7);
 }
 
+/* The "visit webpage" globe — Craft draws the icon from `data-icon`; this only sizes and places
+   it so it sits with the row's other controls rather than stretching the row. */
+.menu-builder-item-visit {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--light-text-color, #7f8b96);
+    text-decoration: none;
+}
+
+.menu-builder-item-visit:hover,
+.menu-builder-item-visit:focus {
+    color: var(--link-color, #0d78f2);
+    text-decoration: none;
+}
+
+.menu-builder-item-visit:focus-visible {
+    outline: 2px solid var(--focus-color, #0d78f2);
+    outline-offset: 1px;
+    border-radius: 3px;
+}
+
 .menu-builder-item-actions {
     display: flex;
     gap: 4px;

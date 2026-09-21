@@ -4,6 +4,7 @@ namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderLabelHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderVisitUrlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -77,6 +78,9 @@ class DashboardController extends BaseMenuBuilderController
             'parentOptions' => $parentOptions,
             // Keyed by item ID; dashboard/_items.twig names every row from this.
             'itemLabels' => $itemLabels,
+            // Where each row's globe points, for the items that address a real page — resolved
+            // from the same flat list, through the link resolver's shared element query.
+            'itemUrls' => MenuBuilderVisitUrlHelper::forItems($flat),
             // Edition facts, so the sidebar's create button knows whether there is a menu left to
             // create — see templates/dashboard/_sidebar-footer.twig.
             'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),

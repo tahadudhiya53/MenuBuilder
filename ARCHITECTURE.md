@@ -73,7 +73,7 @@ Twig render → MenuBuilderVariable → MenuBuilderResolver → cache / links / 
 | Services | `MenuBuilderGroupService`, `MenuBuilderItemService`, `MenuBuilderResolver`, `MenuBuilderScopeService`, `MenuBuilderLinkResolver`, `MenuBuilderVisibilityService`, `MenuBuilderCacheService`, `MenuBuilderActiveResolver`, `MenuBuilderElementService`, `MenuBuilderDynamicNavigationService`, `MenuBuilderPreviewService`, `MenuBuilderLinkHealthService`, `MenuBuilderBreadcrumbService`, `MenuBuilderLicenseService`, `MenuBuilderMenuLimitService` | The only classes that query Records. Own all business logic, hierarchy integrity, and transactions. |
 | Models | `MenuBuilderGroup`, `MenuBuilderItem`, `MenuBuilderNode`, `MenuBuilderTree`, `MenuBuilderBreadcrumbTrail`, `ResolvedLink`, `MenuBuilderMegaMenuConfig`, `MenuBuilderApiConfig` | Validation lives here (`defineRules()`), never in Records or controllers. |
 | Records | `MenuBuilderGroupRecord`, `MenuBuilderItemRecord` | Thin `ActiveRecord`: `tableName()` and nothing else. No business logic, and deliberately **no AR relations** — every join this plugin needs is an explicit service query, so there is no lazy-load path that could silently become an N+1. Never visible to controllers or Twig. |
-| Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper`, `MenuBuilderGqlHelper`, `MenuBuilderApiHelper` | Pure static functions, no Craft app required. Where logic that two layers both need lives, so there is one implementation rather than a copy per caller. |
+| Helpers | `LinkAttributeHelper`, `ConfigHelper`, `DateValidationHelper`, `TextHelper`, `BadgeHelper`, `IconHelper`, `MobileHelper`, `MenuBuilderHierarchyHelper`, `MenuBuilderFieldHelper`, `MenuBuilderLabelHelper`, `MenuBuilderGqlHelper`, `MenuBuilderApiHelper`, `MenuBuilderVisitUrlHelper` | Static functions, and where logic that two layers both need lives, so there is one implementation rather than a copy per caller. They need no booted Craft app — which is what lets the unit suite assert them directly (`Craft::t()` degrades to placeholder substitution with no app, see `tests/bootstrap.php`). Two have a path that does need one, and only that path: `MenuBuilderApiHelper`'s custom-field lookup, and `MenuBuilderVisitUrlHelper::forItems()`, which resolves links and builds site URLs; both are covered by the integration suite, and `MenuBuilderVisitUrlHelper::absolute()` stays pure so the rule it enforces can be unit-tested. |
 
 All services are registered as plugin components in `MenuBuilder::config()`, so they're reachable as
 `MenuBuilder::getInstance()->items`, `->resolver`, and so on.
@@ -284,6 +284,27 @@ lookup.
 
 External URLs are **not** checked. Nothing in this phase makes an HTTP request; an external link is
 judged on its shape alone.
+
+### Visiting a row's page
+
+`MenuBuilderVisitUrlHelper` is the other read-side companion to the resolution table: where the
+row's globe — the same affordance Craft's element indexes give a row with a public URL — points.
+`DashboardController::actionIndex()` builds one `itemId => absolute URL` map from the flat item
+list and threads it through `treeContext`, so a globe is rendered only for the rows in it.
+
+- **It resolves nothing of its own.** The destination comes from `MenuBuilderLinkResolver`, the
+  same pass the front end renders with, so the globe cannot send an editor somewhere the menu
+  would not. A row whose element is missing, disabled, unpublished or URL-less resolves to
+  unavailable and simply has no globe — which is also why the globe discloses nothing the row's
+  label did not already.
+- **A globe is always a page.** Only `entry`, `category`, `asset` and `url` items are considered
+  (an anchor is a fragment of whatever page embeds the menu; a heading, separator or dynamic
+  container has no destination), and of those only `http`/`https` destinations qualify. A valid
+  `mailto:`/`tel:` link keeps its place in the menu and gets no globe: opening a mail client is not
+  a preview of anything.
+- **Relative destinations leave the CP.** A path-only custom link is a front-end path, so it is
+  made absolute with `UrlHelper::siteUrl()` — resolved against the CP it would open a control panel
+  URL that looks like the page and isn't.
 
 ---
 
@@ -1101,23 +1122,30 @@ therefore not describe anything in the data model — there is one menu list, wh
 
 ## Control panel front end
 
-No JS framework, no build step. Four plain-JS bundles registered by `CpAsset`:
+No JS framework, no build step. Five plain-JS bundles registered by `CpAsset`, plus one screen's inline script:
 
 | File | Responsibility |
 |---|---|
 | `tree.js` | `MenuBuilderTree` — the drag-and-drop tree on `Garnish.DragSort`, row actions (`edit`, `duplicate`, `toggle`, `delete`), reorder persistence, row state updates |
 | `groups/_index.twig`'s inline JS | The menus **list**: row actions, and its own reordering on `Craft.DataTableSorter` (see below). Inline rather than bundled because it is one screen's behaviour and nothing else loads it |
-| `slideout.js` | A self-contained slide-out panel built on Craft's own `.slideout` CSS but with its own JS, talking to MenuBuilder's `items/edit`/`items/save` actions over a JSON shape this plugin controls end to end (Craft's `CpScreenSlideout` expects a private CP-screen response contract) |
-| `item-fields.js` | Type-dependent field show/hide inside the editor form |
+| `slideout.js` | A self-contained slide-out panel built on Craft's own `.slideout` CSS but with its own JS, talking to MenuBuilder's `items/edit`/`items/save` actions over a JSON shape this plugin controls end to end (Craft's `CpScreenSlideout` expects a private CP-screen response contract). Because the panel's body is built after first paint, it must call `Craft.initUiElements($body)` itself — `Craft.initUiElements()` otherwise only ever runs against the document on ready, leaving action menus, lightswitches and checkbox selects inert |
+| `item-fields.js` | Type-dependent field show/hide inside the editor form, plus `initTitleSync()` — the linked element's title as the Title field's placeholder, shared with the quick-add panel |
 | `menu-builder.js` | Bootstrapping |
 | `preview.js` | The preview stage's interaction only: inert links, the mega-menu disclosure, the mobile toggle. Resolves nothing and requests nothing — see "Preview" |
 
-Two details this code depends on:
+A few details this code depends on:
 
 - Rows must be looked up by `data-id`, **never** from the clicked anchor — Craft relocates an open
   disclosure `.menu` to near `<body>`, so the anchor is not inside its row.
 - The Disabled badge needs its own `menu-builder-item-disabled-flag` class, because
   `.menu-builder-item-status` is shared with the mega-menu and link-health badges.
+- **`_pendingMove` is a queue head that must always settle *resolved*.** Everything that waits on it
+  does so with `.then()` — the next move chains onto it, and `editItem()` joins it too — and
+  `.then()` on a rejected promise skips its callback silently, so one escaped rejection would
+  strand reordering *and* Edit for the life of the page. `persistMove()` therefore ends in a
+  terminal `.catch()` on top of the one that reports the failure. `editItem()` waits on the queue
+  because the editor posts the item's parent back as a hidden field: opening it between a drop and
+  its save would load the pre-move parent and hand it back on Save, undoing the drag.
 - **The tree's hierarchy connector needs every row to draw its *ancestors'* columns, not just its
   own.** The rows are a flat list, so a row can only paint over its own box — which means a rail
   down a sibling column cannot be drawn by those siblings: siblings at level N stop being adjacent
@@ -1135,8 +1163,8 @@ Two details this code depends on:
   last" after any drag. `MenuBuilderTreeSorter.updateInsertionRails()` does the same for the drop
   slot, which no forward pass can reach because it isn't in the tree yet.
 
-`item-fields.js` exports two helpers the dashboard's quick-add panel reuses rather than
-reimplementing: `setFieldsDisabled()` and `syncDynamicSourcePickers()`. Several sibling sections
+`item-fields.js` exports three helpers the dashboard's quick-add panel reuses rather than
+reimplementing: `setFieldsDisabled()`, `syncDynamicSourcePickers()` and `initTitleSync()`. Several sibling sections
 deliberately share one field name — `customUrl` (url/anchor), `elementId` (entry/category/asset),
 `dynamicSourceId` (the three dynamic source pickers) — because only one applies at a time, so hiding
 the others isn't enough: a hidden field still serializes and clobbers the visible one. Exactly one
@@ -1179,6 +1207,15 @@ item whose children would exceed `MenuBuilderGroup::allowsDepth()`. They're buil
 **unfiltered** tree — so an active search never narrows the choices — and *before* `filterTree()`
 runs, since that method mutates `->children` in place. "Top level" submits `''`, which
 `actionSave()` normalises to `null`.
+
+That is first paint only. A drag never reloads the page, so `MenuBuilderTree.syncParentOptions()`
+rebuilds the same list from the tree's own DOM as part of `syncHierarchyMetadata()` — one rebuild
+point, reached by both the drag and the keyboard moves — applying the same two exclusions the
+controller does and falling back to "Top level" when the editor's previous choice is no longer a
+legal parent. It costs no request: `persistMove()` has already posted this exact shape, so the
+server could only answer with what is on screen. Rows are read with `attr('data-title')`, never
+`data()`, whose type coercion made a title of `0` falsy and disagreed with
+`MenuBuilderLabelHelper`.
 
 ---
 
@@ -2277,11 +2314,19 @@ Four commands, and it is worth knowing what each one is for:
 | `composer check-cs` | **Code style** — ECS with Craft's own rule set (`composer fix-cs` applies it) | No |
 
 Counts move with every added test, so this document doesn't pin them; run the suites for the current
-figures. As of the last documentation audit the unit suite was ~1,150 tests across 24 files and the
-integration suite ~490 tests across 16 files.
+figures. As of the last documentation audit the unit suite was ~1,185 tests across 26 files and the
+integration suite ~520 tests across 17 files.
 
 **`composer test`** — `tests/Unit`, no booted Craft app. Fast, and covers the
 pure logic every layer is factored into.
+
+`tests/bootstrap.php` prefers the **surrounding project's** autoloader, because that is the one
+with Craft in it — and where MenuBuilder is *installed* into that project rather than symlinked,
+that loader's PSR-4 map and optimized classmap both point at the released copy under the project's
+`vendor/`, not at this checkout. It therefore registers a loader for `Tahadudhiya\MenuBuilder\`
+*ahead* of Composer's own (a classmap entry would otherwise win), pinning the namespace to this
+`src/`. Without it the unit suite can pass or fail on code nobody here edited. The integration
+bootstrap has no such ambiguity: it loads the plugin's own `vendor/` and nothing else.
 
 **`composer test-integration`** — `tests/Integration`, against a **real booted
 Craft 5 application and a real database**. `tests/integration-bootstrap.php` stands up a throwaway
@@ -2329,10 +2374,12 @@ per-field-handle magic query methods (`->navigation()`) it cannot see. Covered:
 | REST API surface: the master switch (only a literal `true` turns it on), base-path and origin-allowlist normalization, exact origin matching and the wildcard, query-parameter validation and the allowlisted argument set, the JSON shapes (grouped presentation, native custom-field types, `{}` for an empty bag, no row IDs, no install structure), the envelope and error envelope, ETag / `If-None-Match` / `Cache-Control` (`private` for a token), and the rate limiter's key and window arithmetic | `MenuBuilderApiTest` (unit) |
 | **Integration** — the REST API through the real controller, with real `craft\web\Request`s, real GraphQL tokens and real menus: a valid request and its headers, hierarchy and URLs, the list endpoint returning only in-scope menus, the five-way indistinguishable 404 (including path traversal and injection attempts) as JSON rather than Craft's HTML, an invalid / expired / missing token, `lastUsed` bookkeeping, a token reaching past its schema's sites, site selection and disagreement, the anonymous audience, malformed parameters naming themselves, active state with and without `currentUri`, ETag stability and `304`, `private` vs `public` caching, write methods refused before CSRF validation can pre-empt them, `HEAD`, CORS (absent, allowlisted, unlisted, preflight without credentials), the disabled API, and the rate limiter | `MenuBuilderApiTest` (integration) |
 | Attribute parsing, title fallback, rel merging, JSON bags, ID lists, calendar dates | `MenuBuilderHelpersTest` |
-| Editions: the edition list and its order, an unrecognized edition being recognized as such and falling back to Free, the Free ceiling, the create/refuse arithmetic (including an install already over the limit), and the refusal wording | `MenuBuilderLicensingTest` |
+| Editions: the edition list and its order, an unrecognized edition being recognized as such and falling back to Free, the Free ceiling, the create/refuse arithmetic (including an install already over the limit), the refusal wording, and the upgrade URL — the editions screen rather than the cart route, named after the handle `composer.json` declares, with the public listing as the non-admin fallback | `MenuBuilderLicensingTest` |
 | **Integration** — the limit enforced for real: Free creating its first menu and being refused a second, a refused duplicate, one Free menu taking 50 items nested ten deep, Pro creating twelve menus and duplicating one, a Pro install dropping to Free keeping all five menus, their items and their rendering — then regaining creation when Pro returns — direct POSTs to `groups/save` and `groups/duplicate` creating nothing, a fully configured Free menu (depth cap, CSS class, attributes, site restriction, visibility rules) resolving, and the ceiling counting per install rather than per site | `MenuBuilderMenuLimitTest` |
 | **Integration** — the edition switched through Craft's own `Plugins::switchEdition()`: the edition landing in project config and nowhere else, a Pro→Free downgrade leaving every menu row byte-for-byte identical (fingerprinted, not counted) with its items and its rendering intact, Free→Pro restoring creation without touching what was there, a project-config apply changing no menu data, and the plugin's per-request memos still agreeing afterwards | `MenuBuilderEditionSwitchTest` |
 | Link health: the element-status → health mapping (live, no URL, disabled, pending/expired, archived, unknown), agreement with the resolver's availability rule, custom-URL / anchor / structural / dynamic-source checks, the front-end consequence per `fallbackBehavior`, the summary, which statuses offer recovery actions, and the no-disclosure guarantee | `MenuBuilderLinkHealthTest` |
+| One implementation per shared behaviour, asserted across the layers that share it: the attribute-bag, date-bound, mega-menu-column and icon readers; the API's param list; the controllers' shared base helpers; the two item forms' shared controls and title sync (placeholder only, never a written value); the one label rule behind the tree row, the parent picker and the editor heading; the parent list rebuilt after a move; the move queue always settling resolved; and the slide-out initialising the controls Craft renders into it | `MenuBuilderSharedCodeTest` |
+| The CP row's "visit webpage" globe: which destinations earn one (page-addressing types, `http`/`https` only), fragments and `mailto:`/`tel:` earning none, a path made absolute against the site, and the row's Craft-shaped markup | `MenuBuilderVisitUrlTest` |
 
 The pattern this suite relies on: anything worth asserting is factored into a **pure static or
 context-taking method** (`cacheKey()`, `requiredPermissionForAction()`, `isGroupChangeAllowed()`,

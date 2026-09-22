@@ -645,6 +645,31 @@ ul.menu-builder-draghelper .menu-builder-item-rails {
     line-height: 1.35;
 }
 
+.menu-builder-section-title-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Marks anything Craft renders from the menu's field layout. */
+.menu-builder-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border: 1px solid var(--gray-200, #e3e5e8);
+    border-radius: 9px;
+    background: var(--gray-100, #f2f4f7);
+    color: var(--gray-600, #596673);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 .menu-builder-section-description {
     color: var(--gray-600, #596673);
     font-size: 12px;

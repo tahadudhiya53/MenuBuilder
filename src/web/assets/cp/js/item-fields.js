@@ -157,12 +157,23 @@
             button.setAttribute('aria-controls', bodyId);
             button.innerHTML =
                 '<span class="menu-builder-section-heading">' +
-                    '<span class="menu-builder-section-title"></span>' +
+                    '<span class="menu-builder-section-title-row">' +
+                        '<span class="menu-builder-section-title"></span>' +
+                    '</span>' +
                     '<span class="menu-builder-section-description"></span>' +
                 '</span>' +
                 '<span class="menu-builder-section-chevron" aria-hidden="true"></span>';
 
             button.querySelector('.menu-builder-section-title').textContent = title;
+
+            // Craft field layout tabs carry a badge, so a menu's own settings and the site's
+            // custom fields stay tellable apart at a glance.
+            if (section.dataset.mbSectionBadge) {
+                var sectionBadge = document.createElement('span');
+                sectionBadge.className = 'menu-builder-tag';
+                sectionBadge.textContent = section.dataset.mbSectionBadge;
+                button.querySelector('.menu-builder-section-title-row').appendChild(sectionBadge);
+            }
             button.querySelector('.menu-builder-section-description').textContent = section.dataset.mbDescription || '';
             heading.textContent = '';
             heading.appendChild(button);
@@ -187,6 +198,41 @@
         });
     }
 
+    /**
+     * Badges every field Craft renders from the menu's field layout, so it is obvious which
+     * inputs come from the site's own custom fields rather than from Menu Builder.
+    */
+    function initCustomFieldTags(root) {
+        root.querySelectorAll('[data-mb-custom-fields]').forEach(function(container) {
+            var label = container.dataset.mbCustomFields || 'Custom field';
+
+            container.querySelectorAll(':scope > .field').forEach(function(field) {
+                if (field.dataset.mbCustomFieldTagged) {
+                    return;
+                }
+
+                var heading = field.querySelector(':scope > .heading');
+                if (!heading) {
+                    return;
+                }
+
+                field.dataset.mbCustomFieldTagged = '1';
+
+                var tag = document.createElement('span');
+                tag.className = 'menu-builder-tag';
+                tag.textContent = label;
+
+                // Sit beside the label rather than after Craft's field action menu.
+                var labelEl = heading.querySelector(':scope > label, :scope > legend');
+                if (labelEl) {
+                    labelEl.insertAdjacentElement('afterend', tag);
+                } else {
+                    heading.insertBefore(tag, heading.firstChild);
+                }
+            });
+        });
+    }
+
     window.MenuBuilder.initItemFields = function(root) {
         if (!root || root.dataset.mbFieldsInitialized) {
             return;
@@ -194,6 +240,7 @@
         root.dataset.mbFieldsInitialized = '1';
 
         initSectionCards(root);
+        initCustomFieldTags(root);
 
         var typeField = root.querySelector('#type');
         var sections = root.querySelectorAll('[data-link-section]');

@@ -19,13 +19,11 @@
 {% set openColumns = openColumns ?? [] %}
 
 {% for item in items %}
-    {# The one label every control on this row refers to. #}
-    {# `is not empty` would call a title of "0" empty, which is a real title. #}
-    {% set itemLabel = (item.title is not null and item.title|trim != '')
-        ? item.title
-        : (item.type in ['entry', 'category', 'asset']
-            ? "(uses linked element's title)"|t('menubuilder')
-            : "(untitled)"|t('menubuilder')) %}
+    {# The one label every control on this row refers to, resolved once per screen by
+       MenuBuilderLabelHelper (see DashboardController::actionIndex) so the row, the quick-add
+       parent picker and the editor heading can't drift — and so an item with no title of its own
+       is named after the element it links to rather than by a placeholder. #}
+    {% set itemLabel = itemLabels[item.id] ?? "(untitled)"|t('menubuilder') %}
 
     {#
        One lookup per row; healthy items are in the map too, so a missing key means "not checked"
@@ -162,6 +160,23 @@
                         </ul>
                     </div>
                 </div>
+            {% endif %}
+
+            {#
+               The same affordance Craft's own element indexes give every row with a public URL:
+               one click from the menu to the page it points at, in a new tab, so a link can be
+               checked without rebuilding it in the address bar. Only rows that address a real,
+               reachable page get one — see MenuBuilderVisitUrlHelper.
+            #}
+            {% set itemUrl = (itemUrls is defined and itemUrls[item.id] is defined) ? itemUrls[item.id] : null %}
+            {% if itemUrl %}
+                <a class="menu-builder-item-visit"
+                   href="{{ itemUrl }}"
+                   target="_blank"
+                   rel="noopener"
+                   data-icon="world"
+                   title="{{ 'Visit webpage'|t('app') }}"
+                   aria-label="{{ 'Visit {title}'|t('menubuilder', { title: itemLabel }) }}"></a>
             {% endif %}
         </div>
     </li>

@@ -12,6 +12,7 @@ use Tahadudhiya\MenuBuilder\controllers\PreviewController;
 use Tahadudhiya\MenuBuilder\helpers\DateValidationHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
 use Tahadudhiya\MenuBuilder\helpers\MenuBuilderApiHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderLabelHelper;
 use Tahadudhiya\MenuBuilder\models\IconAccessors;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -523,8 +524,299 @@ class MenuBuilderSharedCodeTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // The quick-add parent picker
+    //
+    // The "Nest under" options are rendered once by the server and rebuilt in
+    // the browser after every drag, because a drag never reloads the page.
+    // Two producers of one list, so both the labels and the exclusions have
+    // to agree — otherwise the dropdown describes a hierarchy the editor has
+    // already moved away from, or renames its rows the moment one is dragged.
+    // ---------------------------------------------------------------------
+
+    /**
+     * With an element title available, that is what every screen shows — the row, the parent
+     * picker and the editor heading — instead of a placeholder.
+    */
+    public function testAnItemWithNoTitleOfItsOwnIsNamedAfterTheElementItLinksTo(): void
+    {
+        foreach (MenuBuilderItem::ELEMENT_TYPES as $type) {
+            $item = new MenuBuilderItem();
+            $item->title = '';
+            $item->type = $type;
+
+            $this->assertSame('Careers', MenuBuilderLabelHelper::itemLabel($item, 'Careers'));
+        }
+
+        // A title the editor typed still wins over the element's.
+        $own = new MenuBuilderItem();
+        $own->title = 'Work with us';
+        $own->type = MenuBuilderItem::TYPE_ENTRY;
+
+        $this->assertSame('Work with us', MenuBuilderLabelHelper::itemLabel($own, 'Careers'));
+    }
+
+    /** @dataProvider parentOptionLabelProvider */
+    public function testTheParentPickerNamesEachItemExactlyAsTheTreeRowDoes(
+        string $title,
+        string $type,
+        string $expected,
+    ): void {
+        $item = new MenuBuilderItem();
+        $item->title = $title;
+        $item->type = $type;
+
+        $this->assertSame($expected, MenuBuilderLabelHelper::itemLabel($item));
+    }
+
+    /** @return array<string,array{string,string,string}> */
+    public static function parentOptionLabelProvider(): array
+    {
+        return [
+            'a real title' => ['Products', MenuBuilderItem::TYPE_URL, 'Products'],
+            // "0" is a title, not an absence.
+            'a title of zero' => ['0', MenuBuilderItem::TYPE_URL, '0'],
+            'whitespace only' => ['   ', MenuBuilderItem::TYPE_URL, '(untitled)'],
+            'blank, linked to an entry' => ['', MenuBuilderItem::TYPE_ENTRY, "(uses linked element's title)"],
+            'blank, linked to a category' => ['', MenuBuilderItem::TYPE_CATEGORY, "(uses linked element's title)"],
+            'blank, linked to an asset' => ['', MenuBuilderItem::TYPE_ASSET, "(uses linked element's title)"],
+            'blank heading' => ['', MenuBuilderItem::TYPE_NONCLICKABLE, '(untitled)'],
+        ];
+    }
+
+    /**
+     * A drag persists, and then the list of parents the quick-add panel offers is rebuilt in
+     * place. Without that rebuild the panel kept offering the hierarchy from page load: an item
+     * added straight after a reorder could be nested under a row that had since become a child of
+     * the very item it was listed beside, and a row dragged past the depth ceiling stayed on
+     * offer as a parent until the editor happened to reload.
+    */
+    public function testAPersistedMoveRebuildsTheParentPickerWithoutAReload(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        $this->assertStringContainsString('syncParentOptions: function()', $tree);
+        // syncHierarchyMetadata() is the existing "keep the page in step with the move" step, so
+        // the rebuild hangs off it rather than off each of the drag and keyboard entry points.
+        $this->assertSame(
+            1,
+            substr_count($tree, 'this.syncParentOptions();'),
+            'The parent picker is rebuilt from one place.'
+        );
+        $this->assertMatchesRegularExpression(
+            '~syncHierarchyMetadata: function.*?this\.syncParentOptions\(\);~s',
+            $tree,
+            'The rebuild runs as part of syncing the hierarchy, so both drag and keyboard moves reach it.'
+        );
+        // The picker is rebuilt from the tree's own DOM, which persistMove() has already posted
+        // — re-asking the server would only be told what is already on screen.
+        preg_match('~syncParentOptions: function\(\) \{(.*?)\n        \},~s', $tree, $body);
+
+        $this->assertNotEmpty($body, 'syncParentOptions() could not be read.');
+        $this->assertStringNotContainsString('MenuBuilder.request', $body[1], 'The rebuild costs no request.');
+        $this->assertStringNotContainsString('location.reload', $body[1], 'Nor a reload.');
+    }
+
+    /**
+     * The rebuilt options read `data-title` as an *attribute*.
+     *
+     * jQuery's `.data()` reader type-coerces, so a title of "0" came back as the number 0 and
+     * "false" as the boolean — both falsy, both collapsing to "(untitled)" and contradicting
+     * DashboardController::itemLabel(), which treats "0" as the real title it is.
+    */
+    public function testARebuiltOptionKeepsATitleThatLooksLikeANumberOrABoolean(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        preg_match('~syncParentOptions: function\(\) \{(.*?)\n        \},~s', $tree, $body);
+        $this->assertNotEmpty($body, 'syncParentOptions() could not be read.');
+
+        $this->assertStringContainsString("\$li.attr('data-title')", $body[1]);
+        $this->assertStringContainsString("\$li.attr('data-id')", $body[1]);
+        $this->assertStringNotContainsString("\$li.data('title')", $body[1], 'data() would coerce "0" to falsy.');
+        $this->assertStringNotContainsString("\$li.data('id')", $body[1]);
+    }
+
+    /**
+     * The move queue must never be left holding a rejected promise.
+     *
+     * Everything that waits on `_pendingMove` does so with `.then()` — the next move chains onto
+     * it, and so does opening the editor — and `.then()` on a rejected promise skips its callback
+     * without a sound. One escaped rejection would strand reordering *and* Edit for the rest of
+     * the page's life.
+    */
+    public function testTheMoveQueueAlwaysSettlesResolved(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        preg_match('~persistMove: function\(.*?\n        \},~s', $tree, $body);
+        $this->assertNotEmpty($body, 'persistMove() could not be read.');
+
+        $this->assertMatchesRegularExpression(
+            '~\}\)\.catch\(function\(error\) \{~',
+            $body[0],
+            'The assignment to _pendingMove ends in a terminal catch.'
+        );
+        $this->assertSame(
+            2,
+            substr_count($body[0], '.catch('),
+            'One catch reports the failed move, one guarantees the queue head resolves.'
+        );
+    }
+
+    /**
+     * The editor posts the item's parent back as a hidden field, so it must not be built from a
+     * read that overtook a move still in flight — opening it between a drop and its save would
+     * load the old parent and hand it back on Save, silently undoing the drag.
+    */
+    public function testTheEditorIsNotOpenedOverAMoveStillInFlight(): void
+    {
+        $tree = self::asset('js/tree.js');
+
+        $this->assertMatchesRegularExpression(
+            '~editItem: function\(id\) \{.*?this\._pendingMove.*?openEditor\(id\);~s',
+            $tree,
+            'Opening the editor joins the queue moves are already serialised through.'
+        );
+    }
+
+    /**
+     * Both producers exclude the same rows: a separator can never take children, and neither can
+     * a row whose children would land past the menu's depth ceiling.
+    */
+    public function testBothProducersOfTheParentListApplyTheSameExclusions(): void
+    {
+        $controller = self::source(DashboardController::class);
+        $tree = self::asset('js/tree.js');
+
+        $this->assertStringContainsString('MenuBuilderItem::TYPE_SEPARATOR', $controller);
+        $this->assertStringContainsString('$group->allowsDepth($level + 1)', $controller);
+
+        $this->assertStringContainsString("\$li.attr('data-no-children') === '1'", $tree);
+        $this->assertStringContainsString('self.maxDepth && level + 1 > self.maxDepth', $tree);
+    }
+
+    // ---------------------------------------------------------------------
+    // The item editor's Craft-rendered controls
+    // ---------------------------------------------------------------------
+
+    /**
+     * The slide-out builds its body after the page has loaded, so nothing Craft renders into it
+     * has been through Craft's initialiser.
+     *
+     * This is what left the custom fields' three-dot action menus inert: Craft renders the
+     * trigger as `[data-disclosure-trigger]` and turns it into a real menu in
+     * `Craft.initUiElements()`, which only ever ran against the document at first paint. The same
+     * omission left every lightswitch and checkbox select in the panel un-upgraded.
+    */
+    public function testTheSlideoutInitialisesTheControlsCraftRenderedIntoIt(): void
+    {
+        $slideout = self::asset('js/slideout.js');
+
+        $this->assertMatchesRegularExpression(
+            '~\$body\s*\n?\s*\.?removeAttr\(.aria-busy.\)\.html\(response\.data\.html\);~',
+            $slideout,
+            'The body is still filled from the edit response.'
+        );
+        $this->assertStringContainsString('Craft.initUiElements($body);', $slideout);
+        $this->assertMatchesRegularExpression(
+            '~Craft\.appendBodyHtml\(response\.data\.footHtml\);.*?Craft\.initUiElements\(\$body\);~s',
+            $slideout,
+            'Craft’s own inline JS is appended first, exactly as Craft’s slideouts do it.'
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // The derived title
+    //
+    // Both screens that pick a linked element fill a blank Title with that
+    // element's own title, and neither may overwrite one the editor typed.
+    // One implementation, called twice.
+    // ---------------------------------------------------------------------
+
+    public function testBothScreensShareOneTitleSyncImplementation(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+        $dashboard = self::template('dashboard/index.twig');
+
+        $this->assertStringContainsString('window.MenuBuilder.initTitleSync = function(root, config)', $fields);
+
+        $this->assertStringContainsString("sectionAttribute: 'data-link-section',", $fields);
+        $this->assertStringContainsString("sectionAttribute: 'data-quick-add-section',", $dashboard);
+
+        // Called once per screen, and defined once.
+        $this->assertSame(1, substr_count($dashboard, 'MenuBuilder.initTitleSync(panel, {'));
+        $this->assertSame(1, substr_count($fields, 'MenuBuilder.initTitleSync(root, {'));
+        $this->assertSame(1, substr_count($fields, 'window.MenuBuilder.initTitleSync = function'));
+    }
+
+    /**
+     * The title the editor sees is a *placeholder*, never a written value.
+     *
+     * `menubuilder_items.title` is one column for every site, and the per-site title comes from
+     * leaving it blank — that blank is what makes the resolver fall through to the element as
+     * loaded for the current site. Writing the CP's current-site label into it would freeze one
+     * site's wording across all of them. A placeholder shows the same text without touching what
+     * is stored, and needs no "derived vs. typed" bookkeeping: a value simply covers it.
+    */
+    public function testTheElementTitleIsShownAsAPlaceholderAndNeverWrittenToTheField(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+
+        preg_match('~initTitleSync = function\(root, config\) \{(.*?)\n    \};~s', $fields, $body);
+        $this->assertNotEmpty($body, 'initTitleSync() could not be read.');
+
+        $this->assertStringContainsString(
+            "titleInput.setAttribute('placeholder', selectedLabel() || originalPlaceholder);",
+            $body[1]
+        );
+        $this->assertStringNotContainsString(
+            'titleInput.value =',
+            $body[1],
+            'The sync must never assign the title field a value.'
+        );
+        $this->assertStringNotContainsString(
+            'isDerived',
+            $body[1],
+            'A placeholder needs no derived/typed bookkeeping.'
+        );
+    }
+
+    /**
+     * No request is made for a title that is already on the page: Craft writes each selected
+     * element's site-specific label onto its chip.
+    */
+    public function testTheDerivedTitleIsReadFromTheChipRatherThanFetched(): void
+    {
+        $fields = self::asset('js/item-fields.js');
+
+        $this->assertStringContainsString("\$element.data('label')", $fields);
+        $this->assertStringNotContainsString('MenuBuilder.request', $fields);
+        $this->assertStringNotContainsString('sendActionRequest', $fields);
+    }
+
+    /**
+     * The blank title an older item stored still means "use the element's own", on every layer
+     * that reads it — this fills the box in, it does not change what a stored blank does.
+    */
+    public function testABlankTitleStillFallsBackToTheLinkedElement(): void
+    {
+        $item = new MenuBuilderItem();
+        $item->type = MenuBuilderItem::TYPE_ENTRY;
+        $item->title = '';
+        $item->elementId = 5;
+        $item->validate();
+
+        $this->assertSame([], $item->getErrors('title'), 'A linked item may still be saved with no title of its own.');
+    }
+
+    // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
+
+    private static function asset(string $path): string
+    {
+        return (string)file_get_contents(dirname(__DIR__, 2) . '/src/web/assets/cp/' . $path);
+    }
 
     private static function template(string $path): string
     {

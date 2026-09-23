@@ -449,6 +449,31 @@ li.menu-builder-item.menu-builder-just-dropped {
     background: var(--gray-100, #f2f4f7);
 }
 
+/* The "visit webpage" globe — Craft draws the icon from `data-icon`; this only sizes and places
+   it so it sits with the row's other controls rather than stretching the row. */
+.menu-builder-item-visit {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--light-text-color, #7f8b96);
+    text-decoration: none;
+}
+
+.menu-builder-item-visit:hover,
+.menu-builder-item-visit:focus {
+    color: var(--link-color, #0d78f2);
+    text-decoration: none;
+}
+
+.menu-builder-item-visit:focus-visible {
+    outline: 2px solid var(--focus-color, #0d78f2);
+    outline-offset: 1px;
+    border-radius: 3px;
+}
+
 .menu-builder-item-actions {
     display: flex;
     gap: 4px;
@@ -618,6 +643,31 @@ ul.menu-builder-draghelper .menu-builder-item-rails {
     font-size: 15px;
     font-weight: 600;
     line-height: 1.35;
+}
+
+.menu-builder-section-title-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Marks anything Craft renders from the menu's field layout. */
+.menu-builder-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border: 1px solid var(--gray-200, #e3e5e8);
+    border-radius: 9px;
+    background: var(--gray-100, #f2f4f7);
+    color: var(--gray-600, #596673);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .menu-builder-section-description {
@@ -3754,6 +3804,16 @@ li.menu-builder-item.menu-builder-item-added {
 
 .menu-builder-edition-upgrade {
     flex: 0 0 auto;
+}
+
+/*
+ * Craft pulls `.tablepane` up by a pane's own top padding, so the table sits flush against the top
+ * of the pane it starts. The menus table doesn't start this pane — the edition strip does — so that
+ * pull-up dragged the table over the strip. Sit in normal flow instead; the horizontal bleed, which
+ * is what `.tablepane` is wanted for here, is untouched.
+*/
+.menu-builder-groups-pane {
+    margin-block-start: 0;
 }
 
 /*

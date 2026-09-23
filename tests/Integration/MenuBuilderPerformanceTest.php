@@ -169,6 +169,39 @@ class MenuBuilderPerformanceTest extends CraftIntegrationTestCase
         );
     }
 
+    /**
+     * The dashboard asks two questions about the same rows — "will this link work" and "what is
+     * the element behind it called" — and both are answered from one batch.
+     *
+     * Naming every row after its linked element is what stops a menu of entry links reading as a
+     * column of identical "(uses linked element's title)" placeholders. It must not cost a second
+     * sweep of element queries to do it, and it must certainly not cost one query per row.
+    */
+    public function testNamingRowsAfterTheirElementsCostsNoExtraQueries(): void
+    {
+        $group = $this->entryMenu('perfLabelBatch', 20);
+        $items = MenuBuilder::getInstance()->items->getFlatForGroup((int)$group->id);
+        $health = MenuBuilder::getInstance()->linkHealth;
+
+        // Cold: the health pass pays for the element batch.
+        $healthQueries = $this->countQueries(fn() => $health->getForItems($items));
+
+        // The label pass then rides on it.
+        $labelQueries = $this->countQueries(fn() => $health->getElementTitles($items));
+
+        $this->assertGreaterThan(0, $healthQueries, 'The health pass should be what loads the elements.');
+        $this->assertSame(
+            0,
+            $labelQueries,
+            'Element titles must come from the batch the health pass already ran, not a second one.'
+        );
+
+        // And the titles are real, not placeholders.
+        $titles = $health->getElementTitles($items);
+        $this->assertCount(count($items), $titles);
+        $this->assertNotContains('', $titles);
+    }
+
     public function testAPreloadedEntryResolvesToTheSameLinkAsAnUnpreloadedOne(): void
     {
         // Correctness half of the batching: the preloaded element must be the element the per-item

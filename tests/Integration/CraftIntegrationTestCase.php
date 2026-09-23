@@ -6,6 +6,7 @@ use Craft;
 use craft\base\FieldInterface;
 use craft\elements\Entry;
 use craft\fieldlayoutelements\CustomField;
+use craft\fieldlayoutelements\TitleField;
 use craft\models\EntryType;
 use craft\models\FieldLayout;
 use craft\models\Section;
@@ -237,7 +238,14 @@ abstract class CraftIntegrationTestCase extends TestCase
         $layout->setTabs([
             [
                 'name' => 'Content',
-                'elements' => array_map(fn(FieldInterface $field) => new CustomField($field), $fields),
+                // The Title field has to be in the layout for Craft to persist a title at all.
+                // Without it every fixture entry was saved title-less, which quietly made the
+                // element-title fallback untestable — MenuBuilderLinkResolutionTest's
+                // `assertSame($entry->title, $link->label)` was comparing null to null.
+                'elements' => array_merge(
+                    [new TitleField()],
+                    array_map(fn(FieldInterface $field) => new CustomField($field), $fields),
+                ),
             ],
         ]);
         $entryType->setFieldLayout($layout);

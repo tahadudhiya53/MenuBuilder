@@ -1,7 +1,9 @@
 {% extends "_layouts/cp" %}
 
-{# `is not empty` would call a title of "0" empty, which is a real title. #}
-{% set itemLabel = (item.title is not null and item.title|trim != '') ? item.title : "(untitled)"|t('menubuilder') %}
+{# Resolved by MenuBuilderLabelHelper in ItemsController, so this heading, the tree row and the
+   quick-add parent picker all name the item identically — including naming an item with no title
+   of its own after the element it links to. #}
+{% set itemLabel = itemLabel ?? "(untitled)"|t('menubuilder') %}
 {% set title = isNew ? "New menu item"|t('menubuilder') : itemLabel %}
 
 {#

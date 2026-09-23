@@ -3,6 +3,8 @@
 namespace Tahadudhiya\MenuBuilder\controllers;
 
 use Craft;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderLabelHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderVisitUrlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -43,11 +45,20 @@ class DashboardController extends BaseMenuBuilderController
         $tree = MenuBuilder::getInstance()->items->getTree($group->id);
         $items = $search !== '' ? $this->filterTree($tree, mb_strtolower($search)) : $tree;
 
+        // One label per row, resolved once. The linked element's title comes from the same
+        // batched, per-site lookup the health pass above already performed, so naming every row
+        // after the entry/category/asset it points at costs no extra query.
+        $flat = MenuBuilder::getInstance()->items->getFlatForGroup($group->id);
+        $itemLabels = MenuBuilderLabelHelper::itemLabels(
+            $flat,
+            MenuBuilder::getInstance()->linkHealth->getElementTitles($flat),
+        );
+
         // Built from the unfiltered tree so a search never narrows the parents the quick-add form
         // can target.
         $parentOptions = array_merge(
             [['label' => Craft::t('menubuilder', 'Top level'), 'value' => '']],
-            $this->parentOptions($tree, $group)
+            $this->parentOptions($tree, $group, $itemLabels)
         );
 
         return $this->renderTemplate('menubuilder/dashboard/index', [
@@ -65,6 +76,11 @@ class DashboardController extends BaseMenuBuilderController
             'itemHealth' => $itemHealth,
             'healthSummary' => MenuBuilderLinkHealth::summarize($itemHealth),
             'parentOptions' => $parentOptions,
+            // Keyed by item ID; dashboard/_items.twig names every row from this.
+            'itemLabels' => $itemLabels,
+            // Where each row's globe points, for the items that address a real page — resolved
+            // from the same flat list, through the link resolver's shared element query.
+            'itemUrls' => MenuBuilderVisitUrlHelper::forItems($flat),
             // Edition facts, so the sidebar's create button knows whether there is a menu left to
             // create — see templates/dashboard/_sidebar-footer.twig.
             'edition' => MenuBuilder::getInstance()->menuLimit->cpSummary(),
@@ -93,7 +109,7 @@ class DashboardController extends BaseMenuBuilderController
      * @param MenuBuilderItem[] $items
      * @return array<array{label: string, value: string}>
     */
-    private function parentOptions(array $items, MenuBuilderGroup $group, int $level = 1): array
+    private function parentOptions(array $items, MenuBuilderGroup $group, array $labels, int $level = 1): array
     {
         $options = [];
 
@@ -106,14 +122,12 @@ class DashboardController extends BaseMenuBuilderController
                 $options[] = [
                     'label' => str_repeat("\u{00a0}\u{00a0}\u{00a0}\u{00a0}", $level - 1)
                         . ($level > 1 ? "\u{21b3} " : '')
-                        . ($item->title !== '' && $item->title !== null
-                            ? $item->title
-                            : Craft::t('menubuilder', '(untitled)')),
+                        . ($labels[$item->id] ?? MenuBuilderLabelHelper::itemLabel($item)),
                     'value' => (string)$item->id,
                 ];
             }
 
-            $options = array_merge($options, $this->parentOptions($item->children, $group, $level + 1));
+            $options = array_merge($options, $this->parentOptions($item->children, $group, $labels, $level + 1));
         }
 
         return $options;

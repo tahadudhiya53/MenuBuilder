@@ -79,7 +79,8 @@ The resolved tree is plain data — see [Resolving a menu](#resolving-a-menu).
 - **Custom fields per menu**, on a real Craft field layout, plus built-in icons, badges,
   descriptions, images and validated HTML attributes.
 - **Control panel tooling** — slide-out editor, quick add, search, bulk actions, link-health badges,
-  and a visual preview for a chosen site, audience and device.
+  one click to the live page behind any row, and a visual preview for a chosen site, audience and
+  device.
 - **Developer surface** — a five-method Twig API, optional accessible macros, a Navigation field,
   GraphQL, a read-only REST API, and two extension events.
 - **Multi-site, cached and permissioned** throughout — per-site resolution and cache entries,
@@ -152,7 +153,19 @@ arrow keys to move it up, down, in or out one level.
 | Separator | A divider (`<hr>`) | Visually splitting a list |
 | Dynamic | Children generated from a source | Lists that should keep themselves up to date — see [Dynamic navigation](#dynamic-navigation) |
 
-Leave the title blank on an element-backed item to inherit the element's own title.
+Pick an element and the Title field shows that element's own title as a placeholder, so you can
+see the label that will render without having to type it. The menu tree names the item the same
+way, so a row linked to an entry called "Careers" reads "Careers" rather than a placeholder.
+
+Leave the box empty and the item keeps inheriting the element's title at render time — per site,
+so a translated entry keeps its own title on each site. Type a title and that one is used
+everywhere instead.
+
+Rows that point at a real page carry a **globe** on the right, like Craft's own element indexes:
+click it to open that page on the front end in a new tab. It appears for entry, category, asset and
+custom-URL items that resolve to an `http`/`https` address — anchors, headings, separators,
+`mailto:`/`tel:` links and items whose element is missing, disabled, unpublished or has no URL have
+no page to open, so they get no globe.
 
 | Tab | Settings |
 |---|---|

@@ -34,6 +34,96 @@
     };
 
     /**
+     * The item types whose title falls back to the linked element's own title.
+    */
+    var ELEMENT_TYPES = ['entry', 'category', 'asset'];
+
+    /**
+     * Shows the linked element's own title in the Title box, as a placeholder.
+     *
+     * MenuBuilderResolver has always fallen back to the linked element's title when an item's own
+     * is blank, but the editor only ever saw that as an absence — an empty box, and
+     * "(uses linked element's title)" on the row. This puts the real title in front of the editor
+     * without changing what is stored.
+     *
+     * A placeholder rather than a value, deliberately. `menubuilder_items.title` is one column for
+     * every site; the per-site title comes from leaving it blank, because that is what makes
+     * MenuBuilderLinkResolver fall through to the element as loaded for the *current* site. Writing
+     * the CP's current-site label into that column would freeze one site's wording across all of
+     * them, silently and with no way back. A placeholder is visible only while the box is empty, so
+     * it also needs no notion of "derived vs. typed": type anything and the placeholder is simply
+     * covered by the value.
+     *
+     * No request is made: Craft renders each selected element's site-specific label onto its chip
+     * as `data-label`, and the element select keeps a live handle on its own selection, so the
+     * title is already on the page by the time this runs.
+     *
+     * @param {Element} root the form or panel to search within
+     * @param {Object} config `titleInput`, `typeField`, and `sectionAttribute` — the attribute
+     *                        naming each link-type section, which differs between the two screens.
+    */
+    window.MenuBuilder.initTitleSync = function(root, config) {
+        var $ = window.jQuery;
+        var titleInput = config.titleInput;
+        var typeField = config.typeField;
+        var sectionAttribute = config.sectionAttribute;
+
+        if (!$ || !root || !titleInput || !typeField) {
+            return;
+        }
+
+        // Whatever the field already offered before any element was picked.
+        var originalPlaceholder = titleInput.getAttribute('placeholder') || '';
+
+        /**
+         * The label of the element currently selected in the section matching the chosen type, or
+         * null when there is no such selection (or it has no usable title).
+        */
+        function selectedLabel() {
+            if (ELEMENT_TYPES.indexOf(typeField.value) === -1) {
+                return null;
+            }
+
+            var section = root.querySelector('[' + sectionAttribute + '="' + typeField.value + '"]');
+            var container = section && section.querySelector('.elementselect');
+
+            if (!container) {
+                return null;
+            }
+
+            // The input's own `$elements` is updated before it announces the change, whereas the
+            // chip it drops lingers in the DOM for the length of its removal animation — so ask
+            // the input, and fall back to the markup only before it has been instantiated.
+            var input = $(container).data('elementSelect');
+            var $element = (input && input.$elements)
+                ? input.$elements.first()
+                : $(container).find('.element').first();
+
+            if (!$element || !$element.length) {
+                return null;
+            }
+
+            var label = String($element.data('label') || '').trim();
+
+            return label !== '' ? label : null;
+        }
+
+        function sync() {
+            titleInput.setAttribute('placeholder', selectedLabel() || originalPlaceholder);
+        }
+
+        // Craft announces a selection, an addition and a removal all as a `change` on the
+        // `.elementselect` container — and as a jQuery event, so it has to be heard with jQuery.
+        $(root).on('change', '.elementselect', sync);
+
+        // Every type change re-derives: switching to another element type reads that type's own
+        // picker, and switching to one that has no element clears the placeholder again.
+        typeField.addEventListener('change', sync);
+
+        sync();
+    };
+
+    /**
      * Turns the editor's long stack of settings into scannable, independently collapsible cards.
     */
     function initSectionCards(root) {
@@ -67,12 +157,23 @@
             button.setAttribute('aria-controls', bodyId);
             button.innerHTML =
                 '<span class="menu-builder-section-heading">' +
-                    '<span class="menu-builder-section-title"></span>' +
+                    '<span class="menu-builder-section-title-row">' +
+                        '<span class="menu-builder-section-title"></span>' +
+                    '</span>' +
                     '<span class="menu-builder-section-description"></span>' +
                 '</span>' +
                 '<span class="menu-builder-section-chevron" aria-hidden="true"></span>';
 
             button.querySelector('.menu-builder-section-title').textContent = title;
+
+            // Craft field layout tabs carry a badge, so a menu's own settings and the site's
+            // custom fields stay tellable apart at a glance.
+            if (section.dataset.mbSectionBadge) {
+                var sectionBadge = document.createElement('span');
+                sectionBadge.className = 'menu-builder-tag';
+                sectionBadge.textContent = section.dataset.mbSectionBadge;
+                button.querySelector('.menu-builder-section-title-row').appendChild(sectionBadge);
+            }
             button.querySelector('.menu-builder-section-description').textContent = section.dataset.mbDescription || '';
             heading.textContent = '';
             heading.appendChild(button);
@@ -97,6 +198,41 @@
         });
     }
 
+    /**
+     * Badges every field Craft renders from the menu's field layout, so it is obvious which
+     * inputs come from the site's own custom fields rather than from Menu Builder.
+    */
+    function initCustomFieldTags(root) {
+        root.querySelectorAll('[data-mb-custom-fields]').forEach(function(container) {
+            var label = container.dataset.mbCustomFields || 'Custom field';
+
+            container.querySelectorAll(':scope > .field').forEach(function(field) {
+                if (field.dataset.mbCustomFieldTagged) {
+                    return;
+                }
+
+                var heading = field.querySelector(':scope > .heading');
+                if (!heading) {
+                    return;
+                }
+
+                field.dataset.mbCustomFieldTagged = '1';
+
+                var tag = document.createElement('span');
+                tag.className = 'menu-builder-tag';
+                tag.textContent = label;
+
+                // Sit beside the label rather than after Craft's field action menu.
+                var labelEl = heading.querySelector(':scope > label, :scope > legend');
+                if (labelEl) {
+                    labelEl.insertAdjacentElement('afterend', tag);
+                } else {
+                    heading.insertBefore(tag, heading.firstChild);
+                }
+            });
+        });
+    }
+
     window.MenuBuilder.initItemFields = function(root) {
         if (!root || root.dataset.mbFieldsInitialized) {
             return;
@@ -104,6 +240,7 @@
         root.dataset.mbFieldsInitialized = '1';
 
         initSectionCards(root);
+        initCustomFieldTags(root);
 
         var typeField = root.querySelector('#type');
         var sections = root.querySelectorAll('[data-link-section]');
@@ -119,6 +256,12 @@
         if (!typeField) {
             return;
         }
+
+        window.MenuBuilder.initTitleSync(root, {
+            titleInput: root.querySelector('#title'),
+            typeField: typeField,
+            sectionAttribute: 'data-link-section',
+        });
 
         function isHeadingType() {
             return typeField.value === 'nonclickable' || typeField.value === 'separator';

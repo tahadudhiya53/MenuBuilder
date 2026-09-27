@@ -88,11 +88,19 @@ All methods are used and retained; none implements separate license validation.
 | `editionName()` | Instance helper and tests; Pro or Free label |
 | `getLicenseKeyStatus()` | `isLicenseActive()` and tests; calls Craft's public Plugins service, reads no key |
 | `isLicenseActive()` | CP summary only; Valid/Trial informational indicator, never a feature gate |
-| `getUpgradeUrl()` | CP summary; admin with allowed config changes gets the CP buy route; other users get the public listing |
+| `getUpgradeUrl()` | CP summary; admin with allowed config changes gets the CP editions screen, other users get the public listing |
 
-The buy URL is not invented: installed Craft 5's `craft\helpers\App::licenseInfo()`
-uses `plugin-store/buy/<handle>/<edition>` itself. The license status service reads
-Craft's stored status and adds no HTTP request. No license service change was needed.
+The upgrade URL is not invented: `plugin-store/<handle>/editions` is the Plugin
+Store's own per-plugin editions screen, which renders one card per declared edition
+with whichever of Try and Buy the Store offers this install.
+
+It deliberately does **not** use `plugin-store/buy/<handle>/<edition>`. That route
+exists — `craft\helpers\App::licenseInfo()` uses it — but the Plugin Store app reads
+it as "add this plugin to the cart" and decides whether it can by looking at the price
+of the plugin's *first* edition. MenuBuilder's first edition is Free, at no cost, so
+the check fails and the app redirects to the Plugin Store index. Craft only ever links
+to that route for a plugin whose paid edition is already installed on trial. The
+license status service reads Craft's stored status and adds no HTTP request.
 
 ## Behavior verified
 
@@ -128,7 +136,7 @@ Send the following to Pixel & Tonic through [Craft's contact page](https://craft
 or support@craftcms.com; no message was sent during this audit:
 
 > Please approve and configure multiple editions for MenuBuilder, handle
-> `menu-builder`, Composer package `tahadudhiya/craft-menu-builder`, repository
+> `menubuilder`, Composer package `tahadudhiya/craft-menu-builder`, repository
 > https://github.com/tahadudhiya53/MenuBuilder. Console currently shows only
 > Standard (`standard`) at $0 and says to contact you to manage editions.
 > The Craft 5 plugin declares `['free', 'pro']`. Please configure Free (`free`)

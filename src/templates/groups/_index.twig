@@ -60,7 +60,11 @@
     {% endif %}
 
     {% if rows|length %}
-        <div class="tablepane">
+        {#
+           `.menu-builder-groups-pane` cancels the negative top margin `.tablepane` carries for
+           tables that start a pane — this one follows the edition strip, which it was overlapping.
+        #}
+        <div class="tablepane menu-builder-groups-pane">
             <table class="data fullwidth" id="menu-builder-groups">
                 <thead>
                     <tr>

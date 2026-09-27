@@ -7,6 +7,7 @@ use craft\helpers\UrlHelper;
 use Tahadudhiya\MenuBuilder\helpers\BadgeHelper;
 use Tahadudhiya\MenuBuilder\helpers\IconHelper;
 use Tahadudhiya\MenuBuilder\helpers\LinkAttributeHelper;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderLabelHelper;
 use Tahadudhiya\MenuBuilder\helpers\MobileHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -85,6 +86,8 @@ class ItemsController extends BaseMenuBuilderController
             // The dynamic-source cap belongs to the model; the editor's field shows and bounds it
             // rather than writing the number out again.
             'dynamicSourceMaxLimit' => MenuBuilderItem::DYNAMIC_SOURCE_MAX_LIMIT,
+            // Named the same way the tree row behind this screen names it.
+            'itemLabel' => $item->id !== null ? $this->itemLabel($item) : null,
         ] + $affordances;
 
         if (Craft::$app->getRequest()->getIsAjax() && Craft::$app->getRequest()->getAcceptsJson()) {
@@ -106,13 +109,15 @@ class ItemsController extends BaseMenuBuilderController
     }
 
     /**
-     * What to call an item on screen.
+     * What to call an item on screen — the one rule the tree rows and the quick-add parent picker
+     * also use, so the heading over the editor names the item the same way the row behind it does.
     */
     private function itemLabel(MenuBuilderItem $item): string
     {
-        $title = trim((string)$item->title);
-
-        return $title !== '' ? $title : Craft::t('menubuilder', '(untitled)');
+        return MenuBuilderLabelHelper::itemLabel(
+            $item,
+            MenuBuilder::getInstance()->linkHealth->getElementTitles([$item])[$item->id] ?? null,
+        );
     }
 
     public function actionSave(): ?Response

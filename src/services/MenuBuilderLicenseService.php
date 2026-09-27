@@ -98,6 +98,34 @@ class MenuBuilderLicenseService extends Component
     }
 
     /**
+     * The Plugin Store path "Upgrade to Pro" sends an admin to.
+     *
+     * Deliberately *not* `plugin-store/buy/<handle>/pro`. That route exists, but the Plugin
+     * Store's Vue app treats it as "add this plugin to the cart", and its buyability check reads
+     * the price of the plugin's *first* edition — which for MenuBuilder is Free, at no cost. A
+     * free first edition therefore fails the check and the app redirects to the Plugin Store
+     * index, which is exactly the bounce editors were seeing. Craft only ever uses that route for
+     * a plugin whose paid edition is already installed on trial.
+     *
+     * The editions screen is the Craft-supported entry point for a free-first plugin: it renders
+     * one card per declared edition with the Try/Buy actions the store decides are available for
+     * this install.
+    */
+    public static function upgradePath(): string
+    {
+        return sprintf('plugin-store/%s/editions', self::PLUGIN_HANDLE);
+    }
+
+    /**
+     * Where a non-admin (or an install with admin changes turned off) is sent instead — the public
+     * listing, which needs no CP access to read.
+    */
+    public static function marketplaceUrl(): string
+    {
+        return sprintf('https://plugins.craftcms.com/%s', self::PLUGIN_HANDLE);
+    }
+
+    /**
      * Where "Upgrade to Pro" should send this user, or null if there is nowhere useful to send
      * them.
     */
@@ -110,13 +138,9 @@ class MenuBuilderLicenseService extends Component
         $user = Craft::$app->getUser()->getIdentity();
 
         if ($user !== null && $user->admin && Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
-            return UrlHelper::cpUrl(sprintf(
-                'plugin-store/buy/%s/%s',
-                self::PLUGIN_HANDLE,
-                MenuBuilder::EDITION_PRO,
-            ));
+            return UrlHelper::cpUrl(self::upgradePath());
         }
 
-        return sprintf('https://plugins.craftcms.com/%s', self::PLUGIN_HANDLE);
+        return self::marketplaceUrl();
     }
 }

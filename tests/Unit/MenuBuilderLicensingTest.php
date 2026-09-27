@@ -83,6 +83,51 @@ class MenuBuilderLicensingTest extends TestCase
         $this->assertSame('Free', MenuBuilderLicenseService::editionName(null));
     }
 
+    // Where "Upgrade to Pro" goes
+
+    /**
+     * The upgrade link must not use `plugin-store/buy/<handle>/<edition>`.
+     *
+     * That route is real, but the Plugin Store's own app reads it as "add this plugin to the
+     * cart" and decides whether it can by looking at the price of the plugin's *first* edition.
+     * MenuBuilder's first edition is Free, at no cost, so the check fails and the app redirects
+     * to the Plugin Store index — the upgrade button bounced editors to a page that said nothing
+     * about MenuBuilder. The editions screen is the supported entry point for a plugin whose base
+     * edition is free: it renders one card per declared edition with whichever of Try and Buy the
+     * store offers this install.
+    */
+    public function testTheUpgradeLinkGoesToTheEditionsScreenRatherThanTheCart(): void
+    {
+        $path = MenuBuilderLicenseService::upgradePath();
+
+        $this->assertSame('plugin-store/menubuilder/editions', $path);
+        $this->assertStringNotContainsString('plugin-store/buy', $path);
+        $this->assertStringContainsString(MenuBuilderLicenseService::PLUGIN_HANDLE, $path);
+    }
+
+    /**
+     * The handle in the link is the handle Craft knows this plugin by — the Plugin Store resolves
+     * the listing from it, and a mismatch would 404 just as surely as the wrong route redirects.
+    */
+    public function testTheUpgradeLinkNamesThePluginHandleComposerDeclares(): void
+    {
+        $composer = json_decode(
+            (string)file_get_contents(dirname(__DIR__, 2) . '/composer.json'),
+            true,
+        );
+
+        $this->assertSame($composer['extra']['handle'], MenuBuilderLicenseService::PLUGIN_HANDLE);
+    }
+
+    /** Whoever can't reach the CP's Plugin Store is sent to the public listing instead. */
+    public function testTheFallbackIsThePublicListing(): void
+    {
+        $this->assertSame(
+            'https://plugins.craftcms.com/menubuilder',
+            MenuBuilderLicenseService::marketplaceUrl()
+        );
+    }
+
     // The limit
 
     public function testFreeAllowsExactlyOneMenuAndProAllowsUnlimited(): void

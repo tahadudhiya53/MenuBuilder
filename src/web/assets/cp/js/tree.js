@@ -224,6 +224,81 @@
             });
 
             this.syncRails();
+            this.syncParentOptions();
+        },
+
+        /**
+         * Rebuilds the quick-add panel's "Nest under" options from the tree as it now stands.
+         *
+         * The options are rendered server-side for first paint by
+         * DashboardController::parentOptions(), but a drag never reloads the page, so without this
+         * the list kept describing the hierarchy the editor had already moved away from — an
+         * "Add menu item" straight after a reorder could be nested under a row that had since
+         * become a child of the very item it was listed beside.
+         *
+         * The tree's own DOM is the authority here rather than a fresh request: persistMove() has
+         * already posted this exact shape and the rows carry everything the options need, so
+         * re-asking the server would only answer with what is already on screen.
+        */
+        syncParentOptions: function() {
+            var $select = $('#quick-add-parent');
+
+            if (!$select.length) {
+                return;
+            }
+
+            var self = this;
+            var previous = $select.val();
+            var options = [{ value: '', label: Craft.t('menubuilder', 'Top level') }];
+
+            this.$list.children('li.menu-builder-item').each(function() {
+                var $li = $(this);
+                var level = self.level($li);
+
+                // The same two exclusions the server applies: a separator can never take
+                // children, and neither can a row whose children would land past the menu's
+                // depth ceiling.
+                if ($li.attr('data-no-children') === '1') {
+                    return;
+                }
+
+                if (self.maxDepth && level + 1 > self.maxDepth) {
+                    return;
+                }
+
+                // `attr()`, not `data()`: jQuery's data reader type-coerces, so a title of
+                // "0" or "false" came back falsy and fell to "(untitled)" — disagreeing with
+                // DashboardController::itemLabel(), which treats "0" as the real title it is.
+                var title = $li.attr('data-title');
+
+                options.push({
+                    value: String($li.attr('data-id')),
+                    // `data-title` is the row's own on-screen label, so the dropdown names each
+                    // parent exactly as the tree above it does.
+                    label: new Array(level).join('    ') +
+                        (level > 1 ? '↳ ' : '') +
+                        ((title !== undefined && title !== '') ? title : Craft.t('menubuilder', '(untitled)')),
+                });
+            });
+
+            $select.empty();
+
+            options.forEach(function(option) {
+                $('<option/>')
+                    .attr('value', option.value)
+                    .text(option.label)
+                    .appendTo($select);
+            });
+
+            // Keep what the editor had chosen when that row is still a legal parent. When it
+            // isn't — it was dragged past the depth ceiling, say — fall back to the top level
+            // rather than leaving a selection that would be refused on save.
+            var wanted = previous == null ? '' : String(previous);
+            var stillValid = options.some(function(option) {
+                return option.value === wanted;
+            });
+
+            $select.val(stillValid ? wanted : '');
         },
 
         /**
@@ -297,6 +372,16 @@
                     window.MenuBuilder.displayError(error, Craft.t('menubuilder', 'That move isn’t allowed.'));
                     window.location.reload();
                 });
+            }).catch(function(error) {
+                // The queue head must never be a rejected promise. Everything that waits on it
+                // does so with `.then()` — the next move chains onto it, and so does opening the
+                // editor — and `.then()` on a rejected promise skips its callback silently. One
+                // rejection escaping the handler above (a failed reload, a throw inside it) would
+                // therefore leave reordering *and* Edit dead for the rest of the page's life, with
+                // nothing on screen to say why.
+                if (window.console && window.console.error) {
+                    window.console.error(error);
+                }
             });
 
             return this._pendingMove;
@@ -754,6 +839,21 @@
         },
 
         editItem: function(id) {
+            var self = this;
+
+            // The editor posts the item's parent back as a hidden field, so it must not be built
+            // from a read that overtook a move still in flight — opening it in the moment between
+            // a drop and its save would otherwise load the old parent and hand it straight back
+            // on Save, silently undoing the drag. Moves are already serialised through
+            // `_pendingMove`; this just joins the queue.
+            var ready = this._pendingMove || Promise.resolve();
+
+            ready.then(function() {
+                self.openEditor(id);
+            });
+        },
+
+        openEditor: function(id) {
             var self = this;
 
             window.MenuBuilder.openItemSlideout({ groupHandle: this.groupHandle, itemId: id }, function() {

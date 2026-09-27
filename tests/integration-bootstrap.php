@@ -121,7 +121,7 @@ if (!$pluginInstalled) {
 $expectedEdition = $installEdition ?: MenuBuilder::EDITION_FREE;
 
 if (!MenuBuilder::getInstance()->is($expectedEdition) ||
-    $app->getProjectConfig()->get('plugins.menu-builder.edition') !== $expectedEdition) {
+    $app->getProjectConfig()->get('plugins.menubuilder.edition') !== $expectedEdition) {
     throw new RuntimeException('Craft did not install the requested MenuBuilder edition.');
 }
 

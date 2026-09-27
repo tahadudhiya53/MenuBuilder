@@ -425,10 +425,13 @@
 
 {% for tab in fieldLayoutForm.tabs %}
     {# Two nested elements on purpose. #}
-    <div data-mb-section="fields-{{ loop.index }}" data-mb-description="{{ "Set the custom fields configured for this menu."|t('menubuilder') }}">
+    <div data-mb-section="fields-{{ loop.index }}"
+         data-mb-description="{{ "Set the custom fields configured for this menu."|t('menubuilder') }}"
+         data-mb-section-badge="{{ "Custom fields"|t('menubuilder') }}">
         <h2>{{ tab.name }}</h2>
         <div id="{{ tab.getId() }}"
              class="flex-fields"
+             data-mb-custom-fields="{{ "Custom field"|t('menubuilder') }}"
              data-id="{{ tab.getId() }}"
              data-layout-tab="{{ tab.getUid() ?? 1 }}">
             {{ tab.content|raw }}

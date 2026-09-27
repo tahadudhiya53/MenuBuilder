@@ -7,9 +7,11 @@ use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
 use craft\fs\Local;
+use craft\helpers\UrlHelper;
 use craft\models\CategoryGroup;
 use craft\models\CategoryGroup_SiteSettings;
 use craft\models\Volume;
+use Tahadudhiya\MenuBuilder\helpers\MenuBuilderVisitUrlHelper;
 use Tahadudhiya\MenuBuilder\MenuBuilder;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderGroup;
 use Tahadudhiya\MenuBuilder\models\MenuBuilderItem;
@@ -455,5 +457,51 @@ class MenuBuilderLinkResolutionTest extends CraftIntegrationTestCase
         ]);
 
         $this->assertSame([self::$categoryId], array_map(fn($e) => (int)$e->id, $elements));
+    }
+    // The CP row's "visit webpage" globe
+
+    /**
+     * The globe map is built from the same resolution as the menu itself, so a row only offers a
+     * visit where the front end would actually render a link — and never to a destination that
+     * isn't a page.
+    */
+    public function testTheVisitUrlMapCoversOnlyRowsWithARealPage(): void
+    {
+        $items = [
+            $this->savedItem(MenuBuilderItem::TYPE_ENTRY, fn($item) => $item->elementId = self::$publishedEntryId),
+            $this->savedItem(MenuBuilderItem::TYPE_ENTRY, fn($item) => $item->elementId = self::$disabledEntryId),
+            $this->savedItem(MenuBuilderItem::TYPE_URL, fn($item) => $item->customUrl = 'mailto:hello@example.com'),
+            $this->savedItem(MenuBuilderItem::TYPE_URL, fn($item) => $item->customUrl = 'https://example.com/docs'),
+            $this->savedItem(MenuBuilderItem::TYPE_ANCHOR, fn($item) => $item->customUrl = 'contact'),
+            $this->savedItem(MenuBuilderItem::TYPE_NONCLICKABLE),
+        ];
+
+        $urls = MenuBuilderVisitUrlHelper::forItems($items);
+
+        $entry = Craft::$app->getElements()->getElementById(self::$publishedEntryId, Entry::class);
+
+        $this->assertSame([
+            (int)$items[0]->id => $entry->getUrl(),
+            (int)$items[3]->id => 'https://example.com/docs',
+        ], $urls);
+    }
+
+    /** A path-only custom link is a front-end path, and the globe has to leave the CP to open it. */
+    public function testARootRelativeLinkIsVisitedOnTheSite(): void
+    {
+        $item = $this->savedItem(MenuBuilderItem::TYPE_URL, fn($i) => $i->customUrl = '/about');
+
+        $url = MenuBuilderVisitUrlHelper::forItems([$item])[(int)$item->id] ?? null;
+
+        $this->assertSame(UrlHelper::siteUrl('/about'), $url);
+        $this->assertStringStartsNotWith(Craft::$app->getConfig()->getGeneral()->cpTrigger . '/', ltrim((string)parse_url((string)$url, PHP_URL_PATH), '/'));
+    }
+
+    private function savedItem(string $type, ?callable $configure = null): MenuBuilderItem
+    {
+        $item = $this->item($type, $configure);
+        MenuBuilder::getInstance()->items->save($item);
+
+        return $item;
     }
 }

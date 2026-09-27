@@ -148,6 +148,14 @@
                     Craft.appendBodyHtml(response.data.footHtml);
                 }
 
+                // Everything Craft renders into this panel — the custom fields' three-dot action
+                // menus, lightswitches, checkbox selects, nice text areas — is inert markup until
+                // Craft's own initialiser has seen it. A full page load does that on ready; this
+                // panel builds its body after that, so it has to do it itself, exactly as Craft's
+                // own slideouts do for their content. Every one of those initialisers is a no-op
+                // on an element it has already claimed.
+                Craft.initUiElements($body);
+
                 var root = $body.find('[data-menu-builder-item-fields]')[0];
                 if (root && window.MenuBuilder.initItemFields) {
                     window.MenuBuilder.initItemFields(root);

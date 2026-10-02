@@ -10,7 +10,7 @@ resolve per request and per site, so renaming or moving an entry never leaves a 
 Rendering stays yours — bundled macros give you accessible markup out of the box, and GraphQL and a
 REST API serve headless front ends the same tree.
 
-**Release status: 1.0.0 release candidate — not yet tagged or published.** See
+**Latest release: 1.0.2.** See
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Documentation

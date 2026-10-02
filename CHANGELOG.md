@@ -4,6 +4,28 @@ All notable changes to MenuBuilder are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.0.2] - 2026-10-02
+
+Improved menu item labels and page linking, with several editor, quick-add, and UI fixes.
+
+### Added
+
+* Added a **globe icon** to menu items with a valid front-end page link, opening the page in a new tab.
+* Linked elements now appear as **Title field placeholders** when adding or editing menu items.
+* Fields coming from the menu's **field layout** are now badged as custom fields in the item editor.
+
+### Fixed
+
+* Fixed the **Upgrade to Pro** link.
+* Improved menu item naming using the linked element's title.
+* Fixed the **Nest under** list updating after menu reordering.
+* Fixed `0` being displayed as **(untitled)**.
+* Fixed drag-and-drop failures making **Edit** and reordering unresponsive.
+* Fixed **Edit** using an outdated parent after dragging.
+* Fixed Craft controls such as **lightswitches, checkboxes, and action menus** in the item editor.
+* Fixed the **Menus table** overlapping the edition information.
+
+
 ## [1.0.1] - 2026-09-15
 
 Fixes plugin installation. MenuBuilder 1.0.0 could not be installed from the Plugin Store or the
@@ -178,4 +200,4 @@ The following limitations are accepted for the 1.0.0 release:
 * Preview renders saved menu data and does not simulate future time-based changes.
 * Some Craft-dependent behavior requires integration testing and manual verification in addition to unit tests.
 
-For detailed architecture, implementation decisions, API documentation, testing procedures, and release guidance, see the documentation in the `docs/` directory.
+For detailed architecture, implementation decisions, API documentation, testing procedures, and release guidance, see [ARCHITECTURE.md](ARCHITECTURE.md) and [README.md](README.md).
